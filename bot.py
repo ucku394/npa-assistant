@@ -133,7 +133,13 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("Бот по охране труда запущен!")
-    app.run_polling()
+    
+    # Более надёжный запуск с обработкой сигналов
+    app.run_polling(
+        drop_pending_updates=True,   # игнорировать старые сообщения при старте
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
 
 
 if __name__ == "__main__":
