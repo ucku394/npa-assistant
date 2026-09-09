@@ -101,3 +101,63 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Контекст из базы НПА:
 {retrieved_text}
 
+Вопрос пользователя:
+{user_query}
+"""
+
+        # 5. Генерация ответа через gemini-3.6-flash с защитой от сбоев 503
+        response = None
+        for attempt in range(3):
+            try:
+                response = gemini_client.models.generate_content(
+                    model=CHAT_MODEL,
+                    contents=prompt,
+                )
+                break
+            except Exception as gen_err:
+                if "503" in str(gen_err) or "UNAVAILABLE" in str(gen_err):
+                    time.sleep(2)
+                else:
+                    raise gen_err
+
+        if response and response.text:
+            await update.message.reply_text(response.text)
+        else:
+            await update.message.reply_text("Сервис временно перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
+
+    except Exception as e:
+        logging.error(f"Ошибка при обработке запроса: {e}", exc_info=True)
+        await update.message.reply_text("Произошла ошибка при поиске ответа. Попробуйте сформулировать вопрос иначе.")
+
+
+def cleanup():
+    """Корректное завершение работы бота"""
+    global app
+    if app:
+        logging.info("Остановка бота...")
+        app.stop()
+
+
+def main():
+    """Запуск Telegram-бота"""
+    global app
+
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    logging.info("Бот по охране труда запущен!")
+
+    # Регистрация обработчика корректного завершения
+    atexit.register(cleanup)
+
+    # Запуск polling
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False
+    )
+
+
+if __name__ == "__main__":
+    main()
