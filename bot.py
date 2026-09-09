@@ -34,7 +34,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Актуальные рабочие модели Gemini API
 EMBEDDING_MODEL = "gemini-embedding-001"
-CHAT_MODEL = "gemini-3.5-flash"
+CHAT_MODEL = "gemini-2.5-flash"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
