@@ -49,7 +49,7 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 EMBEDDING_MODEL = "text-embedding-004"
-CHAT_MODEL = "gemini-2.5-flash"
+CHAT_MODEL = "gemini-3.6-flash"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
