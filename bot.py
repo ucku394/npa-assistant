@@ -33,8 +33,8 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Актуальные рабочие модели Gemini API
-EMBEDDING_MODEL = "text-embedding-004"
-CHAT_MODEL = "gemini-2.5-flash"
+EMBEDDING_MODEL = "gemini-embedding-001"
+CHAT_MODEL = "gemini-3.5-flash"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,10 +58,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             model=EMBEDDING_MODEL,
             contents=user_query,
             config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY"
+                task_type="RETRIEVAL_QUERY",
+                # output_dimensionality=768,  # раскомментируйте, если в Supabase колонка vector(768)
             ),
         )
-        query_vector = emb_response.embedding.values
+        query_vector = emb_response.embeddings[0].values
 
         # 2. Поиск релевантных чанков в Supabase
         rpc_response = supabase.rpc(
@@ -117,7 +118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response and response.text:
             await update.message.reply_text(response.text)
         else:
-            await update.message.reply_text("Сервис временного перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
+            await update.message.reply_text("Сервис временно перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
 
     except Exception as e:
         logging.error(f"Ошибка при обработке запроса: {e}", exc_info=True)
