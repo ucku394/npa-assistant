@@ -1,0 +1,6 @@
+python-telegram-bot>=21.0
+google-genai
+supabase
+python-dotenv
+python-docx
+pypdf
