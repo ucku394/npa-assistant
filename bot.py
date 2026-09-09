@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update
@@ -31,13 +32,9 @@ if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Точные названия моделей без префиксов models/
-# ВАЖНО: text-embedding-004 был прекращён Google 14.01.2026 (используйте
-# ту же модель, что и в upload.py, иначе эмбеддинги из разных пространств
-# несовместимы для векторного поиска, даже при совпадении размерности).
-EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_DIMENSIONS = 768  # должно совпадать с vector(768) в Supabase и upload.py
-CHAT_MODEL = "gemini-3.6-flash"
+# Актуальные рабочие модели Gemini API
+EMBEDDING_MODEL = "text-embedding-004"
+CHAT_MODEL = "gemini-2.5-flash"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,11 +58,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             model=EMBEDDING_MODEL,
             contents=user_query,
             config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=EMBEDDING_DIMENSIONS
+                task_type="RETRIEVAL_QUERY"
             ),
         )
-        query_vector = emb_response.embeddings[0].values
+        query_vector = emb_response.embedding.values
 
         # 2. Поиск релевантных чанков в Supabase
         rpc_response = supabase.rpc(
@@ -87,7 +83,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             retrieved_text = "Релевантные нормативные акты в базе не найдены."
 
-        # 4. Формирование инструкции и передача в Gemini
+        # 4. Формирование инструкции для Gemini
         prompt = f"""Ты — квалифицированный эксперт и консультант по охране труда и промышленной безопасности Беларуси.
 Ответь на вопрос пользователя, строго опираясь на предоставленный ниже контекст из нормативных правовых актов (НПА).
 
@@ -103,13 +99,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 {user_query}
 """
 
-        # 5. Генерация ответа через gemini-2.5-flash
-        response = gemini_client.models.generate_content(
-            model=CHAT_MODEL,
-            contents=prompt,
-        )
+        # 5. Генерация ответа через gemini-2.5-flash с защитой от сбоев 503 (высокая нагрузка)
+        response = None
+        for attempt in range(3):
+            try:
+                response = gemini_client.models.generate_content(
+                    model=CHAT_MODEL,
+                    contents=prompt,
+                )
+                break
+            except Exception as gen_err:
+                if "503" in str(gen_err) or "UNAVAILABLE" in str(gen_err):
+                    time.sleep(2)  # Пауза перед повторной попыткой при перегрузке
+                else:
+                    raise gen_err
 
-        await update.message.reply_text(response.text)
+        if response and response.text:
+            await update.message.reply_text(response.text)
+        else:
+            await update.message.reply_text("Сервис временного перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
 
     except Exception as e:
         logging.error(f"Ошибка при обработке запроса: {e}", exc_info=True)
