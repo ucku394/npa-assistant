@@ -32,7 +32,11 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Точные названия моделей без префиксов models/
-EMBEDDING_MODEL = "text-embedding-004"
+# ВАЖНО: text-embedding-004 был прекращён Google 14.01.2026 (используйте
+# ту же модель, что и в upload.py, иначе эмбеддинги из разных пространств
+# несовместимы для векторного поиска, даже при совпадении размерности).
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIMENSIONS = 768  # должно совпадать с vector(768) в Supabase и upload.py
 CHAT_MODEL = "gemini-3.6-flash"
 
 
@@ -57,10 +61,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             model=EMBEDDING_MODEL,
             contents=user_query,
             config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY"
+                task_type="RETRIEVAL_QUERY",
+                output_dimensionality=EMBEDDING_DIMENSIONS
             ),
         )
-        query_vector = emb_response.embedding.values
+        query_vector = emb_response.embeddings[0].values
 
         # 2. Поиск релевантных чанков в Supabase
         rpc_response = supabase.rpc(
