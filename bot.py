@@ -33,9 +33,9 @@ if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Актуальные модели Gemini API (сентябрь 2026)
+# Актуальные модели Gemini API
 EMBEDDING_MODEL = "gemini-embedding-001"
-CHAT_MODEL = "gemini-3.6-flash"  # ИСПРАВЛЕНО: 2.5-flash больше недоступен
+CHAT_MODEL = "gemini-3.6-flash"
 
 # Глобальная переменная для приложения
 app = None
@@ -63,7 +63,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             contents=user_query,
             config=types.EmbedContentConfig(
                 task_type="RETRIEVAL_QUERY",
-                output_dimensionality=768,  # ИСПРАВЛЕНО: раскомментировано для совместимости с Supabase
+                output_dimensionality=768,
             ),
         )
         query_vector = emb_response.embeddings[0].values
@@ -90,18 +90,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             retrieved_text = "Релевантные нормативные акты в базе не найдены."
 
         # 4. Формирование инструкции для Gemini
-        prompt = f"""Ты — квалифицированный эксперт и консультант по охране труда и промышленной безопасности Беларуси.
-Ответь на вопрос пользователя, строго опираясь на предоставленный ниже контекст из нормативных правовых актов (НПА).
+        prompt = f"""Ты — квалифицированный эксперт и консультант по охране труда и промышленной безопасности Республики Беларусь.
+Твоя задача — дать точный, профессиональный и визуально понятный ответ на вопрос пользователя, строго опираясь на предоставленный ниже контекст из нормативных правовых актов (НПА).
 
-Правила ответа:
-- Обязательно ссылайся на конкретные статьи, пункты и названия документов из контекста.
-- Ответ должен быть точным, структурированным и профессиональным.
-- Если в контексте нет прямого ответа, честно скажи об этом.
+--- ПРАВИЛА ФОРМАТИРОВАНИЯ И СТИЛЯ ---
+1. Структура ответа:
+   - Вступление: Начни с прямого резюмирующего ответа на вопрос (1-2 предложения).
+   - Основная часть: Разбей ответ на понятные логические блоки. Используй маркированные списки (• или -) вместо длинных сплошных абзацев.
+   - Ссылки на НПА: Обязательно ссылайся на конкретные статьи, пункты и названия документов из контекста (например: "Согласно п. 12 Инструкции...").
+2. Оформление текста:
+   - Используй **жирный шрифт** для выделения ключевых требований, терминов, цифр и названий документов.
+   - Делай короткие, легко читаемые абзацы.
+3. Ограничения по смыслу:
+   - Ответ должен основываться ТОЛЬКО на предоставленном контексте.
+   - Если в контексте нет прямого ответа на вопрос или информации недостаточно, честно и вежливо скажи об этом.
 
-Контекст из базы НПА:
+--- КОНТЕКСТ ИЗ БАЗЫ НПА ---
 {retrieved_text}
 
-Вопрос пользователя:
+--- ВОПРОС ПОЛЬЗОВАТЕЛЯ ---
 {user_query}
 """
 
@@ -120,8 +127,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     raise gen_err
 
+        # 6. Безопасная отправка ответа (с защитой от ошибок синтаксиса Markdown и длины)
         if response and response.text:
-            await update.message.reply_text(response.text)
+            text = response.text
+            # Разбиваем текст на куски до 4000 символов, если ответ длинный
+            chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]
+            
+            for chunk in chunks:
+                try:
+                    await update.message.reply_text(chunk, parse_mode="Markdown")
+                except Exception as parse_err:
+                    logging.warning(f"Ошибка Markdown парсинга: {parse_err}. Отправка простым текстом.")
+                    await update.message.reply_text(chunk)
         else:
             await update.message.reply_text("Сервис временно перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
 
