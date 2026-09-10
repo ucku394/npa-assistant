@@ -3,6 +3,8 @@ import logging
 import time
 import atexit
 import io
+import base64
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update
@@ -10,6 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from google import genai
 from google.genai import types
 from supabase import create_client, Client
+from openai import OpenAI
 
 # 1. Настройка логирования
 logging.basicConfig(
@@ -24,19 +27,22 @@ load_dotenv(dotenv_path=env_path)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
+if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, DEEPSEEK_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
     raise ValueError("Проверьте наличие всех ключей в файле .env или переменные окружения в Railway!")
 
 # 3. Инициализация клиентов
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Актуальные модели Gemini API
+# Модели
 EMBEDDING_MODEL = "gemini-embedding-001"
 CHAT_MODEL = "gemini-3.6-flash"
+DEEPSEEK_VISION_MODEL = "deepseek-v4-flash-vision-exp"
 
 # Глобальная переменная для приложения
 app = None
@@ -53,7 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Анализ фотографии рабочего места/производственного объекта через Gemini Vision."""
+    """Анализ фотографии рабочего места/производственного объекта через DeepSeek Vision."""
     try:
         await update.message.reply_chat_action("upload_photo")
 
@@ -66,7 +72,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await tg_file.download_to_memory(photo_buffer)
         image_bytes = photo_buffer.getvalue()
 
+        # Защита от слишком большого изображения.
+        if len(image_bytes) > 32 * 1024 * 1024:
+            await update.message.reply_text(
+                "⚠️ Фотография слишком большая для анализа. "
+                "Отправьте изображение меньшего размера."
+            )
+            return
+
         user_caption = (update.message.caption or "").strip()
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         vision_prompt = f"""
 Ты — эксперт по охране труда, промышленной и пожарной безопасности
@@ -141,21 +156,33 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 {user_caption if user_caption else "не указан"}
 """
 
-        # Передаём изображение непосредственно в Gemini.
-        response = gemini_client.models.generate_content(
-            model=CHAT_MODEL,
-            contents=[
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type="image/jpeg"
-                ),
-                vision_prompt,
-            ],
-        )
+        # DeepSeek использует OpenAI-совместимый Chat Completions API.
+        # Изображение передаём как base64 data URL.
+        def call_deepseek():
+            return deepseek_client.chat.completions.create(
+                model=DEEPSEEK_VISION_MODEL,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": vision_prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_tokens=1800,
+                temperature=0.1,
+            )
 
-        if response and response.text:
-            result = response.text
-        else:
+        response = await asyncio.to_thread(call_deepseek)
+        result = response.choices[0].message.content if response.choices else None
+
+        if not result:
             result = "Не удалось получить результат визуального анализа."
 
         # Для фото отправляем обычным текстом — без риска Markdown-разметки.
@@ -164,11 +191,26 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(chunk)
 
     except Exception as e:
-        logging.error(f"Ошибка при анализе фотографии: {e}", exc_info=True)
-        await update.message.reply_text(
-            "Не удалось проанализировать фотографию. "
-            "Попробуйте отправить изображение ещё раз."
-        )
+        error_text = str(e)
+        logging.error(f"Ошибка при анализе фотографии через DeepSeek: {e}", exc_info=True)
+
+        # Отдельно обрабатываем нехватку баланса/лимита или HTTP 429.
+        if "429" in error_text or "insufficient" in error_text.lower() or "balance" in error_text.lower():
+            await update.message.reply_text(
+                "⚠️ DeepSeek API вернул ошибку 429/лимита.\n\n"
+                "Проверьте баланс и доступность API-ключа DeepSeek.\n"
+                "После пополнения баланса повторите отправку фотографии."
+            )
+        elif "401" in error_text or "403" in error_text:
+            await update.message.reply_text(
+                "⚠️ DeepSeek API не принял ключ доступа.\n\n"
+                "Проверьте переменную DEEPSEEK_API_KEY в Railway."
+            )
+        else:
+            await update.message.reply_text(
+                "Не удалось проанализировать фотографию через DeepSeek. "
+                "Попробуйте отправить изображение ещё раз."
+            )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
