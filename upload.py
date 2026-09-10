@@ -1,200 +1,531 @@
+import hashlib
 import os
 import re
 import time
-import logging
 from pathlib import Path
+
 from dotenv import load_dotenv
-import docx
+from docx import Document
+from pypdf import PdfReader
 from google import genai
 from google.genai import types
 from supabase import create_client, Client
 
-# 1. Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 2. Загрузка переменных окружения
+# ============================================================
+# 1. КОНФИГУРАЦИЯ
+# ============================================================
+
 script_dir = Path(__file__).parent
-env_path = script_dir / '.env'
+env_path = script_dir / ".env"
+
 load_dotenv(dotenv_path=env_path)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not GEMINI_API_KEY:
-    raise ValueError(f"Ключ GEMINI_API_KEY не найден в файле {env_path}")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Проверьте наличие SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в файле .env")
+if not api_key:
+    raise ValueError(
+        f"Ключ GEMINI_API_KEY не найден в файле {env_path}"
+    )
 
-# 3. Инициализация клиентов
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+if not supabase_url or not supabase_key:
+    raise ValueError(
+        "Параметры SUPABASE_URL или SUPABASE_SERVICE_ROLE_KEY "
+        "не найдены в .env"
+    )
 
-# Константы моделей и загрузки
+
+# ============================================================
+# 2. ИНИЦИАЛИЗАЦИЯ
+# ============================================================
+
+gemini_client = genai.Client(api_key=api_key)
+
+supabase: Client = create_client(
+    supabase_url,
+    supabase_key
+)
+
+
+# ============================================================
+# 3. НАСТРОЙКИ EMBEDDING
+# ============================================================
+
 EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_DIM = 768
-BATCH_SIZE = 40  # Размер пачки для паакетной отправки в Supabase
+
+# Должно совпадать с vector(768) в Supabase
+EMBEDDING_DIMENSIONS = 768
+
+# Количество попыток при временной ошибке API
+MAX_RETRIES = 5
+
+# Задержка между попытками
+RETRY_DELAY = 3
 
 
-def read_docx(file_path: Path) -> str:
-    """Чтение текста из файла .docx"""
-    doc = docx.Document(file_path)
-    full_text = []
-    for para in doc.paragraphs:
-        if para.text.strip():
-            full_text.append(para.text.strip())
-    return "\n".join(full_text)
+# ============================================================
+# 4. ИЗВЛЕЧЕНИЕ ТЕКСТА
+# ============================================================
 
-
-def read_txt(file_path: Path) -> str:
-    """Чтение текста из файла .txt"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
-
-
-def split_text_into_chunks(text: str, doc_name: str):
+def extract_text(file_path: str) -> str:
     """
-    Умное разбиение текста на статьи и пункты НПА (например, 'Статья 5.', 'Пункт 12.', '1. ').
+    Извлечение текста из DOCX или PDF.
     """
-    paragraphs = text.split("\n")
+
+    file_path_lower = file_path.lower()
+
+    # ----------------------------
+    # DOCX
+    # ----------------------------
+
+    if file_path_lower.endswith(".docx"):
+
+        doc = Document(file_path)
+
+        paragraphs = []
+
+        for paragraph in doc.paragraphs:
+
+            text = paragraph.text.strip()
+
+            if text:
+                paragraphs.append(text)
+
+        return "\n".join(paragraphs)
+
+    # ----------------------------
+    # PDF
+    # ----------------------------
+
+    elif file_path_lower.endswith(".pdf"):
+
+        reader = PdfReader(file_path)
+
+        text_parts = []
+
+        for page in reader.pages:
+
+            extracted = page.extract_text()
+
+            if extracted:
+                text_parts.append(extracted)
+
+        return "\n".join(text_parts)
+
+    else:
+
+        raise ValueError(
+            "Поддерживаются только .docx и .pdf файлы"
+        )
+
+
+# ============================================================
+# 5. НАРЕЗКА ДОКУМЕНТА
+# ============================================================
+
+def chunk_text(text: str, doc_name: str):
+    """
+    Нарезка документов по статьям и пунктам.
+    """
+
+    pattern = (
+        r"(?=\n"
+        r"(?:Статья|Глава|Пункт|п\.)?"
+        r"\s*\d+(?:\.\d+)*\.\s+)"
+    )
+
+    raw_chunks = re.split(pattern, text)
+
+    # Если структура документа не подошла
+    if len(raw_chunks) <= 1:
+
+        raw_chunks = text.split("\n\n")
+
     chunks = []
-    current_chunk = []
-    current_point = "1"
 
-    for p in paragraphs:
-        p_str = p.strip()
-        if not p_str:
+    for raw in raw_chunks:
+
+        clean = raw.strip()
+
+        if not clean:
             continue
-            
-        # Проверка начала новой статьи или пункта
-        match = re.match(r'^(Статья\s+\d+|Пункт\s+\d+|\d+\.)', p_str, re.IGNORECASE)
-        if match and current_chunk:
-            chunks.append({
-                "doc_name": doc_name,
-                "point_num": current_point,
-                "content": "\n".join(current_chunk)
-            })
-            current_chunk = []
-            current_point = match.group(0).strip()
-            
-        current_chunk.append(p_str)
 
-    if current_chunk:
+        if len(clean) < 30:
+            continue
+
+        # Ищем номер статьи/пункта
+        match = re.search(
+            r"^(?:Статья|Глава|Пункт|п\.)?"
+            r"\s*(\d+(?:\.\d+)*)",
+            clean
+        )
+
+        point_num = (
+            match.group(1)
+            if match
+            else "Общее"
+        )
+
+        content = (
+            f"[{doc_name}, ст./п. {point_num}]\n"
+            f"{clean}"
+        )
+
         chunks.append({
-            "doc_name": doc_name,
-            "point_num": current_point,
-            "content": "\n".join(current_chunk)
+            "point_num": point_num,
+            "content": content
         })
 
     return chunks
 
 
-def generate_embedding_with_retry(text: str, retries: int = 3, delay: int = 2):
+# ============================================================
+# 6. ПОЛУЧЕНИЕ EMBEDDING
+# ============================================================
+
+class QuotaExceededError(Exception):
     """
-    Генерация вектора (768 измерений) с обработкой ошибок 503 и повторными попытками.
+    Дневная квота Gemini API (embed_content) исчерпана.
+    В отличие от временных сбоев сети, повторные попытки внутри
+    этого же запуска бессмысленны — квота сбрасывается раз в сутки.
     """
-    for attempt in range(1, retries + 1):
+    pass
+
+
+def _is_quota_exhausted(error: Exception) -> bool:
+    text = str(error)
+    return "RESOURCE_EXHAUSTED" in text or "429" in text
+
+
+def create_embedding(text: str):
+
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+
         try:
+
             response = gemini_client.models.embed_content(
+
                 model=EMBEDDING_MODEL,
+
                 contents=text,
+
                 config=types.EmbedContentConfig(
+
                     task_type="RETRIEVAL_DOCUMENT",
-                    output_dimensionality=EMBEDDING_DIM,
-                ),
+
+                    output_dimensionality=EMBEDDING_DIMENSIONS
+                )
             )
-            return response.embeddings[0].values
+
+            # Новый формат ответа Gemini
+            embedding = response.embeddings[0].values
+
+            # Контроль размерности
+            if len(embedding) != EMBEDDING_DIMENSIONS:
+
+                raise ValueError(
+                    f"Неверная размерность embedding: "
+                    f"{len(embedding)}, "
+                    f"ожидалось {EMBEDDING_DIMENSIONS}"
+                )
+
+            return embedding
+
         except Exception as e:
-            if ("503" in str(e) or "UNAVAILABLE" in str(e)) and attempt < retries:
-                logging.warning(f"Ошибка API (попытка {attempt}/{retries}): {e}. Повтор через {delay} сек...")
-                time.sleep(delay)
-            else:
-                logging.error(f"Не удалось получить вектор для текста: {e}")
-                return None
-    return None
+
+            if _is_quota_exhausted(e):
+                # Ретраи здесь не помогут: если квота на сутки исчерпана,
+                # она не восстановится через 3 секунды. Останавливаем
+                # весь прогон сразу, а не жжём оставшиеся попытки.
+                raise QuotaExceededError(
+                    "Дневная квота Gemini API (embed_content) исчерпана "
+                    "(лимит бесплатного тарифа — 1000 запросов/сутки). "
+                    "Загрузка остановлена; уже вставленные чанки сохранены "
+                    "в Supabase. Запустите скрипт повторно позже — он "
+                    "продолжит с того места, где остановился, и не будет "
+                    "тратить квоту на уже загруженные чанки."
+                ) from e
+
+            last_error = e
+
+            print(
+                f"    Ошибка embedding "
+                f"(попытка {attempt}/{MAX_RETRIES}): {e}"
+            )
+
+            if attempt < MAX_RETRIES:
+
+                time.sleep(RETRY_DELAY)
+
+    raise RuntimeError(
+        f"Не удалось получить embedding "
+        f"после {MAX_RETRIES} попыток: {last_error}"
+    )
 
 
-def process_file(file_path: Path):
-    """Полный цикл векторизации одного документа"""
-    doc_name = file_path.stem
-    logging.info(f"Начало обработки документа: '{doc_name}' ({file_path.name})")
+# ============================================================
+# 7. ЗАГРУЗКА ДОКУМЕНТА
+# ============================================================
 
-    # Чтение текста
-    ext = file_path.suffix.lower()
-    if ext == ".docx":
-        raw_text = read_docx(file_path)
-    elif ext == ".txt":
-        raw_text = read_txt(file_path)
-    else:
-        logging.warning(f"Пропуск файла с неподдерживаемым расширением: {file_path.name}")
-        return
-
-    if not raw_text.strip():
-        logging.warning(f"Файл {file_path.name} пуст!")
-        return
-
-    # Нарезка на чанки
-    chunks = split_text_into_chunks(raw_text, doc_name)
-    total_chunks = len(chunks)
-    logging.info(f"Документ '{doc_name}' успешно разбит на {total_chunks} чанков.")
-
-    # Генерация векторов и сохранение пачками
-    batch_records = []
-    
-    for idx, chunk in enumerate(chunks, 1):
-        print(f"[{idx}/{total_chunks}] Векторизация ст./п. {chunk['point_num']}...")
-        vector = generate_embedding_with_retry(chunk["content"])
-
-        if vector:
-            batch_records.append({
-                "doc_name": chunk["doc_name"],
-                "point_num": chunk["point_num"],
-                "content": chunk["content"],
-                "embedding": vector
-            })
-
-        # Отправка пакета данных при накоплении BATCH_SIZE
-        if len(batch_records) >= BATCH_SIZE:
-            supabase.table("npa_chunks").insert(batch_records).execute()
-            print(f"  --> Загружена пачка из {len(batch_records)} чанков в Supabase.")
-            batch_records = []
-
-    # Финальный остаток
-    if batch_records:
-        supabase.table("npa_chunks").insert(batch_records).execute()
-        print(f"  --> Загружена финальная пачка из {len(batch_records)} чанков.")
-
-    print(f"\n==================================================")
-    print(f"УСПЕХ! Файл '{file_path.name}' полностью отправлен в базу.")
-    print(f"==================================================\n")
-
-
-def main():
+def get_existing_content_hashes(doc_name: str) -> set:
     """
-    8. АВТОМАТИЧЕСКИЙ ЗАПУСК
-    Сканирование пачки документов в директории без жесткой привязки к имени.
+    Хэши content уже загруженных чанков этого документа.
+    Используются, чтобы при повторном запуске не тратить квоту
+    на чанки, которые уже есть в Supabase (сравнение по точному
+    тексту чанка надёжнее, чем по point_num — номера пунктов
+    могут повторяться, например все "Общее" без явного номера).
     """
-    supported_extensions = [".docx", ".txt"]
-    all_files = []
 
-    for ext in supported_extensions:
-        all_files.extend(list(script_dir.glob(f"*{ext}")))
+    response = (
+        supabase
+        .table("npa_chunks")
+        .select("content")
+        .eq("doc_name", doc_name)
+        .execute()
+    )
 
-    # Исключение скрытых/временных файлов Word вида ~$doc.docx
-    files_to_process = [f for f in all_files if not f.name.startswith("~$")]
+    return {
+        hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
+        for row in response.data
+    }
 
-    if not files_to_process:
-        logging.error("В папке npa_loader не найдено подходящих документов (.docx или .txt)!")
+
+def process_and_upload(
+    file_path: str,
+    doc_name: str,
+    doc_type: str,
+    issuer: str,
+    source_url: str
+):
+
+    print()
+    print("=" * 70)
+    print(f"Обработка файла: {file_path}")
+    print("=" * 70)
+
+    # --------------------------------------------------------
+    # Извлечение текста
+    # --------------------------------------------------------
+
+    text = extract_text(file_path)
+
+    if not text.strip():
+
+        raise ValueError(
+            "Из файла не удалось извлечь текст."
+        )
+
+    print(
+        f"Извлечено символов: {len(text):,}"
+    )
+
+    # --------------------------------------------------------
+    # Нарезка
+    # --------------------------------------------------------
+
+    chunks = chunk_text(
+        text,
+        doc_name
+    )
+
+    print(
+        f"Успешно нарезано на "
+        f"{len(chunks)} чанков."
+    )
+
+    # --------------------------------------------------------
+    # Пропуск уже загруженных чанков (устойчиво к повторному запуску)
+    # --------------------------------------------------------
+
+    existing_hashes = get_existing_content_hashes(doc_name)
+
+    if existing_hashes:
+        print(
+            f"В базе уже есть чанков этого документа: "
+            f"{len(existing_hashes)} — они будут пропущены."
+        )
+
+    pending_chunks = []
+
+    for c in chunks:
+        c_hash = hashlib.sha256(c["content"].encode("utf-8")).hexdigest()
+        if c_hash in existing_hashes:
+            continue
+        c["_hash"] = c_hash
+        pending_chunks.append(c)
+
+    skipped = len(chunks) - len(pending_chunks)
+
+    if skipped:
+        print(f"Пропущено уже загруженных чанков: {skipped}")
+
+    if not pending_chunks:
+        print("Все чанки этого документа уже в базе — пропускаем целиком.")
+        print()
         return
 
-    logging.info(f"Найдено документов для обработки: {len(files_to_process)}")
-    for f in files_to_process:
-        logging.info(f" - {f.name}")
+    print()
+    print("Начинаем векторизацию...")
+    print()
 
-    print("\n--- СТАРТ ПАКЕТНОЙ ЗАГРУЗКИ ---")
-    for file_path in files_to_process:
-        process_file(file_path)
+    # --------------------------------------------------------
+    # Векторизация
+    # --------------------------------------------------------
 
+    records = []
+
+    total = len(pending_chunks)
+
+    for i, chunk in enumerate(pending_chunks, start=1):
+
+        print(
+            f"[{i}/{total}] "
+            f"Векторизация "
+            f"ст./п. {chunk['point_num']}..."
+        )
+
+        try:
+            embedding = create_embedding(
+                chunk["content"]
+            )
+        except QuotaExceededError as e:
+            print()
+            print("!" * 70)
+            print(str(e))
+            print(
+                f"Остановлено на {i - 1}/{total} новых чанков "
+                f"документа '{doc_name}' (уже загруженные ранее — "
+                f"{skipped} — в счёт не идут, они и так пропущены)."
+            )
+            print("!" * 70)
+
+            if records:
+                supabase \
+                    .table("npa_chunks") \
+                    .insert(records) \
+                    .execute()
+                print(
+                    f"    ✓ Промежуточная пачка ({len(records)}) "
+                    f"сохранена перед остановкой."
+                )
+
+            print()
+            return
+
+        records.append({
+
+            "doc_name": doc_name,
+
+            "doc_type": doc_type,
+
+            "issuer": issuer,
+
+            "point_num": chunk["point_num"],
+
+            "content": chunk["content"],
+
+            "source_url": source_url,
+
+            "status": "active",
+
+            "embedding": embedding
+        })
+
+        # ----------------------------------------------------
+        # Загрузка пачкой по 20
+        # ----------------------------------------------------
+
+        if len(records) >= 20:
+
+            supabase \
+                .table("npa_chunks") \
+                .insert(records) \
+                .execute()
+
+            print(
+                f"    ✓ Загружено в Supabase: "
+                f"{i}/{total}"
+            )
+
+            records = []
+
+    # --------------------------------------------------------
+    # Остаток
+    # --------------------------------------------------------
+
+    if records:
+
+        supabase \
+            .table("npa_chunks") \
+            .insert(records) \
+            .execute()
+
+        print(
+            f"    ✓ Финальная пачка загружена."
+        )
+
+    print()
+    print("=" * 70)
+    print(
+        f"УСПЕХ! Документ '{doc_name}' "
+        f"векторизован и загружен в Supabase."
+    )
+    print("=" * 70)
+    print()
+
+
+# ============================================================
+# 8. ЗАПУСК
+# ============================================================
 
 if __name__ == "__main__":
-    main()
+
+    file_name = "ЗООТ.docx"
+
+    possible_paths = [
+
+        script_dir / file_name,
+
+        script_dir / f"{file_name}.docx"
+    ]
+
+    target_path = None
+
+    for p in possible_paths:
+
+        if p.exists():
+
+            target_path = p
+
+            break
+
+    if not target_path:
+
+        print()
+        print(
+            f"ОШИБКА: файл '{file_name}' "
+            f"не найден в папке:"
+        )
+
+        print(script_dir)
+
+        print()
+
+    else:
+
+        process_and_upload(
+
+            file_path=str(target_path),
+
+            doc_name="Закон об охране труда РБ",
+
+            doc_type="Закон",
+
+            issuer="Парламент РБ",
+
+            source_url="https://pravo.by"
+        )
