@@ -36,6 +36,19 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIM = 768
 BATCH_SIZE = 40  # Размер пачки для отправки в Supabase
 
+# --------------------------------------------------------
+# Человекочитаемые названия документов по имени файла.
+# Ключ — имя файла БЕЗ расширения (например, для "175.docx" ключ — "175").
+# Если файла нет в этом словаре, doc_name возьмётся из имени файла как есть
+# (и скрипт выведет предупреждение, чтобы это не осталось незамеченным).
+# --------------------------------------------------------
+DOC_NAME_MAP = {
+    "175": "Инструкция о порядке обучения, стажировки, инструктажа и проверки знаний "
+           "работающих по вопросам охраны труда (утв. постановлением Минтруда и "
+           "соцзащиты РБ от 28.11.2008 № 175)",
+    # "имя_файла_без_расширения": "Полное название документа",
+}
+
 
 class QuotaExceededError(Exception):
     """
@@ -160,7 +173,17 @@ def generate_embedding_with_retry(text: str, retries: int = 3, delay: int = 2):
 
 def process_file(file_path: Path):
     """Полный цикл векторизации и отправки документа"""
-    doc_name = file_path.stem
+    file_stem = file_path.stem
+    doc_name = DOC_NAME_MAP.get(file_stem, file_stem)
+
+    if file_stem not in DOC_NAME_MAP:
+        logging.warning(
+            f"Для файла '{file_path.name}' нет записи в DOC_NAME_MAP — "
+            f"doc_name будет взят из имени файла ('{doc_name}'). Если это "
+            f"не человекочитаемое название, добавь запись в DOC_NAME_MAP "
+            f"в начале скрипта."
+        )
+
     logging.info(f"Начало обработки документа: '{doc_name}' ({file_path.name})")
 
     ext = file_path.suffix.lower()
