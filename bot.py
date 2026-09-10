@@ -2,6 +2,7 @@ import os
 import logging
 import time
 import atexit
+import io
 from pathlib import Path
 from dotenv import load_dotenv
 from telegram import Update
@@ -49,6 +50,125 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "и я найду точные статьи и дам развернутый ответ."
     )
     await update.message.reply_text(welcome_text)
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Анализ фотографии рабочего места/производственного объекта через Gemini Vision."""
+    try:
+        await update.message.reply_chat_action("upload_photo")
+
+        # Берём фотографию максимального доступного размера.
+        photo = update.message.photo[-1]
+        tg_file = await context.bot.get_file(photo.file_id)
+
+        # Скачиваем фото в память, без записи на диск.
+        photo_buffer = io.BytesIO()
+        await tg_file.download_to_memory(photo_buffer)
+        image_bytes = photo_buffer.getvalue()
+
+        user_caption = (update.message.caption or "").strip()
+
+        vision_prompt = f"""
+Ты — эксперт по охране труда, промышленной и пожарной безопасности
+в Республике Беларусь с большим практическим опытом.
+
+Тебе передана фотография производственного объекта, рабочего места,
+оборудования или территории.
+
+Твоя задача — провести ТОЛЬКО ВИЗУАЛЬНЫЙ АНАЛИЗ фотографии.
+
+ВАЖНЕЙШЕЕ ПРАВИЛО:
+Не утверждай, что действие или объект является нарушением законодательства,
+если это невозможно установить только по фотографии.
+Не придумывай номера пунктов НПА, документы, размеры, характеристики
+оборудования или обстоятельства, которых на фото не видно.
+
+Разделяй:
+1. что ДОСТОВЕРНО ВИДНО на фотографии;
+2. что МОЖЕТ СВИДЕТЕЛЬСТВОВАТЬ о потенциальном нарушении;
+3. что НЕВОЗМОЖНО определить по фотографии.
+
+Проверь, насколько это возможно по изображению:
+- СИЗ работников;
+- ограждения опасных зон;
+- состояние оборудования;
+- электрические кабели и электрооборудование;
+- проходы, проезды, лестницы и ограждения;
+- порядок и складирование материалов;
+- наличие потенциальных источников падения предметов;
+- пожарную безопасность;
+- блокировки и защитные устройства, если они визуально доступны;
+- транспорт и движение техники;
+- наличие очевидных опасных факторов;
+- другие явно видимые небезопасные условия.
+
+Для каждого потенциального нарушения укажи:
+• Что видно;
+• Почему это потенциально опасно;
+• Уровень риска: 🔴 высокий / 🟠 средний / 🟡 низкий;
+• Что необходимо дополнительно проверить.
+
+Не ставь окончательный юридический диагноз только на основании фото.
+
+ФОРМАТ ОТВЕТА:
+
+🔎 ВИЗУАЛЬНЫЙ АНАЛИЗ
+
+Если явных проблем не видно:
+🟢 Явных нарушений по фотографии не обнаружено.
+Затем укажи, что всё равно невозможно проверить визуально.
+
+Если проблемы обнаружены:
+
+🔴 1. [краткое название]
+Что видно: ...
+Риск: ...
+Почему требует внимания: ...
+Проверить: ...
+
+🟠 2. ...
+
+В конце:
+
+⚠️ ОГРАНИЧЕНИЯ АНАЛИЗА
+Укажи 1–3 наиболее важных обстоятельства, которые невозможно определить
+по фотографии и которые могут изменить вывод.
+
+Не ссылайся на конкретные НПА в этом режиме.
+Нормативное обоснование будет выполняться отдельным этапом через базу НПА.
+
+Подпись/комментарий пользователя к фото:
+{user_caption if user_caption else "не указан"}
+"""
+
+        # Передаём изображение непосредственно в Gemini.
+        response = gemini_client.models.generate_content(
+            model=CHAT_MODEL,
+            contents=[
+                types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type="image/jpeg"
+                ),
+                vision_prompt,
+            ],
+        )
+
+        if response and response.text:
+            result = response.text
+        else:
+            result = "Не удалось получить результат визуального анализа."
+
+        # Для фото отправляем обычным текстом — без риска Markdown-разметки.
+        chunks = [result[i:i + 4000] for i in range(0, len(result), 4000)]
+        for chunk in chunks:
+            await update.message.reply_text(chunk)
+
+    except Exception as e:
+        logging.error(f"Ошибка при анализе фотографии: {e}", exc_info=True)
+        await update.message.reply_text(
+            "Не удалось проанализировать фотографию. "
+            "Попробуйте отправить изображение ещё раз."
+        )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -176,6 +296,9 @@ def main():
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    # Фотографии анализируются отдельным Vision-обработчиком.
+    # Текстовый RAG-режим остаётся без изменений.
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("Бот по охране труда запущен!")
