@@ -1,59 +1,60 @@
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 
+load_dotenv()
 
 # ============================================================
-# Загрузка .env
+# TELEGRAM
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-ENV_FILE = BASE_DIR / ".env"
-
-load_dotenv(ENV_FILE)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
 
 # ============================================================
-# Telegram
+# GEMINI
 # ============================================================
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-
-# ============================================================
-# AI
-# ============================================================
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-
-
-# ============================================================
-# Supabase
-# ============================================================
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-
-# ============================================================
-# Модели
-# ============================================================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 EMBEDDING_MODEL = os.getenv(
     "EMBEDDING_MODEL",
     "gemini-embedding-001"
-)
+).strip()
 
 CHAT_MODEL = os.getenv(
     "CHAT_MODEL",
     "gemini-3.6-flash"
-)
+).strip()
+
+
+# ============================================================
+# DEEPSEEK
+# ============================================================
+
+DEEPSEEK_API_KEY = os.getenv(
+    "DEEPSEEK_API_KEY",
+    ""
+).strip()
 
 VISION_MODEL = os.getenv(
     "VISION_MODEL",
     "deepseek-v4-flash-vision-exp"
-)
+).strip()
+
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL",
+    ""
+).strip()
+
+SUPABASE_SERVICE_ROLE_KEY = os.getenv(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    ""
+).strip()
 
 
 # ============================================================
@@ -74,14 +75,12 @@ RAG_FINAL_COUNT = int(
 
 
 # ============================================================
-# Ограничения
+# LIMITS
 # ============================================================
 
 MAX_IMAGE_SIZE_MB = int(
     os.getenv("MAX_IMAGE_SIZE_MB", "32")
 )
-
-MAX_TELEGRAM_MESSAGE_LENGTH = 4000
 
 MAX_VISION_TOKENS = int(
     os.getenv("MAX_VISION_TOKENS", "1800")
@@ -91,29 +90,19 @@ MAX_CHAT_TOKENS = int(
     os.getenv("MAX_CHAT_TOKENS", "3000")
 )
 
-
-# ============================================================
-# Rate limit
-# ============================================================
-
-REQUESTS_PER_MINUTE = int(
-    os.getenv("REQUESTS_PER_MINUTE", "10")
-)
-
-REQUESTS_PER_HOUR = int(
-    os.getenv("REQUESTS_PER_HOUR", "50")
-)
+TELEGRAM_MESSAGE_LIMIT = 4000
 
 
 # ============================================================
-# Проверка конфигурации
+# VALIDATION
 # ============================================================
 
 def validate_config():
+
     required = {
         "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
         "SUPABASE_URL": SUPABASE_URL,
-        "SUPABASE_SERVICE_ROLE_KEY": SUPABASE_KEY,
+        "SUPABASE_SERVICE_ROLE_KEY": SUPABASE_SERVICE_ROLE_KEY,
     }
 
     missing = [
@@ -123,7 +112,7 @@ def validate_config():
     ]
 
     if missing:
-        raise ValueError(
-            "Не заданы обязательные переменные окружения: "
+        raise RuntimeError(
+            "Не заполнены обязательные переменные окружения: "
             + ", ".join(missing)
         )
