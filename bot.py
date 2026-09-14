@@ -1,360 +1,793 @@
-import os
 import logging
-import time
-import atexit
+import asyncio
 import io
 import base64
-import asyncio
-from pathlib import Path
-from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from google import genai
-from google.genai import types
-from supabase import create_client, Client
-from openai import OpenAI
 
-# 1. Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
 )
 
-# 2. Загрузка переменных окружения
-script_dir = Path(__file__).parent
-env_path = script_dir / '.env'
-load_dotenv(dotenv_path=env_path)
+from openai import OpenAI
+from google import genai
+from supabase import create_client, Client
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+from config import (
+    TELEGRAM_TOKEN,
+    GEMINI_API_KEY,
+    DEEPSEEK_API_KEY,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+    VISION_MODEL,
+    MAX_IMAGE_SIZE_MB,
+    MAX_VISION_TOKENS,
+    MAX_CHAT_TOKENS,
+    TELEGRAM_MESSAGE_LIMIT,
+    validate_config,
+)
 
-if not all([TELEGRAM_TOKEN, GEMINI_API_KEY, DEEPSEEK_API_KEY, SUPABASE_URL, SUPABASE_KEY]):
-    raise ValueError("Проверьте наличие всех ключей в файле .env или переменные окружения в Railway!")
+from prompts import VISION_ANALYSIS_PROMPT
+from rag import retrieve_context, get_source_names
 
-# 3. Инициализация клиентов
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Модели
-EMBEDDING_MODEL = "gemini-embedding-001"
-CHAT_MODEL = "gemini-3.6-flash"
-DEEPSEEK_VISION_MODEL = "deepseek-v4-flash-vision-exp"
+# ============================================================
+# 1. ЛОГИРОВАНИЕ
+# ============================================================
 
-# Глобальная переменная для приложения
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 2. ПРОВЕРКА КОНФИГУРАЦИИ
+# ============================================================
+
+validate_config()
+
+
+# ============================================================
+# 3. ИНИЦИАЛИЗАЦИЯ КЛИЕНТОВ
+# ============================================================
+
+gemini_client = genai.Client(
+    api_key=GEMINI_API_KEY
+)
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+)
+
+
+# DeepSeek нужен только для анализа фотографий.
+deepseek_client = None
+
+if DEEPSEEK_API_KEY:
+    deepseek_client = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com",
+    )
+
+
+# ============================================================
+# 4. ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+# ============================================================
+
 app = None
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Приветственное сообщение по команде /start"""
+# ============================================================
+# 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================================
+
+async def send_long_message(
+    message,
+    text: str,
+    parse_mode=None,
+):
+    """
+    Telegram ограничивает размер одного сообщения.
+    Поэтому длинный ответ разбиваем на части.
+    """
+
+    if not text:
+        return
+
+    limit = TELEGRAM_MESSAGE_LIMIT
+
+    chunks = [
+        text[i:i + limit]
+        for i in range(0, len(text), limit)
+    ]
+
+    for chunk in chunks:
+
+        try:
+            if parse_mode:
+                await message.reply_text(
+                    chunk,
+                    parse_mode=parse_mode,
+                )
+            else:
+                await message.reply_text(chunk)
+
+        except Exception as error:
+
+            logger.warning(
+                "Ошибка отправки сообщения: %s",
+                error,
+            )
+
+            # Если Markdown сломался —
+            # отправляем обычным текстом.
+            try:
+                await message.reply_text(chunk)
+
+            except Exception:
+                logger.exception(
+                    "Не удалось отправить сообщение Telegram"
+                )
+
+
+# ============================================================
+# 6. /START
+# ============================================================
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    Приветственное сообщение.
+    """
+
     welcome_text = (
-        "Здравствуйте! Я ваш ИИ-ассистент по охране труда и промышленной безопасности.\n\n"
-        "Задайте мне вопрос по законодательству РБ и нормативным актам (НПА), "
-        "и я найду точные статьи и дам развернутый ответ."
+        "Здравствуйте! 👋\n\n"
+        "Я — ИИ-ассистент по охране труда, "
+        "промышленной и пожарной безопасности "
+        "в Республике Беларусь.\n\n"
+
+        "📚 Я могу:\n"
+        "• отвечать на вопросы по НПА;\n"
+        "• искать нормативное обоснование в базе;\n"
+        "• анализировать фотографии рабочих мест;\n"
+        "• выявлять потенциально опасные факторы;\n"
+        "• помогать специалисту по охране труда "
+        "проводить предварительную проверку.\n\n"
+
+        "⚠️ Нормативные ответы формируются "
+        "на основании доступной базы НПА Республики Беларусь.\n\n"
+
+        "Просто задайте вопрос или отправьте фотографию."
     )
+
     await update.message.reply_text(welcome_text)
 
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Анализ фотографии рабочего места/производственного объекта через DeepSeek Vision."""
+# ============================================================
+# 7. АНАЛИЗ ФОТОГРАФИИ
+# ============================================================
+
+async def handle_photo(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    Временная версия Vision-модуля.
+
+    На следующем этапе будет вынесена
+    в отдельный vision.py.
+    """
+
+    if deepseek_client is None:
+
+        await update.message.reply_text(
+            "⚠️ Анализ фотографий сейчас недоступен: "
+            "не настроен DEEPSEEK_API_KEY."
+        )
+
+        return
+
     try:
-        await update.message.reply_chat_action("upload_photo")
 
-        # Берём фотографию максимального доступного размера.
-        photo = update.message.photo[-1]
-        tg_file = await context.bot.get_file(photo.file_id)
+        await update.message.reply_chat_action(
+            "upload_photo"
+        )
 
-        # Скачиваем фото в память, без записи на диск.
-        photo_buffer = io.BytesIO()
-        await tg_file.download_to_memory(photo_buffer)
-        image_bytes = photo_buffer.getvalue()
+        # ----------------------------------------------------
+        # Получаем фотографию максимального качества
+        # ----------------------------------------------------
 
-        # Защита от слишком большого изображения.
-        if len(image_bytes) > 32 * 1024 * 1024:
+        if not update.message.photo:
+
             await update.message.reply_text(
-                "⚠️ Фотография слишком большая для анализа. "
-                "Отправьте изображение меньшего размера."
+                "Не удалось получить фотографию."
             )
+
             return
 
-        user_caption = (update.message.caption or "").strip()
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        photo = update.message.photo[-1]
 
-        vision_prompt = f"""
-Ты — эксперт по охране труда, промышленной и пожарной безопасности
-в Республике Беларусь с большим практическим опытом.
+        tg_file = await context.bot.get_file(
+            photo.file_id
+        )
 
-Тебе передана фотография производственного объекта, рабочего места,
-оборудования или территории.
+        # ----------------------------------------------------
+        # Скачиваем фотографию в память
+        # ----------------------------------------------------
 
-Твоя задача — провести ТОЛЬКО ВИЗУАЛЬНЫЙ АНАЛИЗ фотографии.
+        photo_buffer = io.BytesIO()
 
-ВАЖНЕЙШЕЕ ПРАВИЛО:
-Не утверждай, что действие или объект является нарушением законодательства,
-если это невозможно установить только по фотографии.
-Не придумывай номера пунктов НПА, документы, размеры, характеристики
-оборудования или обстоятельства, которых на фото не видно.
+        await tg_file.download_to_memory(
+            photo_buffer
+        )
 
-Разделяй:
-1. что ДОСТОВЕРНО ВИДНО на фотографии;
-2. что МОЖЕТ СВИДЕТЕЛЬСТВОВАТЬ о потенциальном нарушении;
-3. что НЕВОЗМОЖНО определить по фотографии.
+        image_bytes = photo_buffer.getvalue()
 
-Проверь, насколько это возможно по изображению:
-- СИЗ работников;
-- ограждения опасных зон;
-- состояние оборудования;
-- электрические кабели и электрооборудование;
-- проходы, проезды, лестницы и ограждения;
-- порядок и складирование материалов;
-- наличие потенциальных источников падения предметов;
-- пожарную безопасность;
-- блокировки и защитные устройства, если они визуально доступны;
-- транспорт и движение техники;
-- наличие очевидных опасных факторов;
-- другие явно видимые небезопасные условия.
+        # ----------------------------------------------------
+        # Проверяем размер
+        # ----------------------------------------------------
 
-Для каждого потенциального нарушения укажи:
-• Что видно;
-• Почему это потенциально опасно;
-• Уровень риска: 🔴 высокий / 🟠 средний / 🟡 низкий;
-• Что необходимо дополнительно проверить.
+        max_size = (
+            MAX_IMAGE_SIZE_MB
+            * 1024
+            * 1024
+        )
 
-Не ставь окончательный юридический диагноз только на основании фото.
+        if len(image_bytes) > max_size:
 
-ФОРМАТ ОТВЕТА:
+            await update.message.reply_text(
+                f"⚠️ Фотография слишком большая.\n\n"
+                f"Максимальный размер: "
+                f"{MAX_IMAGE_SIZE_MB} МБ."
+            )
 
-🔎 ВИЗУАЛЬНЫЙ АНАЛИЗ
+            return
 
-Если явных проблем не видно:
-🟢 Явных нарушений по фотографии не обнаружено.
-Затем укажи, что всё равно невозможно проверить визуально.
+        # ----------------------------------------------------
+        # Комментарий пользователя
+        # ----------------------------------------------------
 
-Если проблемы обнаружены:
+        user_caption = (
+            update.message.caption or ""
+        ).strip()
 
-🔴 1. [краткое название]
-Что видно: ...
-Риск: ...
-Почему требует внимания: ...
-Проверить: ...
+        # ----------------------------------------------------
+        # Base64
+        # ----------------------------------------------------
 
-🟠 2. ...
+        image_b64 = base64.b64encode(
+            image_bytes
+        ).decode("utf-8")
 
-В конце:
+        # ----------------------------------------------------
+        # Формируем Vision prompt
+        # ----------------------------------------------------
 
-⚠️ ОГРАНИЧЕНИЯ АНАЛИЗА
-Укажи 1–3 наиболее важных обстоятельства, которые невозможно определить
-по фотографии и которые могут изменить вывод.
+        prompt = VISION_ANALYSIS_PROMPT.format(
+            user_caption=(
+                user_caption
+                if user_caption
+                else "не указан"
+            )
+        )
 
-Не ссылайся на конкретные НПА в этом режиме.
-Нормативное обоснование будет выполняться отдельным этапом через базу НПА.
+        # ----------------------------------------------------
+        # Запрос DeepSeek
+        # ----------------------------------------------------
 
-Подпись/комментарий пользователя к фото:
-{user_caption if user_caption else "не указан"}
-"""
-
-        # DeepSeek использует OpenAI-совместимый Chat Completions API.
-        # Изображение передаём как base64 data URL.
         def call_deepseek():
+
             return deepseek_client.chat.completions.create(
-                model=DEEPSEEK_VISION_MODEL,
+                model=VISION_MODEL,
+
                 messages=[
                     {
                         "role": "user",
+
                         "content": [
-                            {"type": "text", "text": vision_prompt},
+
+                            {
+                                "type": "text",
+                                "text": prompt,
+                            },
+
                             {
                                 "type": "image_url",
+
                                 "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                    "url": (
+                                        "data:image/jpeg;base64,"
+                                        f"{image_b64}"
+                                    )
                                 },
                             },
+
                         ],
                     }
                 ],
-                max_tokens=1800,
+
+                max_tokens=MAX_VISION_TOKENS,
+
                 temperature=0.1,
             )
 
-        response = await asyncio.to_thread(call_deepseek)
-        result = response.choices[0].message.content if response.choices else None
+        response = await asyncio.to_thread(
+            call_deepseek
+        )
+
+        # ----------------------------------------------------
+        # Получаем результат
+        # ----------------------------------------------------
+
+        result = None
+
+        if response and response.choices:
+
+            result = (
+                response
+                .choices[0]
+                .message
+                .content
+            )
 
         if not result:
-            result = "Не удалось получить результат визуального анализа."
 
-        # Для фото отправляем обычным текстом — без риска Markdown-разметки.
-        chunks = [result[i:i + 4000] for i in range(0, len(result), 4000)]
-        for chunk in chunks:
-            await update.message.reply_text(chunk)
-
-    except Exception as e:
-        error_text = str(e)
-        logging.error(f"Ошибка при анализе фотографии через DeepSeek: {e}", exc_info=True)
-
-        # Отдельно обрабатываем нехватку баланса/лимита или HTTP 429.
-        if "429" in error_text or "insufficient" in error_text.lower() or "balance" in error_text.lower():
-            await update.message.reply_text(
-                "⚠️ DeepSeek API вернул ошибку 429/лимита.\n\n"
-                "Проверьте баланс и доступность API-ключа DeepSeek.\n"
-                "После пополнения баланса повторите отправку фотографии."
+            result = (
+                "Не удалось получить результат "
+                "визуального анализа."
             )
-        elif "401" in error_text or "403" in error_text:
+
+        # ----------------------------------------------------
+        # Отправляем результат
+        # ----------------------------------------------------
+
+        await send_long_message(
+            update.message,
+            result,
+        )
+
+    except Exception as error:
+
+        error_text = str(error)
+
+        logger.error(
+            "Ошибка Vision: %s",
+            error,
+            exc_info=True,
+        )
+
+        # ----------------------------------------------------
+        # Ошибка API / баланс
+        # ----------------------------------------------------
+
+        if (
+            "429" in error_text
+            or "insufficient" in error_text.lower()
+            or "balance" in error_text.lower()
+        ):
+
+            await update.message.reply_text(
+                "⚠️ DeepSeek API сообщил "
+                "об ограничении запроса или баланса.\n\n"
+                "Проверьте DEEPSEEK_API_KEY "
+                "и доступность API DeepSeek."
+            )
+
+            return
+
+        # ----------------------------------------------------
+        # Ошибка авторизации
+        # ----------------------------------------------------
+
+        if (
+            "401" in error_text
+            or "403" in error_text
+        ):
+
             await update.message.reply_text(
                 "⚠️ DeepSeek API не принял ключ доступа.\n\n"
-                "Проверьте переменную DEEPSEEK_API_KEY в Railway."
-            )
-        else:
-            await update.message.reply_text(
-                "Не удалось проанализировать фотографию через DeepSeek. "
-                "Попробуйте отправить изображение ещё раз."
+                "Проверьте DEEPSEEK_API_KEY."
             )
 
+            return
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка текстовых вопросов пользователя"""
-    user_query = update.message.text
-    await update.message.reply_chat_action("typing")
+        # ----------------------------------------------------
+        # Остальные ошибки
+        # ----------------------------------------------------
+
+        await update.message.reply_text(
+            "❌ Не удалось выполнить "
+            "визуальный анализ.\n\n"
+            "Попробуйте отправить фотографию ещё раз."
+        )
+
+
+# ============================================================
+# 8. ОБРАБОТКА ТЕКСТОВОГО ВОПРОСА
+# ============================================================
+
+async def handle_message(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    Основной текстовый режим.
+
+    Архитектура:
+
+    Пользователь
+        ↓
+    retrieve_context()
+        ↓
+    Gemini Embedding
+        ↓
+    Supabase
+        ↓
+    Reranking
+        ↓
+    Context
+        ↓
+    Gemini
+        ↓
+    Ответ
+    """
+
+    if not update.message:
+        return
+
+    user_query = (
+        update.message.text or ""
+    ).strip()
+
+    if not user_query:
+        return
+
+    await update.message.reply_chat_action(
+        "typing"
+    )
 
     try:
-        # 1. Векторизация запроса через Gemini API
-        emb_response = gemini_client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=user_query,
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=768,
-            ),
+
+        logger.info(
+            "Новый запрос пользователя: %s",
+            user_query[:300],
         )
-        query_vector = emb_response.embeddings[0].values
 
-        # 2. Поиск релевантных чанков в Supabase
-        rpc_response = supabase.rpc(
-            "match_npa_chunks",
-            {
-                "query_embedding": query_vector,
-                "match_threshold": 0.3,
-                "match_count": 4
-            }
-        ).execute()
+        # ====================================================
+        # 1. RAG
+        # ====================================================
 
-        context_chunks = rpc_response.data
+        rag_result = await retrieve_context(
+            user_query=user_query,
+            supabase=supabase,
+        )
 
-        # 3. Сборка контекста из найденных фрагментов
-        if context_chunks:
-            retrieved_text = "\n\n---\n\n".join(
-                [f"Источник: {c.get('doc_name', 'НПА')}, ст./п. {c.get('point_num', '-')}\nТекст: {c.get('content', '')}"
-                 for c in context_chunks]
+        # ----------------------------------------------------
+        # Проверяем результат
+        # ----------------------------------------------------
+
+        if not rag_result.get("found"):
+
+            await update.message.reply_text(
+                "⚠️ В базе НПА не найдено "
+                "достаточно релевантной информации "
+                "для уверенного ответа.\n\n"
+
+                "Я не буду придумывать нормативное "
+                "обоснование.\n\n"
+
+                "Попробуйте:\n"
+                "• уточнить вопрос;\n"
+                "• указать конкретную профессию;\n"
+                "• указать оборудование;\n"
+                "• указать вид работ;\n"
+                "• назвать известный вам НПА."
             )
-        else:
-            retrieved_text = "Релевантные нормативные акты в базе не найдены."
 
-        # 4. Формирование инструкции для Gemini
-        prompt = f"""Ты — квалифицированный эксперт и консультант по охране труда и промышленной безопасности Республики Беларусь.
-Твоя задача — дать точный, профессиональный и визуально понятный ответ на вопрос пользователя, строго опираясь на предоставленный ниже контекст из нормативных правовых актов (НПА).
+            return
 
---- ПРАВИЛА ФОРМАТИРОВАНИЯ И СТИЛЯ ---
-1. Структура ответа:
-   - Вступление: Начни с прямого резюмирующего ответа на вопрос (1-2 предложения).
-   - Основная часть: Разбей ответ на понятные логические блоки. Используй маркированные списки (• или -) вместо длинных сплошных абзацев.
-   - Ссылки на НПА:
-     • Если ВСЕ используемые нормы взяты из ОДНОГО документа — укажи его полное название только ОДИН раз,
-       в первом предложении ответа (например: "Согласно Инструкции № 175 по охране труда..."). Дальше по всему
-       тексту ссылайся ТОЛЬКО номером пункта/статьи в формате "(п. X)" или "(ст. X)", БЕЗ повторения названия документа.
-     • Если используются нормы из НЕСКОЛЬКИХ РАЗНЫХ документов — в начале ответа один раз приведи короткую
-       расшифровку сокращений для каждого документа, например: "И-175 — Инструкция № 175 по охране труда;
-       П-53 — Правила по охране труда № 53." Дальше по тексту при каждой ссылке используй ТОЛЬКО это короткое
-       обозначение вместо полного названия, например "(И-175, п. 25)", "(П-53, п. 10)" — никогда не пиши
-       полное название документа больше одного раза.
-2. Оформление текста:
-   - Используй **жирный шрифт** для выделения ключевых требований, терминов, цифр и названий документов.
-   - Делай короткие, легко читаемые абзацы.
-3. Ограничения по смыслу:
-   - Ответ должен основываться ТОЛЬКО на предоставленном контексте.
-   - Если в контексте нет прямого ответа на вопрос или информации недостаточно, честно и вежливо скажи об этом.
+        # ====================================================
+        # 2. Получаем контекст
+        # ====================================================
 
---- КОНТЕКСТ ИЗ БАЗЫ НПА ---
-{retrieved_text}
+        retrieved_text = (
+            rag_result.get(
+                "retrieved_text",
+                "",
+            )
+        )
 
---- ВОПРОС ПОЛЬЗОВАТЕЛЯ ---
-{user_query}
-"""
+        context_chunks = (
+            rag_result.get(
+                "chunks",
+                [],
+            )
+        )
 
-        # 5. Генерация ответа через gemini-3.6-flash с защитой от сбоев 503
-        response = None
-        for attempt in range(3):
-            try:
-                response = gemini_client.models.generate_content(
-                    model=CHAT_MODEL,
-                    contents=prompt,
+        # ====================================================
+        # 3. Формируем prompt
+        # ====================================================
+
+        from prompts import LEGAL_ASSISTANT_PROMPT
+
+        prompt = LEGAL_ASSISTANT_PROMPT.format(
+            retrieved_text=retrieved_text,
+            user_query=user_query,
+        )
+
+        # ====================================================
+        # 4. Генерация ответа
+        # ====================================================
+
+        def generate_answer():
+
+            return gemini_client.models.generate_content(
+                model=__import__(
+                    "config"
+                ).CHAT_MODEL,
+
+                contents=prompt,
+
+                config={
+                    "temperature": 0.1,
+                    "max_output_tokens": MAX_CHAT_TOKENS,
+                },
+            )
+
+        # Gemini синхронный → выносим из event loop
+        response = await asyncio.to_thread(
+            generate_answer
+        )
+
+        # ====================================================
+        # 5. Проверяем результат
+        # ====================================================
+
+        if not response:
+
+            await update.message.reply_text(
+                "⚠️ Сервис временно недоступен."
+            )
+
+            return
+
+        text = getattr(
+            response,
+            "text",
+            None,
+        )
+
+        if not text:
+
+            await update.message.reply_text(
+                "⚠️ Не удалось сформировать ответ."
+            )
+
+            return
+
+        text = text.strip()
+
+        # ====================================================
+        # 6. Добавляем информацию о найденных источниках
+        # ====================================================
+
+        source_names = get_source_names(
+            context_chunks
+        )
+
+        if source_names:
+
+            text += (
+                "\n\n📚 **Источники, использованные "
+                "при поиске:**\n"
+            )
+
+            for source in source_names:
+
+                text += (
+                    f"• {source}\n"
                 )
-                break
-            except Exception as gen_err:
-                if "503" in str(gen_err) or "UNAVAILABLE" in str(gen_err):
-                    time.sleep(2)
-                else:
-                    raise gen_err
 
-        # 6. Безопасная отправка ответа (с защитой от ошибок синтаксиса Markdown и длины)
-        if response and response.text:
-            text = response.text
+        # ====================================================
+        # 7. Отправка
+        # ====================================================
 
-            # Гарантированно показываем, из каких документов реально взят контекст —
-            # независимо от того, упомянула ли модель их все в тексте ответа.
-            if context_chunks:
-                sources = sorted({c.get("doc_name", "НПА") for c in context_chunks})
-                text += "\n\n📄 Источники: " + "; ".join(sources)
+        await send_long_message(
+            update.message,
+            text,
+            parse_mode="Markdown",
+        )
 
-            # Разбиваем текст на куски до 4000 символов, если ответ длинный
-            chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]
+        logger.info(
+            "Ответ успешно сформирован. "
+            "Найдено кандидатов: %s, "
+            "итоговых чанков: %s",
+            rag_result.get("candidate_count", 0),
+            rag_result.get("final_count", 0),
+        )
 
-            for chunk in chunks:
-                try:
-                    await update.message.reply_text(chunk, parse_mode="Markdown")
-                except Exception as parse_err:
-                    logging.warning(f"Ошибка Markdown парсинга: {parse_err}. Отправка простым текстом.")
-                    await update.message.reply_text(chunk)
-        else:
-            await update.message.reply_text("Сервис временно перегружен. Пожалуйста, повторите вопрос через несколько секунд.")
+    except Exception as error:
 
-    except Exception as e:
-        logging.error(f"Ошибка при обработке запроса: {e}", exc_info=True)
-        await update.message.reply_text("Произошла ошибка при поиске ответа. Попробуйте сформулировать вопрос иначе.")
+        logger.error(
+            "Ошибка обработки вопроса: %s",
+            error,
+            exc_info=True,
+        )
+
+        error_text = str(error)
+
+        # ====================================================
+        # Gemini quota
+        # ====================================================
+
+        if (
+            "429" in error_text
+            or "RESOURCE_EXHAUSTED"
+            in error_text
+        ):
+
+            await update.message.reply_text(
+                "⚠️ Превышен лимит API Gemini.\n\n"
+                "Попробуйте повторить запрос позже."
+            )
+
+            return
+
+        # ====================================================
+        # Gemini 503
+        # ====================================================
+
+        if (
+            "503" in error_text
+            or "UNAVAILABLE"
+            in error_text
+        ):
+
+            await update.message.reply_text(
+                "⚠️ Сервис ИИ временно перегружен.\n\n"
+                "Повторите вопрос через несколько секунд."
+            )
+
+            return
+
+        # ====================================================
+        # Общая ошибка
+        # ====================================================
+
+        await update.message.reply_text(
+            "❌ Произошла ошибка при обработке вопроса.\n\n"
+            "Попробуйте сформулировать вопрос иначе."
+        )
 
 
-def cleanup():
-    """Корректное завершение работы бота"""
-    global app
-    if app:
-        logging.info("Остановка бота...")
-        app.stop()
+# ============================================================
+# 9. ОБРАБОТКА ОШИБОК TELEGRAM
+# ============================================================
 
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    Центральный обработчик ошибок Telegram.
+    """
+
+    logger.error(
+        "Ошибка Telegram:",
+        exc_info=context.error,
+    )
+
+
+# ============================================================
+# 10. ЗАПУСК
+# ============================================================
 
 def main():
-    """Запуск Telegram-бота"""
+
     global app
 
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    # Фотографии анализируются отдельным Vision-обработчиком.
-    # Текстовый RAG-режим остаётся без изменений.
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    logger.info(
+        "Запуск ИИ-ассистента по охране труда..."
+    )
 
-    logging.info("Бот по охране труда запущен!")
+    # --------------------------------------------------------
+    # Создаём Telegram Application
+    # --------------------------------------------------------
 
-    # Регистрация обработчика корректного завершения
-    atexit.register(cleanup)
+    app = (
+        Application
+        .builder()
+        .token(TELEGRAM_TOKEN)
+        .build()
+    )
 
-    # Запуск polling
+    # --------------------------------------------------------
+    # Команды
+    # --------------------------------------------------------
+
+    app.add_handler(
+        CommandHandler(
+            "start",
+            start,
+        )
+    )
+
+    # --------------------------------------------------------
+    # Фото
+    # --------------------------------------------------------
+
+    app.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            handle_photo,
+        )
+    )
+
+    # --------------------------------------------------------
+    # Текст
+    # --------------------------------------------------------
+
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT
+            & ~filters.COMMAND,
+            handle_message,
+        )
+    )
+
+    # --------------------------------------------------------
+    # Глобальный обработчик ошибок
+    # --------------------------------------------------------
+
+    app.add_error_handler(
+        error_handler
+    )
+
+    logger.info(
+        "======================================"
+    )
+
+    logger.info(
+        "ИИ-АССИСТЕНТ ПО ОХРАНЕ ТРУДА ЗАПУЩЕН"
+    )
+
+    logger.info(
+        "RAG: ENABLED"
+    )
+
+    logger.info(
+        "VISION: %s",
+        "ENABLED"
+        if deepseek_client
+        else "DISABLED",
+    )
+
+    logger.info(
+        "======================================"
+    )
+
+    # --------------------------------------------------------
+    # Запускаем polling
+    # --------------------------------------------------------
+
     app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES,
-        close_loop=False
     )
 
+
+# ============================================================
+# 11. ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()
