@@ -2,7 +2,6 @@ import os
 import re
 import html
 import logging
-import time
 import atexit
 import io
 import base64
@@ -356,15 +355,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_chat_action("typing")
 
     try:
-        # 1. Векторизация запроса через Gemini API
-        emb_response = gemini_client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=user_query,
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=768,
-            ),
-        )
+        # 1. Векторизация запроса через Gemini API.
+        # Синхронный SDK-вызов уносим в отдельный поток через
+        # asyncio.to_thread — иначе на время сетевого запроса
+        # блокируется event loop бота целиком (зависают все пользователи).
+        def call_embed():
+            return gemini_client.models.embed_content(
+                model=EMBEDDING_MODEL,
+                contents=user_query,
+                config=types.EmbedContentConfig(
+                    task_type="RETRIEVAL_QUERY",
+                    output_dimensionality=768,
+                ),
+            )
+
+        try:
+            emb_response = await asyncio.to_thread(call_embed)
+        except Exception as embed_err:
+            error_text = str(embed_err)
+            logging.error(f"Ошибка получения embedding: {embed_err}", exc_info=True)
+
+            # RESOURCE_EXHAUSTED на embed_content обычно означает дневную
+            # квоту бесплатного тарифа (EmbedContentRequestsPerDayPer...),
+            # а не кратковременный per-minute лимит — повторять запрос
+            # через пару секунд здесь бессмысленно, квота не успеет
+            # обновиться. Сообщаем пользователю честно и выходим.
+            if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+                await update.message.reply_text(
+                    "⚠️ Достигнут дневной лимит бесплатного тарифа Gemini API "
+                    "(эмбеддинги). Лимит сбрасывается раз в сутки.\n\n"
+                    "Чтобы снять это ограничение — подключите платный тариф "
+                    "(billing) в Google AI Studio для проекта."
+                )
+            else:
+                await update.message.reply_text(
+                    "Не удалось обработать запрос (ошибка сервиса эмбеддингов). "
+                    "Попробуйте повторить чуть позже."
+                )
+            return
+
         query_vector = emb_response.embeddings[0].values
 
         # 2. Поиск релевантных чанков в Supabase
@@ -398,20 +427,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_query=user_query,
         )
 
-        # 5. Генерация ответа через gemini-3.6-flash с защитой от сбоев 503
+        # 5. Генерация ответа через gemini-3.6-flash с защитой от сбоев 503.
+        # Каждая попытка тоже уходит в отдельный поток (не блокирует бота),
+        # а пауза между попытками — через asyncio.sleep, не time.sleep.
+        def call_generate():
+            return gemini_client.models.generate_content(
+                model=CHAT_MODEL,
+                contents=prompt,
+            )
+
         response = None
+        quota_exhausted = False
+
         for attempt in range(3):
             try:
-                response = gemini_client.models.generate_content(
-                    model=CHAT_MODEL,
-                    contents=prompt,
-                )
+                response = await asyncio.to_thread(call_generate)
                 break
             except Exception as gen_err:
-                if "503" in str(gen_err) or "UNAVAILABLE" in str(gen_err):
-                    time.sleep(2)
+                gen_error_text = str(gen_err)
+
+                if "429" in gen_error_text or "RESOURCE_EXHAUSTED" in gen_error_text:
+                    # Дневная квота — повторные попытки не помогут, выходим сразу.
+                    logging.error(f"Дневная квота Gemini исчерпана: {gen_err}")
+                    quota_exhausted = True
+                    break
+                elif "503" in gen_error_text or "UNAVAILABLE" in gen_error_text:
+                    logging.warning(f"Gemini 503, попытка {attempt + 1}/3: {gen_err}")
+                    await asyncio.sleep(2 * (attempt + 1))
                 else:
                     raise gen_err
+
+        if quota_exhausted:
+            await update.message.reply_text(
+                "⚠️ Достигнут дневной лимит бесплатного тарифа Gemini API "
+                "(генерация ответов). Лимит сбрасывается раз в сутки.\n\n"
+                "Чтобы снять это ограничение — подключите платный тариф "
+                "(billing) в Google AI Studio для проекта."
+            )
+            return
+
 
         # 6. Безопасная отправка ответа (HTML вместо хрупкого legacy Markdown,
         #    резка по абзацам, источники — отдельным визуальным блоком)
