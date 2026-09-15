@@ -116,3 +116,21 @@ def validate_config():
             "Не заполнены обязательные переменные окружения: "
             + ", ".join(missing)
         )
+# ============================================================
+# OPENROUTER
+# ============================================================
+
+OPENROUTER_API_KEY = os.getenv(
+    "OPENROUTER_API_KEY",
+    ""
+).strip()
+
+OPENROUTER_MODEL = os.getenv(
+    "OPENROUTER_MODEL",
+    "google/gemini-3.1-flash-lite"
+).strip()
+
+OPENROUTER_FALLBACK_MODEL = os.getenv(
+    "OPENROUTER_FALLBACK_MODEL",
+    "deepseek/deepseek-chat"
+).strip()
