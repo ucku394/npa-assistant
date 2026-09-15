@@ -5,3 +5,5 @@ python-dotenv
 python-docx
 pypdf
 openai>=1.0.0
+sentence-transformers
+torch
