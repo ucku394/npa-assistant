@@ -1,103 +1,70 @@
-import logging
-from functools import lru_cache
+"""
+Single embedding implementation used by BOTH ingestion and query.
 
+Important:
+- Documents: passage:<text>
+- Queries:   query:<text>
+- Model: intfloat/multilingual-e5-base
+- Dimension: 768
+
+The exact same model and prefixes must be used on both sides of vector search.
+"""
+
+from functools import lru_cache
+import threading
+from typing import Iterable, List, Sequence
+
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 
-logger = logging.getLogger(__name__)
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+EMBEDDING_DIM = 768
 
-# Мультиязычная модель.
-# Размер вектора = 768.
-MODEL_NAME = "intfloat/multilingual-e5-base"
-
-# Размерность должна соответствовать:
-# Supabase: embedding vector(768)
-EMBEDDING_DIMENSION = 768
+_MODEL_LOCK = threading.Lock()
 
 
 @lru_cache(maxsize=1)
-def get_model():
-    """
-    Загружает embedding-модель один раз
-    и повторно использует её в процессе работы бота.
-    """
-
-    logger.info("Загрузка embedding-модели: %s", MODEL_NAME)
-
-    model = SentenceTransformer(MODEL_NAME)
-
-    logger.info(
-        "Embedding-модель загружена. Размерность: %s",
-        model.get_sentence_embedding_dimension()
-    )
-
-    return model
+def get_model() -> SentenceTransformer:
+    return SentenceTransformer(EMBEDDING_MODEL)
 
 
-def get_query_embedding(text: str) -> list[float]:
-    """
-    Создает embedding пользовательского запроса.
-
-    Для E5-моделей поисковый запрос должен начинаться
-    с префикса 'query:'.
-    """
-
-    if not text or not text.strip():
-        raise ValueError("Нельзя создать embedding для пустого текста.")
-
-    model = get_model()
-
-    prepared_text = f"query: {text.strip()}"
-
-    vector = model.encode(
-        prepared_text,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-    )
-
-    result = vector.tolist()
-
-    if len(result) != EMBEDDING_DIMENSION:
-        raise ValueError(
-            f"Неверная размерность embedding: {len(result)}. "
-            f"Ожидалось: {EMBEDDING_DIMENSION}"
-        )
-
-    return result
-
-
-def get_document_embeddings(texts: list[str]) -> list[list[float]]:
-    """
-    Создает embeddings для массива документов/чанков.
-
-    Для E5-модели используется префикс 'passage:'.
-    """
-
-    if not texts:
+def _encode(texts: Sequence[str]) -> List[List[float]]:
+    clean = [str(x).strip() for x in texts]
+    if not clean:
         return []
 
-    model = get_model()
+    with _MODEL_LOCK:
+        vectors = get_model().encode(
+            clean,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            batch_size=32,
+        )
 
-    prepared_texts = [
-        f"passage: {text.strip()}"
-        for text in texts
-        if text and text.strip()
-    ]
+    arr = np.asarray(vectors, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
 
-    vectors = model.encode(
-        prepared_texts,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=True,
-    )
+    if arr.shape[1] != EMBEDDING_DIM:
+        raise RuntimeError(
+            f"Embedding dimension mismatch: got {arr.shape[1]}, "
+            f"expected {EMBEDDING_DIM} for {EMBEDDING_MODEL}"
+        )
 
-    result = [vector.tolist() for vector in vectors]
+    return arr.tolist()
 
-    for vector in result:
-        if len(vector) != EMBEDDING_DIMENSION:
-            raise ValueError(
-                f"Неверная размерность embedding: {len(vector)}. "
-                f"Ожидалось: {EMBEDDING_DIMENSION}"
-            )
 
-    return result
+def get_query_embedding(text: str) -> List[float]:
+    text = str(text).strip()
+    if not text:
+        raise ValueError("Query text is empty.")
+    return _encode([f"query: {text}"])[0]
+
+
+def get_document_embeddings(texts: Iterable[str]) -> List[List[float]]:
+    texts = [str(x).strip() for x in texts if str(x).strip()]
+    if not texts:
+        return []
+    return _encode([f"passage: {text}" for text in texts])
