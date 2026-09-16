@@ -1,13 +1,18 @@
 """
-Embedding engine for the Belarus occupational-safety Telegram bot.
+Local embedding implementation for BOTH ingestion and query.
 
-IMPORTANT:
-- Model: intfloat/multilingual-e5-base
-- Dimension: 768
-- Documents use: passage: <text>
-- Queries use:   query: <text>
+Model:
+    intfloat/multilingual-e5-small
 
-The same model and prefixes MUST be used for both ingestion and search.
+Dimension:
+    384
+
+Important:
+    Documents -> passage:<text>
+    Queries   -> query:<text>
+
+The SAME model and prefixes must be used for
+both indexing and searching.
 """
 
 import logging
@@ -28,23 +33,27 @@ logger = logging.getLogger(__name__)
 # CONFIG
 # ============================================================
 
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
-EMBEDDING_DIM = 768
+EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+EMBEDDING_DIM = 384
 
-# Railway / small CPU container:
-# keep the number of native threads low to reduce RAM usage.
-CPU_THREADS = int(os.getenv("EMBEDDING_CPU_THREADS", "1"))
+CPU_THREADS = int(
+    os.getenv("EMBEDDING_CPU_THREADS", "1")
+)
 
-# Limit BLAS/OpenMP thread creation.
-os.environ.setdefault("OMP_NUM_THREADS", str(CPU_THREADS))
-os.environ.setdefault("MKL_NUM_THREADS", str(CPU_THREADS))
-os.environ.setdefault("OPENBLAS_NUM_THREADS", str(CPU_THREADS))
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+BATCH_SIZE = int(
+    os.getenv("EMBEDDING_BATCH_SIZE", "8")
+)
+
+
+# ============================================================
+# CPU OPTIMIZATION
+# ============================================================
 
 try:
     torch.set_num_threads(CPU_THREADS)
 except Exception:
     pass
+
 
 try:
     torch.set_num_interop_threads(1)
@@ -61,17 +70,13 @@ _MODEL_LOCK = threading.Lock()
 
 @lru_cache(maxsize=1)
 def get_model() -> SentenceTransformer:
-    """
-    Load the E5 model exactly once per process.
-
-    The cache is important:
-    the model must NOT be loaded for every Telegram message.
-    """
-
     logger.info(
-        "EMBEDDING | loading model: %s | cpu_threads=%s",
+        "EMBEDDING | loading model: %s | "
+        "dimension=%s | cpu_threads=%s | batch_size=%s",
         EMBEDDING_MODEL,
+        EMBEDDING_DIM,
         CPU_THREADS,
+        BATCH_SIZE,
     )
 
     model = SentenceTransformer(
@@ -81,157 +86,102 @@ def get_model() -> SentenceTransformer:
 
     model.eval()
 
-    dimension = model.get_sentence_embedding_dimension()
-
-    logger.info(
-        "EMBEDDING | model loaded | dimension=%s | device=cpu",
-        dimension,
+    actual_dimension = (
+        model.get_sentence_embedding_dimension()
     )
 
-    if dimension != EMBEDDING_DIM:
+    if actual_dimension != EMBEDDING_DIM:
         raise RuntimeError(
-            f"Embedding dimension mismatch: "
-            f"got {dimension}, expected {EMBEDDING_DIM}"
+            "Embedding dimension mismatch: "
+            f"model returned {actual_dimension}, "
+            f"expected {EMBEDDING_DIM}"
         )
+
+    logger.info(
+        "EMBEDDING | model loaded successfully | "
+        "dimension=%s",
+        actual_dimension,
+    )
 
     return model
 
 
 # ============================================================
-# WARMUP
+# ENCODE
 # ============================================================
 
-def warmup_model() -> None:
-    """
-    Load and test the model during application startup.
+def _encode(
+    texts: Sequence[str],
+) -> List[List[float]]:
 
-    This makes model initialization explicit instead of hiding it
-    inside the first user request.
-    """
-
-    logger.info("EMBEDDING | startup warmup started")
-
-    model = get_model()
-
-    test_text = "query: проверка загрузки модели"
-
-    with _MODEL_LOCK:
-        with torch.inference_mode():
-            vector = model.encode(
-                test_text,
-                normalize_embeddings=True,
-                convert_to_numpy=True,
-                show_progress_bar=False,
-                batch_size=1,
-            )
-
-    arr = np.asarray(vector, dtype=np.float32).reshape(-1)
-
-    if arr.shape[0] != EMBEDDING_DIM:
-        raise RuntimeError(
-            f"Warmup embedding dimension mismatch: "
-            f"got {arr.shape[0]}, expected {EMBEDDING_DIM}"
-        )
-
-    logger.info(
-        "EMBEDDING | startup warmup completed | dimension=%s",
-        arr.shape[0],
-    )
-
-
-# ============================================================
-# INTERNAL ENCODE
-# ============================================================
-
-def _encode(texts: Sequence[str]) -> List[List[float]]:
-    clean = [str(x).strip() for x in texts if str(x).strip()]
+    clean = [
+        str(x).strip()
+        for x in texts
+        if str(x).strip()
+    ]
 
     if not clean:
         return []
 
-    logger.info(
-        "EMBEDDING | encoding %s text(s)",
-        len(clean),
-    )
-
-    model = get_model()
-
     with _MODEL_LOCK:
+
+        model = get_model()
+
         with torch.inference_mode():
+
             vectors = model.encode(
                 clean,
                 normalize_embeddings=True,
                 convert_to_numpy=True,
                 show_progress_bar=False,
-                batch_size=1,
+                batch_size=BATCH_SIZE,
             )
 
-    arr = np.asarray(vectors, dtype=np.float32)
+    arr = np.asarray(
+        vectors,
+        dtype=np.float32,
+    )
 
     if arr.ndim == 1:
         arr = arr.reshape(1, -1)
 
     if arr.shape[1] != EMBEDDING_DIM:
         raise RuntimeError(
-            f"Embedding dimension mismatch: "
-            f"got {arr.shape[1]}, expected {EMBEDDING_DIM}"
+            "Embedding dimension mismatch: "
+            f"got {arr.shape[1]}, "
+            f"expected {EMBEDDING_DIM}"
         )
-
-    logger.info(
-        "EMBEDDING | encoding completed | shape=%s",
-        tuple(arr.shape),
-    )
 
     return arr.tolist()
 
 
 # ============================================================
-# QUERY
+# QUERY EMBEDDING
 # ============================================================
 
-def get_query_embedding(text: str) -> List[float]:
-    """
-    Create embedding for a user search query.
-
-    E5 requires the query prefix:
-        query:
-    """
+def get_query_embedding(
+    text: str,
+) -> List[float]:
 
     text = str(text).strip()
 
     if not text:
-        raise ValueError("Query text is empty.")
+        raise ValueError(
+            "Query text is empty."
+        )
 
-    logger.info(
-        "EMBEDDING | query started | chars=%s",
-        len(text),
-    )
-
-    result = _encode(
+    return _encode(
         [f"query: {text}"]
     )[0]
 
-    logger.info(
-        "EMBEDDING | query completed | dimension=%s",
-        len(result),
-    )
-
-    return result
-
 
 # ============================================================
-# DOCUMENTS
+# DOCUMENT EMBEDDINGS
 # ============================================================
 
 def get_document_embeddings(
     texts: Iterable[str],
 ) -> List[List[float]]:
-    """
-    Create embeddings for document chunks.
-
-    E5 requires:
-        passage:
-    """
 
     texts = [
         str(x).strip()
@@ -243,5 +193,31 @@ def get_document_embeddings(
         return []
 
     return _encode(
-        [f"passage: {text}" for text in texts]
+        [
+            f"passage: {text}"
+            for text in texts
+        ]
+    )
+
+
+# ============================================================
+# STARTUP WARMUP
+# ============================================================
+
+def warmup_model() -> None:
+    """
+    Explicitly loads the model during application startup.
+
+    This prevents the first user request from triggering
+    a large model initialization.
+    """
+
+    logger.info(
+        "EMBEDDING | startup warmup started"
+    )
+
+    get_model()
+
+    logger.info(
+        "EMBEDDING | startup warmup completed"
     )
