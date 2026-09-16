@@ -10,3 +10,5 @@ sentence-transformers
 torch
 numpy
 python-docx
+REINDEX_ALL=true
+UPLOAD_BATCH_SIZE=8
