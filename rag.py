@@ -1,560 +1,194 @@
+# ============================================================
+# RAG.PY — поиск нормативных фрагментов
+# Republic of Belarus
+# ============================================================
+
 import asyncio
-import json
 import logging
 from typing import Any
 
 from google import genai
 from google.genai import types
+from supabase import Client
 
 from config import (
-    GEMINI_API_KEY,
-    EMBEDDING_MODEL,
     CHAT_MODEL,
-    RAG_MATCH_THRESHOLD,
-    RAG_MATCH_COUNT,
-    RAG_FINAL_COUNT,
+    GEMINI_API_KEY,
+    SUPABASE_MATCH_COUNT,
+    SUPABASE_MATCH_THRESHOLD,
 )
+from embedding import get_query_embedding
+from prompts import RAG_RELEVANCE_PROMPT
 
 logger = logging.getLogger(__name__)
 
-
-# ============================================================
-# GEMINI
-# ============================================================
-
-gemini_client = genai.Client(
-    api_key=GEMINI_API_KEY
-)
+_gemini = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 
-# ============================================================
-# EMBEDDING
-# ============================================================
-
-async def create_query_embedding(
-    user_query: str,
-) -> list[float]:
-    """
-    Создаёт embedding пользовательского вопроса.
-    """
-
-    def generate_embedding():
-
-        return gemini_client.models.embed_content(
-            model=EMBEDDING_MODEL,
-
-            contents=user_query,
-
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=768,
-            ),
-        )
-
-    response = await asyncio.to_thread(
-        generate_embedding
-    )
-
-    if not response or not response.embeddings:
-        raise RuntimeError(
-            "Gemini не вернул embedding."
-        )
-
-    return response.embeddings[0].values
-
-
-# ============================================================
-# SUPABASE SEARCH
-# ============================================================
-
-async def search_supabase(
-    supabase,
-    query_vector: list[float],
-) -> list[dict[str, Any]]:
-    """
-    Семантический поиск в Supabase.
-    """
-
-    def execute_search():
-
-        return supabase.rpc(
-            "match_npa_chunks",
-            {
-                "query_embedding": query_vector,
-
-                "match_threshold":
-                    RAG_MATCH_THRESHOLD,
-
-                "match_count":
-                    RAG_MATCH_COUNT,
-            },
-        ).execute()
-
-    response = await asyncio.to_thread(
-        execute_search
-    )
-
-    if not response:
-        return []
-
+def _search_chunks(supabase: Client, query_vector: list[float]) -> list[dict[str, Any]]:
+    response = supabase.rpc(
+        "match_npa_chunks",
+        {
+            "query_embedding": query_vector,
+            "match_threshold": SUPABASE_MATCH_THRESHOLD,
+            "match_count": SUPABASE_MATCH_COUNT,
+        },
+    ).execute()
     return response.data or []
 
 
-# ============================================================
-# FORMAT CHUNKS
-# ============================================================
+def _format_chunk(chunk: dict[str, Any]) -> str:
+    doc_name = str(chunk.get("doc_name") or "НПА").strip()
+    point_num = str(
+        chunk.get("point_num")
+        or chunk.get("article")
+        or chunk.get("section")
+        or "-"
+    ).strip()
+    content = str(chunk.get("content") or "").strip()
+    return f"Документ: {doc_name}\nПункт/статья: {point_num}\nТекст:\n{content}"
 
-def format_chunk_for_reranking(
-    index: int,
-    chunk: dict[str, Any],
-) -> str:
-    """
-    Формирует компактное представление
-    одного нормативного фрагмента.
-    """
 
-    doc_name = chunk.get(
-        "doc_name",
-        "НПА",
+def _semantic_score(chunk: dict[str, Any]) -> float:
+    for key in ("similarity", "score"):
+        value = chunk.get(key)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pass
+    return 0.0
+
+
+def _score_chunk(user_query: str, chunk: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    # If Gemini is unavailable, semantic similarity remains the fallback signal.
+    if _gemini is None:
+        return -1, chunk
+
+    prompt = RAG_RELEVANCE_PROMPT.format(
+        user_query=user_query,
+        chunk=_format_chunk(chunk),
     )
 
-    point_num = chunk.get(
-        "point_num",
-        "-",
-    )
-
-    content = chunk.get(
-        "content",
-        "",
-    )
-
-    return (
-        f"[CHUNK {index}]\n"
-        f"Документ: {doc_name}\n"
-        f"Пункт/статья: {point_num}\n"
-        f"Текст: {content}"
-    )
-
-
-# ============================================================
-# RERANK PROMPT
-# ============================================================
-
-RERANK_SYSTEM_PROMPT = """
-Ты выполняешь reranking нормативных фрагментов
-для экспертной системы по охране труда,
-промышленной и пожарной безопасности
-в Республике Беларусь.
-
-Твоя задача — определить, насколько каждый
-найденный фрагмент действительно помогает
-ответить на вопрос пользователя.
-
-Оцени каждый CHUNK по шкале:
-
-0 — нерелевантен;
-1 — косвенно связан;
-2 — существенно связан;
-3 — непосредственно отвечает на вопрос.
-
-ВАЖНО:
-
-- оценивай только предоставленный текст;
-- не придумывай отсутствующие нормы;
-- не используй законодательство РФ;
-- не добавляй собственные юридические выводы;
-- если фрагмент похож по словам, но не отвечает
-  на вопрос по существу — ставь 0 или 1.
-
-Ответ ОБЯЗАТЕЛЬНО должен быть валидным JSON.
-
-Формат:
-
-{
-  "scores": [
-    {
-      "chunk": 0,
-      "score": 3,
-      "reason": "Краткое объяснение"
-    }
-  ]
-}
-"""
+    try:
+        response = _gemini.models.generate_content(
+            model=CHAT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0,
+                max_output_tokens=5,
+            ),
+        )
+        text = (response.text or "").strip()
+        score = int(text)
+        if score not in (0, 1, 2, 3):
+            score = 0
+        return score, chunk
+    except Exception as exc:
+        logger.warning("RAG reranking failed: %s", exc)
+        return -1, chunk
 
 
-# ============================================================
-# RERANK
-# ============================================================
-
-async def rerank_chunks(
-    user_query: str,
-    chunks: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """
-    Оценивает все найденные чанки одним запросом Gemini.
-    """
-
+async def _rerank_chunks(user_query: str, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not chunks:
         return []
 
-    formatted_chunks = []
+    tasks = [
+        asyncio.to_thread(_score_chunk, user_query, chunk)
+        for chunk in chunks
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for index, chunk in enumerate(chunks):
+    scored: list[dict[str, Any]] = []
+    for result in results:
+        if isinstance(result, Exception):
+            logger.warning("RAG reranking result failed: %s", result)
+            continue
+        score, chunk = result
+        item = dict(chunk)
+        item["_rerank_score"] = score
+        scored.append(item)
 
-        formatted_chunks.append(
-            format_chunk_for_reranking(
-                index,
-                chunk,
-            )
-        )
-
-    chunks_text = "\n\n".join(
-        formatted_chunks
+    # When reranking is unavailable (-1), semantic similarity decides the order.
+    scored.sort(
+        key=lambda item: (
+            item.get("_rerank_score", -1),
+            _semantic_score(item),
+        ),
+        reverse=True,
     )
 
-    prompt = f"""
-{RERANK_SYSTEM_PROMPT}
+    # Do not feed completely unrelated chunks to the answer model when
+    # the reranker explicitly rejected them.
+    useful = [x for x in scored if x.get("_rerank_score", -1) != 0]
+    if not useful:
+        useful = scored[:1]
 
-ВОПРОС ПОЛЬЗОВАТЕЛЯ:
+    return useful[: max(1, min(6, SUPABASE_MATCH_COUNT))]
 
-{user_query}
 
-НАЙДЕННЫЕ ФРАГМЕНТЫ:
-
-{chunks_text}
-"""
-
-    def call_gemini():
-
-        return gemini_client.models.generate_content(
-            model=CHAT_MODEL,
-
-            contents=prompt,
-
-            config={
-                "temperature": 0,
-                "response_mime_type": "application/json",
-                "max_output_tokens": 2000,
-            },
-        )
-
-    try:
-
-        response = await asyncio.to_thread(
-            call_gemini
-        )
-
-        if not response or not response.text:
-            logger.warning(
-                "Reranking: Gemini не вернул результат."
-            )
-
-            return chunks
-
-        data = json.loads(
-            response.text
-        )
-
-        scores = data.get(
-            "scores",
-            [],
-        )
-
-        score_map = {}
-
-        for item in scores:
-
-            try:
-
-                index = int(
-                    item.get("chunk")
-                )
-
-                score = int(
-                    item.get("score", 0)
-                )
-
-                score = max(
-                    0,
-                    min(3, score)
-                )
-
-                score_map[index] = score
-
-            except Exception:
-                continue
-
-        # ----------------------------------------------------
-        # Добавляем оценки к чанкам
-        # ----------------------------------------------------
-
-        enriched = []
-
-        for index, chunk in enumerate(chunks):
-
-            chunk_copy = dict(chunk)
-
-            chunk_copy["_rerank_score"] = (
-                score_map.get(index, 0)
-            )
-
-            enriched.append(
-                chunk_copy
-            )
-
-        # ----------------------------------------------------
-        # Сначала релевантность Gemini,
-        # затем исходное similarity
-        # ----------------------------------------------------
-
-        enriched.sort(
-            key=lambda item: (
-                item.get(
-                    "_rerank_score",
-                    0,
-                ),
-
-                float(
-                    item.get(
-                        "similarity",
-                        0,
-                    ) or 0
-                ),
-            ),
-            reverse=True,
-        )
-
-        # ----------------------------------------------------
-        # Отбрасываем полностью нерелевантные
-        # ----------------------------------------------------
-
-        relevant = [
-            chunk
-            for chunk in enriched
-            if chunk.get(
-                "_rerank_score",
-                0,
-            ) >= 1
-        ]
-
-        if not relevant:
-            return []
-
-        return relevant[
-            :RAG_FINAL_COUNT
-        ]
-
-    except Exception as error:
-
-        logger.warning(
-            "Ошибка reranking: %s",
-            error,
-            exc_info=True,
-        )
-
-        # Безопасный fallback:
-        # возвращаем исходные результаты Supabase,
-        # а не выдумываем оценки.
-        return chunks[
-            :RAG_FINAL_COUNT
-        ]
-
-
-# ============================================================
-# FORMAT FINAL CONTEXT
-# ============================================================
-
-def format_context(
-    chunks: list[dict[str, Any]],
-) -> str:
-    """
-    Формирует нормативный контекст
-    для основной модели.
-    """
-
-    if not chunks:
-        return (
-            "Релевантные нормативные "
-            "фрагменты не найдены."
-        )
-
-    blocks = []
-
-    for index, chunk in enumerate(
-        chunks,
-        start=1,
-    ):
-
-        doc_name = chunk.get(
-            "doc_name",
-            "НПА",
-        )
-
-        point_num = chunk.get(
-            "point_num",
-            "-",
-        )
-
-        content = chunk.get(
-            "content",
-            "",
-        )
-
-        similarity = chunk.get(
-            "similarity"
-        )
-
-        block = (
-            f"[ИСТОЧНИК {index}]\n"
-            f"Документ: {doc_name}\n"
-            f"Пункт/статья: {point_num}\n"
-        )
-
-        if similarity is not None:
-
-            block += (
-                f"Релевантность поиска: "
-                f"{similarity}\n"
-            )
-
-        block += (
-            f"Текст НПА:\n"
-            f"{content}"
-        )
-
-        blocks.append(
-            block
-        )
-
-    return "\n\n====================\n\n".join(
-        blocks
-    )
-
-
-# ============================================================
-# MAIN RAG
-# ============================================================
-
-async def retrieve_context(
-    user_query: str,
-    supabase,
-) -> dict[str, Any]:
-    """
-    Полный RAG pipeline:
-
-    1. Embedding
-    2. Supabase search
-    3. Gemini reranking
-    4. Формирование финального контекста
-    """
-
-    logger.info(
-        "RAG: поиск по запросу: %s",
-        user_query[:300],
-    )
-
-    # --------------------------------------------------------
-    # 1. Embedding
-    # --------------------------------------------------------
-
-    query_vector = (
-        await create_query_embedding(
-            user_query
-        )
-    )
-
-    # --------------------------------------------------------
-    # 2. Semantic search
-    # --------------------------------------------------------
-
-    candidates = (
-        await search_supabase(
-            supabase,
-            query_vector,
-        )
-    )
-
-    logger.info(
-        "RAG: найдено кандидатов: %s",
-        len(candidates),
-    )
-
-    if not candidates:
-
+async def retrieve_context(user_query: str, supabase: Client) -> dict[str, Any]:
+    if not user_query or not user_query.strip():
         return {
-            "found": False,
             "chunks": [],
             "retrieved_text": "",
+            "found": False,
             "candidate_count": 0,
             "final_count": 0,
         }
 
-    # --------------------------------------------------------
-    # 3. Reranking
-    # --------------------------------------------------------
+    logger.info("RAG | search: %s", user_query)
 
-    final_chunks = (
-        await rerank_chunks(
-            user_query,
-            candidates,
+    query_vector = await asyncio.to_thread(get_query_embedding, user_query)
+    logger.info("RAG | embedding dimension: %s", len(query_vector))
+
+    candidate_chunks = await asyncio.to_thread(
+        _search_chunks,
+        supabase,
+        query_vector,
+    )
+    logger.info("RAG | candidates: %s", len(candidate_chunks))
+
+    if not candidate_chunks:
+        return {
+            "chunks": [],
+            "retrieved_text": "",
+            "found": False,
+            "candidate_count": 0,
+            "final_count": 0,
+        }
+
+    final_chunks = await _rerank_chunks(user_query, candidate_chunks)
+    logger.info("RAG | final chunks: %s", len(final_chunks))
+
+    context_parts = []
+    for index, chunk in enumerate(final_chunks, 1):
+        rerank = chunk.get("_rerank_score", -1)
+        similarity = _semantic_score(chunk)
+        metadata = f"\nРелевантность: {rerank}/3" if rerank >= 0 else ""
+        if similarity:
+            metadata += f"\nSemantic similarity: {similarity:.4f}"
+
+        context_parts.append(
+            f"===== ИСТОЧНИК {index} =====\n"
+            f"{_format_chunk(chunk)}"
+            f"{metadata}"
         )
-    )
 
-    logger.info(
-        "RAG: после reranking: %s",
-        len(final_chunks),
-    )
-
-    # --------------------------------------------------------
-    # 4. Context
-    # --------------------------------------------------------
-
-    retrieved_text = (
-        format_context(
-            final_chunks
-        )
-    )
+    retrieved_text = "\n\n".join(context_parts)
 
     return {
-        "found": bool(final_chunks),
-
         "chunks": final_chunks,
-
-        "retrieved_text":
-            retrieved_text,
-
-        "candidate_count":
-            len(candidates),
-
-        "final_count":
-            len(final_chunks),
+        "retrieved_text": retrieved_text,
+        "found": bool(final_chunks),
+        "candidate_count": len(candidate_chunks),
+        "final_count": len(final_chunks),
     }
 
 
-# ============================================================
-# SOURCES
-# ============================================================
-
-def get_source_names(
-    chunks: list[dict[str, Any]],
-) -> list[str]:
-    """
-    Возвращает уникальные названия НПА.
-    """
-
-    sources = []
-
+def get_source_names(chunks: list[dict[str, Any]]) -> list[str]:
+    result = []
     for chunk in chunks:
-
-        name = chunk.get(
-            "doc_name"
-        )
-
-        if (
-            name
-            and name not in sources
-        ):
-
-            sources.append(name)
-
-    return sources
+        name = str(chunk.get("doc_name") or "НПА").strip()
+        if name and name not in result:
+            result.append(name)
+    return result
