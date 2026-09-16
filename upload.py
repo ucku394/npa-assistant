@@ -1,53 +1,167 @@
+"""
+NPA DOCUMENT UPLOADER
+=====================
+
+Назначение:
+    Чтение НПА из DOCX/TXT,
+    разбиение на чанки,
+    генерация embeddings через локальный
+    intfloat/multilingual-e5-small,
+    загрузка в Supabase.
+
+ВАЖНО:
+    Этот файл НЕ использует Gemini для embeddings.
+
+Embedding model:
+    intfloat/multilingual-e5-small
+
+Embedding dimension:
+    384
+
+Documents:
+    passage:<text>
+
+Queries:
+    query:<text>
+
+Один и тот же embedding.py используется
+и для загрузки документов, и для поиска.
+"""
+
 import hashlib
-import os
-import re
-import time
 import logging
+import os
+import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import Dict, List, Set
+
 import docx
-from google import genai
-from google.genai import types
-from supabase import create_client, Client
+from dotenv import load_dotenv
+from supabase import Client, create_client
 
-# 1. Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from embedding import (
+    EMBEDDING_DIM,
+    EMBEDDING_MODEL,
+    get_document_embeddings,
+)
 
-# 2. Загрузка переменных окружения
-script_dir = Path(__file__).parent
-env_path = script_dir / '.env'
-load_dotenv(dotenv_path=env_path)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ============================================================
+# LOGGING
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# PATHS
+# ============================================================
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+ENV_PATH = SCRIPT_DIR / ".env"
+
+
+# ============================================================
+# ENV
+# ============================================================
+
+load_dotenv(dotenv_path=ENV_PATH)
+
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not GEMINI_API_KEY:
-    raise ValueError(f"Ключ GEMINI_API_KEY не найден в файле {env_path}")
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Проверьте наличие SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в файле .env")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv(
+    "SUPABASE_SERVICE_ROLE_KEY"
+)
 
-# 3. Инициализация клиентов
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Константы моделей
-EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_DIM = 768
-BATCH_SIZE = 40  # Размер пачки для отправки в Supabase
+# ------------------------------------------------------------
+# REINDEX_ALL
+#
+# true:
+#     удалить старые чанки каждого документа
+#     и создать embeddings заново.
+#
+# false:
+#     существующие чанки пропускаются.
+# ------------------------------------------------------------
 
-# --------------------------------------------------------
-# Человекочитаемые названия документов по имени файла.
-# Ключ — имя файла БЕЗ расширения (например, для "175.docx" ключ — "175").
-# Запись в этом словаре ОБЯЗАТЕЛЬНА для каждого загружаемого файла —
-# если её нет, process_file() остановится с ошибкой (см. ниже), а не
-# подставит имя файла как doc_name.
-# --------------------------------------------------------
-# ВАЖНО: значения здесь должны точно совпадать с каноническими
-# названиями, к которым были приведены doc_name в Supabase при
-# миграции дублей (см. migrate_doc_names.py) — иначе при следующей
-# загрузке новых чанков этого документа снова появится дубль doc_name.
-DOC_NAME_MAP = {
+REINDEX_ALL = (
+    os.getenv(
+        "REINDEX_ALL",
+        "false",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+)
+
+
+# ------------------------------------------------------------
+# Размер пачки embeddings.
+#
+# Для Railway / 1 GB RAM оставляем небольшим.
+# ------------------------------------------------------------
+
+UPLOAD_BATCH_SIZE = int(
+    os.getenv(
+        "UPLOAD_BATCH_SIZE",
+        "8",
+    )
+)
+
+
+# ============================================================
+# VALIDATION
+# ============================================================
+
+if not SUPABASE_URL:
+    raise ValueError(
+        f"SUPABASE_URL не найден в {ENV_PATH}"
+    )
+
+
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise ValueError(
+        "SUPABASE_SERVICE_ROLE_KEY "
+        f"не найден в {ENV_PATH}"
+    )
+
+
+if UPLOAD_BATCH_SIZE < 1:
+    raise ValueError(
+        "UPLOAD_BATCH_SIZE должен быть >= 1"
+    )
+
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+)
+
+
+# ============================================================
+# DOCUMENT NAMES
+# ============================================================
+
+DOC_NAME_MAP: Dict[str, str] = {
+
     "Закон об охране труда от 23 июня 2008 г. № 356-З":
         "Закон об охране труда от 23 июня 2008 г. № 356-З",
 
@@ -69,144 +183,262 @@ DOC_NAME_MAP = {
 
     "Трудовой кодекс Республики Беларусь 2026":
         "Трудовой кодекс Республики Беларусь 2026",
-     
-    "О расследовании и учете несчастных случаев на производстве и профессиональных заболеваний от 15 января 2004 г. № 30":
-        "О расследовании и учете несчастных случаев на производстве и профессиональных заболеваний от 15 января 2004 г. № 30",
-        
-    "О порядке разработки и принятия локальных правовых актов по охране труда от 28 ноября 2008 г. № 176":
-        "О порядке разработки и принятия локальных правовых актов по охране труда от 28 ноября 2008 г. № 176",
-        
-    "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144":
-        "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144",
-        
-    "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24 33":
-        "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24 33",
-        
-    "О мерах по укреплению общественной безопасности и дисциплины Директива от 11 марта 2004 г. № 1":
-        "О мерах по укреплению общественной безопасности и дисциплины Директива от 11 марта 2004 г. № 1",
-        
-    "Об обеспечении пожарной безопасности постановление МЧС 21 декабря 2021 г. № 82":
-        "Об обеспечении пожарной безопасности постановление МЧС 21 декабря 2021 г. № 82",
-        
-    "Об утверждении Правил по охране труда при производстве пищевой продукции от 31 декабря 2024 г. № 122":
-        "Об утверждении Правил по охране труда при производстве пищевой продукции от 31 декабря 2024 г. № 122",
-        
-    "Об утверждении специфических санитарно-эпидемиологических требований Постановление от 1 февраля 2020 г. № 66":
-        "Об утверждении специфических санитарно-эпидемиологических требований Постановление от 1 февраля 2020 г. № 66",
-        
-    "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42":
-        "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42",
-        
-    "О бесплатном обеспечении работников молоком или равноценными пищевыми продуктами при работе с вредными веществами 27 февраля 2002 г. № 260":
-        "О бесплатном обеспечении работников молоком или равноценными пищевыми продуктами при работе с вредными веществами 27 февраля 2002 г. № 260",
-        
+
+    "О расследовании и учете несчастных случаев на производстве "
+    "и профессиональных заболеваний от 15 января 2004 г. № 30":
+        "О расследовании и учете несчастных случаев на производстве "
+        "и профессиональных заболеваний от 15 января 2004 г. № 30",
+
+    "О порядке разработки и принятия локальных правовых актов "
+    "по охране труда от 28 ноября 2008 г. № 176":
+        "О порядке разработки и принятия локальных правовых актов "
+        "по охране труда от 28 ноября 2008 г. № 176",
+
+    "О документах, необходимых для расследования и учета "
+    "несчастных случаев на производстве и профессиональных заболеваний "
+    "Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144":
+        "О документах, необходимых для расследования и учета "
+        "несчастных случаев на производстве и профессиональных заболеваний "
+        "Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144",
+
+    "Об утверждении Правил по охране труда при выполнении "
+    "строительных работ от 31 мая 2019 г. № 24 33":
+        "Об утверждении Правил по охране труда при выполнении "
+        "строительных работ от 31 мая 2019 г. № 24 33",
+
+    "О мерах по укреплению общественной безопасности и дисциплины "
+    "Директива от 11 марта 2004 г. № 1":
+        "О мерах по укреплению общественной безопасности и дисциплины "
+        "Директива от 11 марта 2004 г. № 1",
+
+    "Об обеспечении пожарной безопасности "
+    "постановление МЧС 21 декабря 2021 г. № 82":
+        "Об обеспечении пожарной безопасности "
+        "постановление МЧС 21 декабря 2021 г. № 82",
+
+    "Об утверждении Правил по охране труда при производстве "
+    "пищевой продукции от 31 декабря 2024 г. № 122":
+        "Об утверждении Правил по охране труда при производстве "
+        "пищевой продукции от 31 декабря 2024 г. № 122",
+
+    "Об утверждении специфических санитарно-эпидемиологических "
+    "требований Постановление от 1 февраля 2020 г. № 66":
+        "Об утверждении специфических санитарно-эпидемиологических "
+        "требований Постановление от 1 февраля 2020 г. № 66",
+
+    "Об утверждении специфических санитарно-эпидемиологических "
+    "требований от 24 января 2020 г. № 42":
+        "Об утверждении специфических санитарно-эпидемиологических "
+        "требований от 24 января 2020 г. № 42",
+
+    "О бесплатном обеспечении работников молоком или равноценными "
+    "пищевыми продуктами при работе с вредными веществами "
+    "27 февраля 2002 г. № 260":
+        "О бесплатном обеспечении работников молоком или равноценными "
+        "пищевыми продуктами при работе с вредными веществами "
+        "27 февраля 2002 г. № 260",
+
     "О контроле состояния водителей от 9 июля 2013 г. № 25.28":
         "О контроле состояния водителей от 9 июля 2013 г. № 25.28",
-        
+
     "О пожарной безопасности Закон РБ от 15 июня 1993 г. № 2403-XII":
         "О пожарной безопасности Закон РБ от 15 июня 1993 г. № 2403-XII",
-        
-    "О порядке проведения предрейсовых и иных медицинских обследований водителей механических транспортных средств (за исключением колесных тракторов) от 3 декабря 2002 г. № 84":
-        "О порядке проведения предрейсовых и иных медицинских обследований водителей механических транспортных средств (за исключением колесных тракторов) от 3 декабря 2002 г. № 84",
-        
-    "О порядке расследования и учета несчастных случаев МЧС от 6 января 2023 г. № 6":
-        "О порядке расследования и учета несчастных случаев МЧС от 6 января 2023 г. № 6",
-        
-    "О проведении обязательных и внеочередных медицинских осмотров работающих от 29 июля 2019 г. № 74":
-        "О проведении обязательных и внеочередных медицинских осмотров работающих от 29 июля 2019 г. № 74",
-        
-    "Об утверждении Инструкции о порядке осуществления контроля за соблюдением работниками требований по охране труда от 15 мая 2020 г. № 51":
-        "Об утверждении Инструкции о порядке осуществления контроля за соблюдением работниками требований по охране труда от 15 мая 2020 г. № 51",
-        
-    "Об утверждении Межотраслевых правил по охране труда при проведении погрузочно-разгрузочных работ от 26 января 2018 г. № 12":
-        "Об утверждении Межотраслевых правил по охране труда при проведении погрузочно-разгрузочных работ от 26 января 2018 г. № 12",
-        
-    "Об утверждении Межотраслевых правил по охране труда при эксплуатации напольного безрельсового транспорта и грузовых тележек от 30 декабря 2003 г. № 165":
-        "Об утверждении Межотраслевых правил по охране труда при эксплуатации напольного безрельсового транспорта и грузовых тележек от 30 декабря 2003 г. № 165",
-        
-    "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104":
-        "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104",
-        
-    "Об утверждении специфических требований по обеспечению пожарной безопасности взрывопожароопасных и пожароопасных производств 20 ноября 2019 г. № 779":
-        "Об утверждении специфических требований по обеспечению пожарной безопасности взрывопожароопасных и пожароопасных производств 20 ноября 2019 г. № 779",
-        
-    "Кодекс Республики Беларусь об административных правонарушениях от 6 января 2021 г. № 91-З":
-        "Кодекс Республики Беларусь об административных правонарушениях от 6 января 2021 г. № 91-З",
+
+    "О порядке проведения предрейсовых и иных медицинских "
+    "обследований водителей механических транспортных средств "
+    "(за исключением колесных тракторов) от 3 декабря 2002 г. № 84":
+        "О порядке проведения предрейсовых и иных медицинских "
+        "обследований водителей механических транспортных средств "
+        "(за исключением колесных тракторов) от 3 декабря 2002 г. № 84",
+
+    "О порядке расследования и учета несчастных случаев "
+    "МЧС от 6 января 2023 г. № 6":
+        "О порядке расследования и учета несчастных случаев "
+        "МЧС от 6 января 2023 г. № 6",
+
+    "О проведении обязательных и внеочередных медицинских "
+    "осмотров работающих от 29 июля 2019 г. № 74":
+        "О проведении обязательных и внеочередных медицинских "
+        "осмотров работающих от 29 июля 2019 г. № 74",
+
+    "Об утверждении Инструкции о порядке осуществления контроля "
+    "за соблюдением работниками требований по охране труда "
+    "от 15 мая 2020 г. № 51":
+        "Об утверждении Инструкции о порядке осуществления контроля "
+        "за соблюдением работниками требований по охране труда "
+        "от 15 мая 2020 г. № 51",
+
+    "Об утверждении Межотраслевых правил по охране труда "
+    "при проведении погрузочно-разгрузочных работ "
+    "от 26 января 2018 г. № 12":
+        "Об утверждении Межотраслевых правил по охране труда "
+        "при проведении погрузочно-разгрузочных работ "
+        "от 26 января 2018 г. № 12",
+
+    "Об утверждении Межотраслевых правил по охране труда "
+    "при эксплуатации напольного безрельсового транспорта "
+    "и грузовых тележек от 30 декабря 2003 г. № 165":
+        "Об утверждении Межотраслевых правил по охране труда "
+        "при эксплуатации напольного безрельсового транспорта "
+        "и грузовых тележек от 30 декабря 2003 г. № 165",
+
+    "Об утверждении Правил по охране труда при эксплуатации "
+    "автомобильного и городского электрического транспорта "
+    "от 6 декабря 2022 г. № 78 104":
+        "Об утверждении Правил по охране труда при эксплуатации "
+        "автомобильного и городского электрического транспорта "
+        "от 6 декабря 2022 г. № 78 104",
+
+    "Об утверждении специфических требований по обеспечению "
+    "пожарной безопасности взрывопожароопасных и пожароопасных "
+    "производств 20 ноября 2019 г. № 779":
+        "Об утверждении специфических требований по обеспечению "
+        "пожарной безопасности взрывопожароопасных и пожароопасных "
+        "производств 20 ноября 2019 г. № 779",
+
+    "Кодекс Республики Беларусь об административных правонарушениях "
+    "от 6 января 2021 г. № 91-З":
+        "Кодекс Республики Беларусь об административных правонарушениях "
+        "от 6 января 2021 г. № 91-З",
 }
 
 
-class QuotaExceededError(Exception):
-    """
-    Дневная квота Gemini API (embed_content) исчерпана.
-    Повторные попытки и дальнейшие вызовы в рамках этого запуска
-    бессмысленны — квота сбрасывается раз в сутки, а не за секунды.
-    """
-    pass
-
-
-def _is_quota_exhausted(error: Exception) -> bool:
-    text = str(error)
-    return "RESOURCE_EXHAUSTED" in text or "429" in text
-
+# ============================================================
+# FILE READING
+# ============================================================
 
 def read_docx(file_path: Path) -> str:
-    """Чтение текста из файла .docx"""
-    doc = docx.Document(file_path)
-    full_text = []
-    for para in doc.paragraphs:
-        if para.text.strip():
-            full_text.append(para.text.strip())
-    return "\n".join(full_text)
+    """
+    Чтение текста из DOCX.
+    """
+
+    document = docx.Document(file_path)
+
+    paragraphs: List[str] = []
+
+    for paragraph in document.paragraphs:
+
+        text = paragraph.text.strip()
+
+        if text:
+            paragraphs.append(text)
+
+    return "\n".join(paragraphs)
 
 
 def read_txt(file_path: Path) -> str:
-    """Чтение текста из файла .txt"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+    """
+    Чтение текста из TXT.
+    """
+
+    with open(
+        file_path,
+        "r",
+        encoding="utf-8",
+    ) as file:
+
+        return file.read()
 
 
-def split_text_into_chunks(text: str, doc_name: str):
+# ============================================================
+# CHUNKING
+# ============================================================
+
+def split_text_into_chunks(
+    text: str,
+    doc_name: str,
+) -> List[dict]:
     """
-    Разбиение текста на чанки по статьям и пунктам НПА.
+    Разбиение НПА на чанки.
+
+    Новый чанк начинается при обнаружении:
+        Статья N
+        Пункт N
+        N.
     """
+
     paragraphs = text.split("\n")
-    chunks = []
-    current_chunk = []
+
+    chunks: List[dict] = []
+
+    current_chunk: List[str] = []
+
     current_point = "1"
 
-    for p in paragraphs:
-        p_str = p.strip()
-        if not p_str:
+    for paragraph in paragraphs:
+
+        p = paragraph.strip()
+
+        if not p:
             continue
 
-        match = re.match(r'^(Статья\s+\d+|Пункт\s+\d+|\d+\.)', p_str, re.IGNORECASE)
-        if match and current_chunk:
-            chunks.append({
-                "doc_name": doc_name,
-                "point_num": current_point,
-                "content": "\n".join(current_chunk)
-            })
-            current_chunk = []
-            current_point = match.group(0).strip()
+        match = re.match(
+            r"^(Статья\s+\d+|Пункт\s+\d+|\d+\.)",
+            p,
+            re.IGNORECASE,
+        )
 
-        current_chunk.append(p_str)
+        if match and current_chunk:
+
+            chunks.append(
+                {
+                    "doc_name": doc_name,
+                    "point_num": current_point,
+                    "content": "\n".join(
+                        current_chunk
+                    ),
+                }
+            )
+
+            current_chunk = []
+
+            current_point = (
+                match.group(0).strip()
+            )
+
+        current_chunk.append(p)
 
     if current_chunk:
-        chunks.append({
-            "doc_name": doc_name,
-            "point_num": current_point,
-            "content": "\n".join(current_chunk)
-        })
+
+        chunks.append(
+            {
+                "doc_name": doc_name,
+                "point_num": current_point,
+                "content": "\n".join(
+                    current_chunk
+                ),
+            }
+        )
 
     return chunks
 
 
-def get_existing_content_hashes(doc_name: str) -> set:
+# ============================================================
+# HASH
+# ============================================================
+
+def content_hash(content: str) -> str:
     """
-    Хэши content уже загруженных чанков этого документа в Supabase.
-    Сравнение по точному тексту чанка, а не по point_num — номера
-    пунктов не гарантированно уникальны в пределах документа.
+    SHA256 хэш текста чанка.
     """
+
+    return hashlib.sha256(
+        content.encode("utf-8")
+    ).hexdigest()
+
+
+# ============================================================
+# EXISTING CHUNKS
+# ============================================================
+
+def get_existing_content_hashes(
+    doc_name: str,
+) -> Set[str]:
+    """
+    Получает хэши уже существующих чанков
+    конкретного документа.
+    """
+
     response = (
         supabase
         .table("npa_chunks")
@@ -214,192 +446,673 @@ def get_existing_content_hashes(doc_name: str) -> set:
         .eq("doc_name", doc_name)
         .execute()
     )
+
+    rows = response.data or []
+
     return {
-        hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
-        for row in response.data
+        content_hash(
+            row["content"]
+        )
+        for row in rows
+        if row.get("content")
     }
 
 
-def generate_embedding_with_retry(text: str, retries: int = 3, delay: int = 2):
+# ============================================================
+# DELETE DOCUMENT
+# ============================================================
+
+def delete_document(
+    doc_name: str,
+) -> int:
     """
-    Генерация вектора (768 измерений) с обработкой ошибок 503.
-    При исчерпании дневной квоты (429/RESOURCE_EXHAUSTED) сразу
-    поднимает QuotaExceededError — ретраи и дальнейшие вызовы API
-    в этом запуске бессмысленны.
+    Удаляет все старые чанки документа.
+
+    Используется только при:
+        REINDEX_ALL=true
     """
-    for attempt in range(1, retries + 1):
-        try:
-            response = gemini_client.models.embed_content(
-                model=EMBEDDING_MODEL,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT",
-                    output_dimensionality=EMBEDDING_DIM,
-                ),
-            )
-            return response.embeddings[0].values
-        except Exception as e:
-            if _is_quota_exhausted(e):
-                raise QuotaExceededError(
-                    "Дневная квота Gemini API (embed_content) исчерпана "
-                    "(лимит бесплатного тарифа — 1000 запросов/сутки). "
-                    "Загрузка остановлена, уже вставленные чанки сохранены. "
-                    "Запустите скрипт повторно позже — он пропустит уже "
-                    "загруженные чанки и продолжит с места остановки."
-                ) from e
-            if ("503" in str(e) or "UNAVAILABLE" in str(e)) and attempt < retries:
-                logging.warning(f"Ошибка API (попытка {attempt}/{retries}): {e}. Повтор через {delay} сек...")
-                time.sleep(delay)
-            else:
-                logging.error(f"Не удалось получить вектор для текста: {e}")
-                return None
-    return None
+
+    response = (
+        supabase
+        .table("npa_chunks")
+        .delete()
+        .eq("doc_name", doc_name)
+        .execute()
+    )
+
+    deleted = len(
+        response.data or []
+    )
+
+    logger.info(
+        "REINDEX | deleted=%s | %s",
+        deleted,
+        doc_name,
+    )
+
+    return deleted
 
 
-def process_file(file_path: Path):
-    """Полный цикл векторизации и отправки документа"""
-    file_stem = file_path.stem
+# ============================================================
+# EMBEDDINGS
+# ============================================================
 
-    if file_stem not in DOC_NAME_MAP:
-        raise ValueError(
-            f"Для файла '{file_path.name}' нет записи в DOC_NAME_MAP. "
-            f"Добавьте человекочитаемое каноническое название документа "
-            f"в словарь DOC_NAME_MAP в начале скрипта — иначе в базу "
-            f"снова могут попасть разные doc_name для одного и того же "
-            f"документа (как это уже случилось раньше)."
+def generate_embeddings(
+    texts: List[str],
+) -> List[List[float]]:
+    """
+    Генерирует embeddings через локальный
+    multilingual-e5-small.
+
+    ВАЖНО:
+        embedding.py уже добавляет:
+            passage:
+    """
+
+    if not texts:
+        return []
+
+    embeddings = get_document_embeddings(
+        texts
+    )
+
+    if len(embeddings) != len(texts):
+
+        raise RuntimeError(
+            "Количество embeddings не совпадает "
+            "с количеством текстов: "
+            f"{len(embeddings)} != {len(texts)}"
         )
 
-    # .strip() — чтобы случайный пробел на конце названия (например,
-    # при копипасте в DOC_NAME_MAP) не создал незаметный дубль doc_name.
-    doc_name = DOC_NAME_MAP[file_stem].strip()
+    for index, embedding in enumerate(
+        embeddings
+    ):
 
-    logging.info(f"Начало обработки документа: '{doc_name}' ({file_path.name})")
+        if len(embedding) != EMBEDDING_DIM:
 
-    ext = file_path.suffix.lower()
-    if ext == ".docx":
-        raw_text = read_docx(file_path)
-    elif ext == ".txt":
-        raw_text = read_txt(file_path)
-    else:
-        logging.warning(f"Пропуск файла с неподдерживаемым расширением: {file_path.name}")
-        return
-
-    if not raw_text.strip():
-        logging.warning(f"Файл {file_path.name} пуст!")
-        return
-
-    chunks = split_text_into_chunks(raw_text, doc_name)
-    total_chunks = len(chunks)
-    logging.info(f"Документ '{doc_name}' успешно разбит на {total_chunks} чанков.")
-
-    # --------------------------------------------------------
-    # Пропуск уже загруженных чанков (устойчиво к повторному запуску)
-    # --------------------------------------------------------
-    existing_hashes = get_existing_content_hashes(doc_name)
-    if existing_hashes:
-        logging.info(f"В базе уже есть чанков этого документа: {len(existing_hashes)} — они будут пропущены.")
-
-    pending_chunks = []
-    for chunk in chunks:
-        chunk_hash = hashlib.sha256(chunk["content"].encode("utf-8")).hexdigest()
-        if chunk_hash in existing_hashes:
-            continue
-        chunk["_hash"] = chunk_hash
-        pending_chunks.append(chunk)
-
-    skipped = total_chunks - len(pending_chunks)
-    if skipped:
-        logging.info(f"Пропущено уже загруженных чанков: {skipped}")
-
-    if not pending_chunks:
-        logging.info(f"Все чанки документа '{doc_name}' уже в базе — пропускаем файл целиком.")
-        return
-
-    total_pending = len(pending_chunks)
-    batch_records = []
-
-    for idx, chunk in enumerate(pending_chunks, 1):
-        print(f"[{idx}/{total_pending}] Векторизация ст./п. {chunk['point_num']}...")
-
-        try:
-            vector = generate_embedding_with_retry(chunk["content"])
-        except QuotaExceededError as e:
-            print()
-            print("!" * 70)
-            print(str(e))
-            print(
-                f"Остановлено на {idx - 1}/{total_pending} новых чанков документа "
-                f"'{doc_name}' (уже загруженные ранее — {skipped} — не в счёт)."
+            raise RuntimeError(
+                "Неверная размерность embedding "
+                f"для чанка {index}: "
+                f"получено {len(embedding)}, "
+                f"ожидалось {EMBEDDING_DIM}"
             )
-            print("!" * 70)
 
-            if batch_records:
-                supabase.table("npa_chunks").insert(batch_records).execute()
-                print(f"  --> Промежуточная пачка ({len(batch_records)}) сохранена перед остановкой.")
+    return embeddings
 
-            print()
-            raise  # прерываем и обработку остальных файлов в main() — квота общая на все документы
 
-        if vector:
-            # ИСПРАВЛЕНИЕ: Добавлено обязательное для Supabase поле doc_type
-            batch_records.append({
+# ============================================================
+# INSERT BATCH
+# ============================================================
+
+def insert_batch(
+    chunks: List[dict],
+    embeddings: List[List[float]],
+) -> int:
+    """
+    Загружает пачку чанков в Supabase.
+    """
+
+    if len(chunks) != len(embeddings):
+
+        raise RuntimeError(
+            "Количество чанков и embeddings "
+            "не совпадает."
+        )
+
+    records = []
+
+    for chunk, embedding in zip(
+        chunks,
+        embeddings,
+    ):
+
+        records.append(
+            {
                 "doc_name": chunk["doc_name"],
-                "doc_type": "НПА",  # Удовлетворяем Not-Null constraint базы
+                "doc_type": "НПА",
                 "point_num": chunk["point_num"],
                 "content": chunk["content"],
-                "embedding": vector
-            })
+                "embedding": embedding,
+            }
+        )
 
-        # Отправка пакета при достижении BATCH_SIZE
-        if len(batch_records) >= BATCH_SIZE:
-            supabase.table("npa_chunks").insert(batch_records).execute()
-            print(f"  --> Загружена пачка из {len(batch_records)} чанков в Supabase.")
-            batch_records = []
+    if not records:
+        return 0
 
-    # Финальный остаток
-    if batch_records:
-        supabase.table("npa_chunks").insert(batch_records).execute()
-        print(f"  --> Загружена финальная пачка из {len(batch_records)} чанков.")
+    response = (
+        supabase
+        .table("npa_chunks")
+        .insert(records)
+        .execute()
+    )
 
-    print(f"\n==================================================")
-    print(f"УСПЕХ! Файл '{file_path.name}' полностью отправлен в базу.")
-    print(f"==================================================\n")
+    inserted = len(
+        response.data or records
+    )
+
+    return inserted
 
 
-def main():
-    """Сканирование папки npa_loader и обработка всех документов"""
-    supported_extensions = [".docx", ".txt"]
-    all_files = []
+# ============================================================
+# PROCESS DOCUMENT
+# ============================================================
 
-    for ext in supported_extensions:
-        all_files.extend(list(script_dir.glob(f"*{ext}")))
+def process_file(
+    file_path: Path,
+) -> tuple[int, int]:
+    """
+    Полный цикл обработки одного документа.
 
-    # Исключаем временные файлы Word и файлы конфигураций/зависимостей
-    files_to_process = [
-        f for f in all_files
-        if not f.name.startswith("~$") and f.name != "requirements.txt"
-    ]
+    Возвращает:
+        uploaded, skipped
+    """
+
+    file_stem = file_path.stem
+
+    # --------------------------------------------------------
+    # Проверка DOC_NAME_MAP
+    # --------------------------------------------------------
+
+    if file_stem not in DOC_NAME_MAP:
+
+        raise ValueError(
+            f"Для файла '{file_path.name}' "
+            "нет записи в DOC_NAME_MAP.\n"
+            "Добавьте его в DOC_NAME_MAP."
+        )
+
+    doc_name = (
+        DOC_NAME_MAP[file_stem]
+        .strip()
+    )
+
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "DOCUMENT | %s",
+        doc_name,
+    )
+
+    logger.info(
+        "FILE | %s",
+        file_path.name,
+    )
+
+    # --------------------------------------------------------
+    # Чтение
+    # --------------------------------------------------------
+
+    extension = (
+        file_path.suffix.lower()
+    )
+
+    if extension == ".docx":
+
+        raw_text = read_docx(
+            file_path
+        )
+
+    elif extension == ".txt":
+
+        raw_text = read_txt(
+            file_path
+        )
+
+    else:
+
+        logger.warning(
+            "Unsupported file: %s",
+            file_path.name,
+        )
+
+        return 0, 0
+
+    if not raw_text.strip():
+
+        logger.warning(
+            "Файл пуст: %s",
+            file_path.name,
+        )
+
+        return 0, 0
+
+    # --------------------------------------------------------
+    # Chunking
+    # --------------------------------------------------------
+
+    chunks = split_text_into_chunks(
+        raw_text,
+        doc_name,
+    )
+
+    total_chunks = len(chunks)
+
+    logger.info(
+        "CHUNKS | total=%s",
+        total_chunks,
+    )
+
+    if not chunks:
+
+        return 0, 0
+
+    # --------------------------------------------------------
+    # REINDEX
+    # --------------------------------------------------------
+
+    if REINDEX_ALL:
+
+        logger.info(
+            "REINDEX_ALL=true | "
+            "удаляем старые embeddings документа"
+        )
+
+        delete_document(
+            doc_name
+        )
+
+        existing_hashes: Set[str] = set()
+
+    else:
+
+        existing_hashes = (
+            get_existing_content_hashes(
+                doc_name
+            )
+        )
+
+        logger.info(
+            "EXISTING | %s",
+            len(existing_hashes),
+        )
+
+    # --------------------------------------------------------
+    # Determine pending chunks
+    # --------------------------------------------------------
+
+    pending_chunks: List[dict] = []
+
+    for chunk in chunks:
+
+        chunk_hash = content_hash(
+            chunk["content"]
+        )
+
+        if (
+            not REINDEX_ALL
+            and chunk_hash in existing_hashes
+        ):
+            continue
+
+        pending_chunks.append(
+            chunk
+        )
+
+    skipped = (
+        total_chunks
+        - len(pending_chunks)
+    )
+
+    logger.info(
+        "PENDING | %s",
+        len(pending_chunks),
+    )
+
+    logger.info(
+        "SKIPPED | %s",
+        skipped,
+    )
+
+    if not pending_chunks:
+
+        logger.info(
+            "Nothing new for %s; skipped=%s",
+            doc_name,
+            skipped,
+        )
+
+        return 0, skipped
+
+    # --------------------------------------------------------
+    # Generate embeddings in batches
+    # --------------------------------------------------------
+
+    uploaded = 0
+
+    total_pending = len(
+        pending_chunks
+    )
+
+    for start in range(
+        0,
+        total_pending,
+        UPLOAD_BATCH_SIZE,
+    ):
+
+        end = min(
+            start + UPLOAD_BATCH_SIZE,
+            total_pending,
+        )
+
+        batch_chunks = (
+            pending_chunks[start:end]
+        )
+
+        batch_number = (
+            start // UPLOAD_BATCH_SIZE
+        ) + 1
+
+        total_batches = (
+            (
+                total_pending
+                + UPLOAD_BATCH_SIZE
+                - 1
+            )
+            // UPLOAD_BATCH_SIZE
+        )
+
+        logger.info(
+            "BATCH | %s/%s | chunks=%s | progress=%s-%s/%s",
+            batch_number,
+            total_batches,
+            len(batch_chunks),
+            start + 1,
+            end,
+            total_pending,
+        )
+
+        # ----------------------------------------------------
+        # Texts
+        # ----------------------------------------------------
+
+        texts = [
+            chunk["content"]
+            for chunk in batch_chunks
+        ]
+
+        # ----------------------------------------------------
+        # Local E5 embeddings
+        # ----------------------------------------------------
+
+        embeddings = generate_embeddings(
+            texts
+        )
+
+        logger.info(
+            "EMBEDDING | model=%s | dimension=%s | count=%s",
+            EMBEDDING_MODEL,
+            EMBEDDING_DIM,
+            len(embeddings),
+        )
+
+        # ----------------------------------------------------
+        # Supabase
+        # ----------------------------------------------------
+
+        inserted = insert_batch(
+            batch_chunks,
+            embeddings,
+        )
+
+        uploaded += inserted
+
+        logger.info(
+            "SUPABASE | inserted=%s | uploaded_total=%s/%s",
+            inserted,
+            uploaded,
+            total_pending,
+        )
+
+    # --------------------------------------------------------
+    # Document finished
+    # --------------------------------------------------------
+
+    logger.info(
+        "DONE | %s | uploaded=%s | skipped=%s",
+        doc_name,
+        uploaded,
+        skipped,
+    )
+
+    return uploaded, skipped
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main() -> None:
+
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "NPA EMBEDDING UPLOADER"
+    )
+
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "Embedding model: %s",
+        EMBEDDING_MODEL,
+    )
+
+    logger.info(
+        "Embedding dimension: %s",
+        EMBEDDING_DIM,
+    )
+
+    logger.info(
+        "Upload batch size: %s",
+        UPLOAD_BATCH_SIZE,
+    )
+
+    logger.info(
+        "REINDEX_ALL: %s",
+        REINDEX_ALL,
+    )
+
+    logger.info(
+        "Supabase URL: %s",
+        SUPABASE_URL,
+    )
+
+    logger.info(
+        "============================================================"
+    )
+
+    # --------------------------------------------------------
+    # Проверка embedding-модели ДО загрузки документов
+    # --------------------------------------------------------
+
+    logger.info(
+        "EMBEDDING | проверка локальной модели..."
+    )
+
+    # Небольшой тестовый embedding.
+    test_embeddings = get_document_embeddings(
+        ["Тестовый фрагмент НПА."]
+    )
+
+    if not test_embeddings:
+
+        raise RuntimeError(
+            "Embedding model returned no vector."
+        )
+
+    if len(test_embeddings[0]) != EMBEDDING_DIM:
+
+        raise RuntimeError(
+            "Embedding test failed: "
+            f"got {len(test_embeddings[0])}, "
+            f"expected {EMBEDDING_DIM}"
+        )
+
+    logger.info(
+        "EMBEDDING | OK | model=%s | dimension=%s",
+        EMBEDDING_MODEL,
+        EMBEDDING_DIM,
+    )
+
+    # --------------------------------------------------------
+    # Search documents
+    # --------------------------------------------------------
+
+    supported_extensions = {
+        ".docx",
+        ".txt",
+    }
+
+    all_files: List[Path] = []
+
+    for extension in supported_extensions:
+
+        all_files.extend(
+            SCRIPT_DIR.glob(
+                f"*{extension}"
+            )
+        )
+
+    files_to_process = sorted(
+        [
+            file
+            for file in all_files
+            if not file.name.startswith("~$")
+            and file.name != "requirements.txt"
+        ],
+        key=lambda x: x.name.lower(),
+    )
 
     if not files_to_process:
-        logging.error("В папке npa_loader не найдено подходящих документов!")
-        return
 
-    logging.info(f"Найдено документов для обработки: {len(files_to_process)}")
-    for f in files_to_process:
-        logging.info(f" - {f.name}")
+        logger.error(
+            "В папке %s "
+            "не найдено DOCX/TXT документов.",
+            SCRIPT_DIR,
+        )
 
-    print("\n--- СТАРТ ПАКЕТНОЙ ЗАГРУЗКИ ---")
+        sys.exit(1)
+
+    logger.info(
+        "Найдено документов: %s",
+        len(files_to_process),
+    )
+
     for file_path in files_to_process:
-        try:
-            process_file(file_path)
-        except QuotaExceededError:
-            logging.error(
-                "Квота исчерпана — обработка оставшихся файлов в этом запуске "
-                "отменена (квота общая на все документы, повторные вызовы "
-                "сейчас всё равно провалятся). Запустите скрипт снова позже."
-            )
-            break
 
+        logger.info(
+            "  - %s",
+            file_path.name,
+        )
+
+    # --------------------------------------------------------
+    # Totals
+    # --------------------------------------------------------
+
+    total_uploaded = 0
+    total_skipped = 0
+    failed_files = []
+
+    # --------------------------------------------------------
+    # Process documents
+    # --------------------------------------------------------
+
+    for file_path in files_to_process:
+
+        try:
+
+            uploaded, skipped = process_file(
+                file_path
+            )
+
+            total_uploaded += uploaded
+            total_skipped += skipped
+
+        except Exception as error:
+
+            logger.exception(
+                "ОШИБКА при обработке %s: %s",
+                file_path.name,
+                error,
+            )
+
+            failed_files.append(
+                file_path.name
+            )
+
+    # --------------------------------------------------------
+    # Final result
+    # --------------------------------------------------------
+
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "FINISHED"
+    )
+
+    logger.info(
+        "Embedding model: %s",
+        EMBEDDING_MODEL,
+    )
+
+    logger.info(
+        "Embedding dimension: %s",
+        EMBEDDING_DIM,
+    )
+
+    logger.info(
+        "uploaded=%s",
+        total_uploaded,
+    )
+
+    logger.info(
+        "skipped=%s",
+        total_skipped,
+    )
+
+    logger.info(
+        "failed=%s",
+        len(failed_files),
+    )
+
+    if failed_files:
+
+        logger.error(
+            "Не обработаны файлы:"
+        )
+
+        for file_name in failed_files:
+
+            logger.error(
+                "  - %s",
+                file_name,
+            )
+
+        logger.error(
+            "Загрузка завершена с ошибками."
+        )
+
+        sys.exit(1)
+
+    logger.info(
+        "Загрузка завершена успешно."
+    )
+
+    logger.info(
+        "============================================================"
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()
