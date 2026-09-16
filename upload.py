@@ -1,48 +1,52 @@
-"""
-NPA document indexer.
-
-This version uses exactly the same local embedding model as bot.py:
-intfloat/multilingual-e5-base, 768 dimensions.
-
-Before the first run after migrating from Gemini embeddings, set:
-    REINDEX_ALL=true
-This removes old vectors for the documents being indexed and recreates them
-with the E5 model. Do NOT mix Gemini and E5 vectors in the same vector index.
-"""
-
 import hashlib
-import logging
 import os
 import re
+import time
+import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
-
 from dotenv import load_dotenv
-from docx import Document
-from supabase import create_client
+import docx
+from google import genai
+from google.genai import types
+from supabase import create_client, Client
 
-from embedding import EMBEDDING_DIM, EMBEDDING_MODEL, get_document_embeddings
+# 1. Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# 2. Загрузка переменных окружения
+script_dir = Path(__file__).parent
+env_path = script_dir / '.env'
+load_dotenv(dotenv_path=env_path)
 
-load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+if not GEMINI_API_KEY:
+    raise ValueError(f"Ключ GEMINI_API_KEY не найден в файле {env_path}")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Проверьте наличие SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в файле .env")
 
-BATCH_SIZE = int(os.getenv("UPLOAD_BATCH_SIZE", "32"))
-REINDEX_ALL = os.getenv("REINDEX_ALL", "false").strip().lower() in {
-    "1", "true", "yes", "y", "on"
-}
+# 3. Инициализация клиентов
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
-logger = logging.getLogger(__name__)
+# Константы моделей
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIM = 768
+BATCH_SIZE = 40  # Размер пачки для отправки в Supabase
 
-
-# Keep the original mapping here. Keys are normalized filename stems.
-# Add/change entries to match the actual names of your source files.
+# --------------------------------------------------------
+# Человекочитаемые названия документов по имени файла.
+# Ключ — имя файла БЕЗ расширения (например, для "175.docx" ключ — "175").
+# Запись в этом словаре ОБЯЗАТЕЛЬНА для каждого загружаемого файла —
+# если её нет, process_file() остановится с ошибкой (см. ниже), а не
+# подставит имя файла как doc_name.
+# --------------------------------------------------------
+# ВАЖНО: значения здесь должны точно совпадать с каноническими
+# названиями, к которым были приведены doc_name в Supabase при
+# миграции дублей (см. migrate_doc_names.py) — иначе при следующей
+# загрузке новых чанков этого документа снова появится дубль doc_name.
 DOC_NAME_MAP = {
     "Закон об охране труда от 23 июня 2008 г. № 356-З":
         "Закон об охране труда от 23 июня 2008 г. № 356-З",
@@ -53,7 +57,7 @@ DOC_NAME_MAP = {
         "работающих по вопросам охраны труда № 175 от 28 ноября 2008 г.",
 
     "Об утверждении Правил по охране труда при выполнении работ на высоте "
-    "от 6 февраля 2025 г. № 11 ":
+    "от 6 февраля 2025 г. № 11":
         "Об утверждении Правил по охране труда при выполнении работ на высоте "
         "от 6 февраля 2025 г. № 11",
 
@@ -107,301 +111,294 @@ DOC_NAME_MAP = {
         
     "О порядке расследования и учета несчастных случаев МЧС от 6 января 2023 г. № 6":
         "О порядке расследования и учета несчастных случаев МЧС от 6 января 2023 г. № 6",
+        
+    "О проведении обязательных и внеочередных медицинских осмотров работающих от 29 июля 2019 г. № 74":
+        "О проведении обязательных и внеочередных медицинских осмотров работающих от 29 июля 2019 г. № 74",
+        
+    "Об утверждении Инструкции о порядке осуществления контроля за соблюдением работниками требований по охране труда от 15 мая 2020 г. № 51":
+        "Об утверждении Инструкции о порядке осуществления контроля за соблюдением работниками требований по охране труда от 15 мая 2020 г. № 51",
+        
+    "Об утверждении Межотраслевых правил по охране труда при проведении погрузочно-разгрузочных работ от 26 января 2018 г. № 12":
+        "Об утверждении Межотраслевых правил по охране труда при проведении погрузочно-разгрузочных работ от 26 января 2018 г. № 12",
+        
+    "Об утверждении Межотраслевых правил по охране труда при эксплуатации напольного безрельсового транспорта и грузовых тележек от 30 декабря 2003 г. № 165":
+        "Об утверждении Межотраслевых правил по охране труда при эксплуатации напольного безрельсового транспорта и грузовых тележек от 30 декабря 2003 г. № 165",
+        
+    "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104":
+        "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104",
+        
+    "Об утверждении специфических требований по обеспечению пожарной безопасности взрывопожароопасных и пожароопасных производств 20 ноября 2019 г. № 779":
+        "Об утверждении специфических требований по обеспечению пожарной безопасности взрывопожароопасных и пожароопасных производств 20 ноября 2019 г. № 779",
+        
+    "Кодекс Республики Беларусь об административных правонарушениях от 6 января 2021 г. № 91-З":
+        "Кодекс Республики Беларусь об административных правонарушениях от 6 января 2021 г. № 91-З",
 }
 
-def normalize_filename(value: str) -> str:
-    value = Path(value).stem.strip()
-    value = re.sub(r"\s+", " ", value)
-    return value.casefold()
 
-
-def resolve_doc_name(file_path: Path) -> str:
-    stem = normalize_filename(file_path.name)
-
-    normalized_map = {
-        normalize_filename(key): value.strip()
-        for key, value in DOC_NAME_MAP.items()
-        if str(value).strip()
-    }
-
-    if stem in normalized_map:
-        return normalized_map[stem]
-
-    # If there is no mapping, use the readable filename itself instead of
-    # silently skipping a valid document.
-    fallback = re.sub(r"\s+", " ", file_path.stem).strip()
-    logger.warning(
-        "No DOC_NAME_MAP entry for %r. Using filename as doc_name: %r",
-        file_path.stem,
-        fallback,
-    )
-    return fallback
-
-
-def read_docx(path: Path) -> str:
-    doc = Document(path)
-    parts: List[str] = []
-
-    for paragraph in doc.paragraphs:
-        text = re.sub(r"\s+", " ", paragraph.text).strip()
-        if text:
-            parts.append(text)
-
-    # NPA files sometimes contain important requirements in tables.
-    for table in doc.tables:
-        for row in table.rows:
-            cells = []
-            for cell in row.cells:
-                text = re.sub(r"\s+", " ", cell.text).strip()
-                cells.append(text)
-            row_text = " | ".join(x for x in cells if x)
-            if row_text:
-                parts.append(row_text)
-
-    return "\n".join(parts)
-
-
-def read_txt(path: Path) -> str:
-    return path.read_text(encoding="utf-8-sig", errors="replace")
-
-
-def read_source(path: Path) -> str:
-    if path.suffix.lower() == ".docx":
-        return read_docx(path)
-    if path.suffix.lower() == ".txt":
-        return read_txt(path)
-    raise ValueError(f"Unsupported file type: {path.suffix}")
-
-
-_ARTICLE_RE = re.compile(r"^\s*Статья\s+([\d.]+)\b", re.IGNORECASE)
-_POINT_RE = re.compile(r"^\s*(?:Пункт|П\.?)\s*([\d.]+)\b", re.IGNORECASE)
-_NUMBER_RE = re.compile(r"^\s*(\d+(?:\.\d+)*)[.)]?\s+")
-
-
-def split_text_into_chunks(text: str) -> List[Tuple[str, str]]:
+class QuotaExceededError(Exception):
     """
-    Split mainly on explicit NPA article/point markers.
-
-    Returns (point_num, content).
+    Дневная квота Gemini API (embed_content) исчерпана.
+    Повторные попытки и дальнейшие вызовы в рамках этого запуска
+    бессмысленны — квота сбрасывается раз в сутки, а не за секунды.
     """
-    lines = [re.sub(r"[ \t]+", " ", x).strip() for x in text.splitlines()]
-    lines = [x for x in lines if x]
+    pass
 
-    chunks: List[Tuple[str, str]] = []
-    current_point = "Без номера"
-    current: List[str] = []
 
-    def flush():
-        nonlocal current
-        if not current:
-            return
-        content = "\n".join(current).strip()
-        if content:
-            chunks.append((current_point, content))
-        current = []
+def _is_quota_exhausted(error: Exception) -> bool:
+    text = str(error)
+    return "RESOURCE_EXHAUSTED" in text or "429" in text
 
-    for line in lines:
-        m = _ARTICLE_RE.match(line)
-        if m:
-            flush()
-            current_point = f"Статья {m.group(1)}"
-            current.append(line)
+
+def read_docx(file_path: Path) -> str:
+    """Чтение текста из файла .docx"""
+    doc = docx.Document(file_path)
+    full_text = []
+    for para in doc.paragraphs:
+        if para.text.strip():
+            full_text.append(para.text.strip())
+    return "\n".join(full_text)
+
+
+def read_txt(file_path: Path) -> str:
+    """Чтение текста из файла .txt"""
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def split_text_into_chunks(text: str, doc_name: str):
+    """
+    Разбиение текста на чанки по статьям и пунктам НПА.
+    """
+    paragraphs = text.split("\n")
+    chunks = []
+    current_chunk = []
+    current_point = "1"
+
+    for p in paragraphs:
+        p_str = p.strip()
+        if not p_str:
             continue
 
-        m = _POINT_RE.match(line)
-        if m:
-            flush()
-            current_point = m.group(1)
-            current.append(line)
-            continue
+        match = re.match(r'^(Статья\s+\d+|Пункт\s+\d+|\d+\.)', p_str, re.IGNORECASE)
+        if match and current_chunk:
+            chunks.append({
+                "doc_name": doc_name,
+                "point_num": current_point,
+                "content": "\n".join(current_chunk)
+            })
+            current_chunk = []
+            current_point = match.group(0).strip()
 
-        m = _NUMBER_RE.match(line)
-        if m:
-            # Only treat numbered lines as boundaries when they are reasonably
-            # short headings/points. Long numbered prose remains in the chunk.
-            if len(line) <= 300:
-                flush()
-                current_point = m.group(1)
-                current.append(line)
-                continue
+        current_chunk.append(p_str)
 
-        current.append(line)
-
-    flush()
-
-    # Safety fallback for very unusual documents.
-    if not chunks and text.strip():
-        return [("Без номера", text.strip())]
+    if current_chunk:
+        chunks.append({
+            "doc_name": doc_name,
+            "point_num": current_point,
+            "content": "\n".join(current_chunk)
+        })
 
     return chunks
 
 
-def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def get_existing_content_hashes(supabase, doc_name: str) -> set:
+def get_existing_content_hashes(doc_name: str) -> set:
     """
-    Uses pagination so large documents do not depend on one oversized response.
+    Хэши content уже загруженных чанков этого документа в Supabase.
+    Сравнение по точному тексту чанка, а не по point_num — номера
+    пунктов не гарантированно уникальны в пределах документа.
     """
-    hashes = set()
-    start = 0
-    page_size = 1000
-
-    while True:
-        response = (
-            supabase.table("npa_chunks")
-            .select("content")
-            .eq("doc_name", doc_name)
-            .range(start, start + page_size - 1)
-            .execute()
-        )
-        rows = response.data or []
-        for row in rows:
-            content = row.get("content")
-            if content:
-                hashes.add(sha256_text(content))
-
-        if len(rows) < page_size:
-            break
-        start += page_size
-
-    return hashes
-
-
-def delete_document_vectors(supabase, doc_name: str) -> None:
-    supabase.table("npa_chunks").delete().eq("doc_name", doc_name).execute()
-    logger.info("Deleted old vectors for %s", doc_name)
-
-
-def insert_rows(supabase, rows: List[dict]) -> None:
-    for start in range(0, len(rows), BATCH_SIZE):
-        batch = rows[start:start + BATCH_SIZE]
-        supabase.table("npa_chunks").insert(batch).execute()
-        logger.info("Inserted %d/%d chunks", min(start + BATCH_SIZE, len(rows)), len(rows))
-
-
-def process_file(supabase, path: Path) -> Tuple[int, int]:
-    doc_name = resolve_doc_name(path)
-    logger.info("Processing %s -> %s", path.name, doc_name)
-
-    if REINDEX_ALL:
-        delete_document_vectors(supabase, doc_name)
-
-    source = read_source(path)
-    if not source.strip():
-        logger.warning("Empty source: %s", path)
-        return 0, 0
-
-    chunks = split_text_into_chunks(source)
-    if not chunks:
-        logger.warning("No chunks produced: %s", path)
-        return 0, 0
-
-    existing = set() if REINDEX_ALL else get_existing_content_hashes(supabase, doc_name)
-
-    pending = []
-    skipped = 0
-
-    for point_num, content in chunks:
-        content_hash = sha256_text(content)
-        if content_hash in existing:
-            skipped += 1
-            continue
-        pending.append((point_num, content, content_hash))
-
-    if not pending:
-        logger.info("Nothing new for %s; skipped=%d", doc_name, skipped)
-        return 0, skipped
-
-    uploaded = 0
-
-    for start in range(0, len(pending), BATCH_SIZE):
-        part = pending[start:start + BATCH_SIZE]
-        texts = [item[1] for item in part]
-        embeddings = get_document_embeddings(texts)
-
-        if len(embeddings) != len(part):
-            raise RuntimeError(
-                f"Embedding count mismatch for {path.name}: "
-                f"{len(embeddings)} != {len(part)}"
-            )
-
-        rows = []
-        for (point_num, content, _), embedding in zip(part, embeddings):
-            if len(embedding) != EMBEDDING_DIM:
-                raise RuntimeError(
-                    f"Wrong vector dimension for {path.name}: "
-                    f"{len(embedding)} != {EMBEDDING_DIM}"
-                )
-            rows.append(
-                {
-                    "doc_name": doc_name,
-                    "doc_type": "НПА",
-                    "point_num": point_num,
-                    "content": content,
-                    "embedding": embedding,
-                }
-            )
-
-        insert_rows(supabase, rows)
-        uploaded += len(rows)
-
-    logger.info(
-        "Done: %s | uploaded=%d | skipped=%d | model=%s",
-        doc_name, uploaded, skipped, EMBEDDING_MODEL
+    response = (
+        supabase
+        .table("npa_chunks")
+        .select("content")
+        .eq("doc_name", doc_name)
+        .execute()
     )
-    return uploaded, skipped
+    return {
+        hashlib.sha256(row["content"].encode("utf-8")).hexdigest()
+        for row in response.data
+    }
 
 
-def validate_config():
-    missing = []
-    if not SUPABASE_URL:
-        missing.append("SUPABASE_URL")
-    if not SUPABASE_SERVICE_ROLE_KEY:
-        missing.append("SUPABASE_SERVICE_ROLE_KEY")
-    if missing:
-        raise RuntimeError("Missing environment variables: " + ", ".join(missing))
+def generate_embedding_with_retry(text: str, retries: int = 3, delay: int = 2):
+    """
+    Генерация вектора (768 измерений) с обработкой ошибок 503.
+    При исчерпании дневной квоты (429/RESOURCE_EXHAUSTED) сразу
+    поднимает QuotaExceededError — ретраи и дальнейшие вызовы API
+    в этом запуске бессмысленны.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            response = gemini_client.models.embed_content(
+                model=EMBEDDING_MODEL,
+                contents=text,
+                config=types.EmbedContentConfig(
+                    task_type="RETRIEVAL_DOCUMENT",
+                    output_dimensionality=EMBEDDING_DIM,
+                ),
+            )
+            return response.embeddings[0].values
+        except Exception as e:
+            if _is_quota_exhausted(e):
+                raise QuotaExceededError(
+                    "Дневная квота Gemini API (embed_content) исчерпана "
+                    "(лимит бесплатного тарифа — 1000 запросов/сутки). "
+                    "Загрузка остановлена, уже вставленные чанки сохранены. "
+                    "Запустите скрипт повторно позже — он пропустит уже "
+                    "загруженные чанки и продолжит с места остановки."
+                ) from e
+            if ("503" in str(e) or "UNAVAILABLE" in str(e)) and attempt < retries:
+                logging.warning(f"Ошибка API (попытка {attempt}/{retries}): {e}. Повтор через {delay} сек...")
+                time.sleep(delay)
+            else:
+                logging.error(f"Не удалось получить вектор для текста: {e}")
+                return None
+    return None
+
+
+def process_file(file_path: Path):
+    """Полный цикл векторизации и отправки документа"""
+    file_stem = file_path.stem
+
+    if file_stem not in DOC_NAME_MAP:
+        raise ValueError(
+            f"Для файла '{file_path.name}' нет записи в DOC_NAME_MAP. "
+            f"Добавьте человекочитаемое каноническое название документа "
+            f"в словарь DOC_NAME_MAP в начале скрипта — иначе в базу "
+            f"снова могут попасть разные doc_name для одного и того же "
+            f"документа (как это уже случилось раньше)."
+        )
+
+    # .strip() — чтобы случайный пробел на конце названия (например,
+    # при копипасте в DOC_NAME_MAP) не создал незаметный дубль doc_name.
+    doc_name = DOC_NAME_MAP[file_stem].strip()
+
+    logging.info(f"Начало обработки документа: '{doc_name}' ({file_path.name})")
+
+    ext = file_path.suffix.lower()
+    if ext == ".docx":
+        raw_text = read_docx(file_path)
+    elif ext == ".txt":
+        raw_text = read_txt(file_path)
+    else:
+        logging.warning(f"Пропуск файла с неподдерживаемым расширением: {file_path.name}")
+        return
+
+    if not raw_text.strip():
+        logging.warning(f"Файл {file_path.name} пуст!")
+        return
+
+    chunks = split_text_into_chunks(raw_text, doc_name)
+    total_chunks = len(chunks)
+    logging.info(f"Документ '{doc_name}' успешно разбит на {total_chunks} чанков.")
+
+    # --------------------------------------------------------
+    # Пропуск уже загруженных чанков (устойчиво к повторному запуску)
+    # --------------------------------------------------------
+    existing_hashes = get_existing_content_hashes(doc_name)
+    if existing_hashes:
+        logging.info(f"В базе уже есть чанков этого документа: {len(existing_hashes)} — они будут пропущены.")
+
+    pending_chunks = []
+    for chunk in chunks:
+        chunk_hash = hashlib.sha256(chunk["content"].encode("utf-8")).hexdigest()
+        if chunk_hash in existing_hashes:
+            continue
+        chunk["_hash"] = chunk_hash
+        pending_chunks.append(chunk)
+
+    skipped = total_chunks - len(pending_chunks)
+    if skipped:
+        logging.info(f"Пропущено уже загруженных чанков: {skipped}")
+
+    if not pending_chunks:
+        logging.info(f"Все чанки документа '{doc_name}' уже в базе — пропускаем файл целиком.")
+        return
+
+    total_pending = len(pending_chunks)
+    batch_records = []
+
+    for idx, chunk in enumerate(pending_chunks, 1):
+        print(f"[{idx}/{total_pending}] Векторизация ст./п. {chunk['point_num']}...")
+
+        try:
+            vector = generate_embedding_with_retry(chunk["content"])
+        except QuotaExceededError as e:
+            print()
+            print("!" * 70)
+            print(str(e))
+            print(
+                f"Остановлено на {idx - 1}/{total_pending} новых чанков документа "
+                f"'{doc_name}' (уже загруженные ранее — {skipped} — не в счёт)."
+            )
+            print("!" * 70)
+
+            if batch_records:
+                supabase.table("npa_chunks").insert(batch_records).execute()
+                print(f"  --> Промежуточная пачка ({len(batch_records)}) сохранена перед остановкой.")
+
+            print()
+            raise  # прерываем и обработку остальных файлов в main() — квота общая на все документы
+
+        if vector:
+            # ИСПРАВЛЕНИЕ: Добавлено обязательное для Supabase поле doc_type
+            batch_records.append({
+                "doc_name": chunk["doc_name"],
+                "doc_type": "НПА",  # Удовлетворяем Not-Null constraint базы
+                "point_num": chunk["point_num"],
+                "content": chunk["content"],
+                "embedding": vector
+            })
+
+        # Отправка пакета при достижении BATCH_SIZE
+        if len(batch_records) >= BATCH_SIZE:
+            supabase.table("npa_chunks").insert(batch_records).execute()
+            print(f"  --> Загружена пачка из {len(batch_records)} чанков в Supabase.")
+            batch_records = []
+
+    # Финальный остаток
+    if batch_records:
+        supabase.table("npa_chunks").insert(batch_records).execute()
+        print(f"  --> Загружена финальная пачка из {len(batch_records)} чанков.")
+
+    print(f"\n==================================================")
+    print(f"УСПЕХ! Файл '{file_path.name}' полностью отправлен в базу.")
+    print(f"==================================================\n")
 
 
 def main():
-    validate_config()
+    """Сканирование папки npa_loader и обработка всех документов"""
+    supported_extensions = [".docx", ".txt"]
+    all_files = []
 
-    supabase = create_client(
-        SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY,
-    )
+    for ext in supported_extensions:
+        all_files.extend(list(script_dir.glob(f"*{ext}")))
 
-    base_dir = Path(__file__).resolve().parent
-    files = sorted(
-        p for p in base_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in {".docx", ".txt"}
-    )
+    # Исключаем временные файлы Word и файлы конфигураций/зависимостей
+    files_to_process = [
+        f for f in all_files
+        if not f.name.startswith("~$") and f.name != "requirements.txt"
+    ]
 
-    if not files:
-        logger.warning("No .docx/.txt files found in %s", base_dir)
+    if not files_to_process:
+        logging.error("В папке npa_loader не найдено подходящих документов!")
         return
 
-    logger.info(
-        "Indexing %d files with %s (%d dims), REINDEX_ALL=%s",
-        len(files), EMBEDDING_MODEL, EMBEDDING_DIM, REINDEX_ALL
-    )
+    logging.info(f"Найдено документов для обработки: {len(files_to_process)}")
+    for f in files_to_process:
+        logging.info(f" - {f.name}")
 
-    total_uploaded = 0
-    total_skipped = 0
-
-    for path in files:
+    print("\n--- СТАРТ ПАКЕТНОЙ ЗАГРУЗКИ ---")
+    for file_path in files_to_process:
         try:
-            uploaded, skipped = process_file(supabase, path)
-            total_uploaded += uploaded
-            total_skipped += skipped
-        except Exception:
-            logger.exception("Failed to process %s", path)
-
-    logger.info(
-        "Finished. uploaded=%d skipped=%d",
-        total_uploaded, total_skipped
-    )
+            process_file(file_path)
+        except QuotaExceededError:
+            logging.error(
+                "Квота исчерпана — обработка оставшихся файлов в этом запуске "
+                "отменена (квота общая на все документы, повторные вызовы "
+                "сейчас всё равно провалятся). Запустите скрипт снова позже."
+            )
+            break
 
 
 if __name__ == "__main__":
