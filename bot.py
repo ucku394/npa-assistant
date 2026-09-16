@@ -196,6 +196,20 @@ async def send_long_message(
         )
 
 
+async def debug_update(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    logger.info(
+        "TELEGRAM UPDATE RECEIVED | update_id=%s | user_id=%s | chat_id=%s | text=%r | photo=%s",
+        update.update_id,
+        update.effective_user.id if update.effective_user else None,
+        update.effective_chat.id if update.effective_chat else None,
+        update.effective_message.text if update.effective_message else None,
+        bool(update.effective_message and update.effective_message.photo),
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
         "Здравствуйте! Я помощник по охране труда и промышленной безопасности "
@@ -406,8 +420,25 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    logger.error(
+        "UNHANDLED TELEGRAM ERROR: %s",
+        context.error,
+        exc_info=context.error,
+    )
+
+
 def main():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+    application.add_handler(
+        MessageHandler(filters.ALL, debug_update),
+        group=-100,
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(
@@ -417,9 +448,11 @@ def main():
         MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
     )
 
+    application.add_error_handler(error_handler)
+
     logger.info("Bot started.")
     application.run_polling(
-        drop_pending_updates=True,
+        drop_pending_updates=False,
         allowed_updates=Update.ALL_TYPES,
         close_loop=False,
     )
