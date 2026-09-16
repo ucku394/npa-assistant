@@ -1,3 +1,4 @@
+```python
 import os
 import re
 import html
@@ -21,7 +22,6 @@ from telegram.ext import (
 )
 
 from google import genai
-from google.genai import types
 
 from supabase import create_client, Client
 
@@ -30,6 +30,10 @@ from openai import OpenAI
 from prompts import LEGAL_ASSISTANT_PROMPT
 
 from ai_router import generate_answer
+
+# НОВОЕ:
+# Локальный multilingual-e5-base вместо Gemini Embedding API
+from embedding import get_query_embedding
 
 
 # ============================================================
@@ -104,6 +108,11 @@ if not all([
 # 5. ИНИЦИАЛИЗАЦИЯ GEMINI
 # ============================================================
 
+# Gemini используется только для генерации ответа
+# через ai_router.py.
+#
+# EMBEDDING ЧЕРЕЗ GEMINI БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ.
+
 gemini_client = genai.Client(
     api_key=GEMINI_API_KEY
 )
@@ -132,11 +141,6 @@ supabase: Client = create_client(
 # ============================================================
 # 8. МОДЕЛИ
 # ============================================================
-
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL",
-    "gemini-embedding-001"
-)
 
 DEEPSEEK_VISION_MODEL = os.getenv(
     "VISION_MODEL",
@@ -688,19 +692,21 @@ async def handle_message(
     """
     Основной RAG-поиск.
 
-    ВАЖНО:
+    Embedding выполняется локально через:
 
-    Embedding пока остаётся на Gemini.
+        intfloat/multilingual-e5-base
 
-    Генерация ответа теперь идёт через ai_router:
-    
-    Gemini
-       ↓
-    ошибка / quota
-       ↓
-    OpenRouter
-       ↓
-    резервная модель
+    Gemini Embedding API НЕ используется.
+
+    Генерация ответа:
+
+        Gemini
+            ↓
+        ошибка / quota
+            ↓
+        OpenRouter
+            ↓
+        резервная модель
     """
 
     user_query = (
@@ -709,7 +715,6 @@ async def handle_message(
 
 
     if not user_query:
-
         return
 
 
@@ -721,98 +726,31 @@ async def handle_message(
     try:
 
         # ====================================================
-        # 1. EMBEDDING
+        # 1. LOCAL EMBEDDING
         # ====================================================
-
-        def call_embed():
-
-            return gemini_client.models.embed_content(
-
-                model=EMBEDDING_MODEL,
-
-                contents=user_query,
-
-                config=types.EmbedContentConfig(
-
-                    task_type="RETRIEVAL_QUERY",
-
-                    output_dimensionality=768,
-                )
-            )
-
 
         try:
 
-            emb_response = await asyncio.to_thread(
-                call_embed
+            query_vector = await asyncio.to_thread(
+                get_query_embedding,
+                user_query
             )
-
 
         except Exception as embed_err:
 
-            error_text = str(
-                embed_err
-            )
-
             logger.error(
-                f"Ошибка получения embedding: "
+                f"Ошибка локального embedding: "
                 f"{embed_err}",
                 exc_info=True
             )
 
-
-            if (
-                "429" in error_text
-                or "RESOURCE_EXHAUSTED"
-                in error_text
-            ):
-
-                await update.message.reply_text(
-
-                    "⚠️ Достигнут дневной лимит "
-                    "Gemini API для эмбеддингов.\n\n"
-
-                    "Сейчас поиск по базе НПА "
-                    "не может выполнить векторизацию "
-                    "запроса.\n\n"
-
-                    "Важно: OpenRouter на этом этапе "
-                    "не заменяет Gemini embedding. "
-                    "Это будет отдельным этапом "
-                    "настройки."
-                )
-
-            else:
-
-                await update.message.reply_text(
-
-                    "Не удалось обработать запрос "
-                    "(ошибка сервиса эмбеддингов). "
-                    "Попробуйте повторить позже."
-                )
-
-            return
-
-
-        if (
-            not emb_response
-            or not emb_response.embeddings
-        ):
-
             await update.message.reply_text(
-
-                "Gemini не вернул embedding "
-                "для вашего запроса."
+                "⚠️ Не удалось выполнить "
+                "векторизацию вашего запроса.\n\n"
+                "Попробуйте повторить запрос."
             )
 
             return
-
-
-        query_vector = (
-            emb_response
-            .embeddings[0]
-            .values
-        )
 
 
         # ====================================================
@@ -850,6 +788,7 @@ async def handle_message(
                 "\n\n---\n\n".join(
 
                     [
+
                         (
                             f"Источник: "
                             f"{c.get('doc_name', 'НПА')}, "
@@ -860,8 +799,11 @@ async def handle_message(
                         )
 
                         for c in context_chunks
+
                     ]
+
                 )
+
             )
 
 
@@ -882,6 +824,7 @@ async def handle_message(
             retrieved_text=retrieved_text,
 
             user_query=user_query
+
         )
 
 
@@ -917,13 +860,16 @@ async def handle_message(
             sources = sorted(
 
                 {
+
                     c.get(
                         "doc_name",
                         "НПА"
                     )
 
                     for c in context_chunks
+
                 }
+
             )
 
 
@@ -931,6 +877,7 @@ async def handle_message(
 
                 "\n\n📄 **Источники:** "
                 + "; ".join(sources)
+
             )
 
 
@@ -945,6 +892,7 @@ async def handle_message(
             text,
 
             use_html=True
+
         )
 
 
@@ -1011,37 +959,45 @@ def main():
 
 
     app = (
+
         Application
         .builder()
         .token(TELEGRAM_TOKEN)
         .build()
+
     )
 
 
     # /start
     app.add_handler(
+
         CommandHandler(
             "start",
             start
         )
+
     )
 
 
     # Фото
     app.add_handler(
+
         MessageHandler(
             filters.PHOTO,
             handle_photo
         )
+
     )
 
 
     # Текст
     app.add_handler(
+
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             handle_message
         )
+
     )
 
 
@@ -1064,6 +1020,7 @@ def main():
         allowed_updates=Update.ALL_TYPES,
 
         close_loop=False
+
     )
 
 
@@ -1074,3 +1031,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+```
