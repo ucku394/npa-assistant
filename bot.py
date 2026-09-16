@@ -1,1034 +1,429 @@
-```python
-import os
-import re
+"""
+Telegram bot for Belarus occupational / industrial safety questions.
+
+Architecture:
+Telegram -> local E5 query embedding -> Supabase vector search
+        -> Gemini -> OpenRouter fallback -> Telegram
+
+Photo questions:
+Telegram -> DeepSeek Vision -> Telegram
+"""
+
+import asyncio
+import base64
 import html
 import logging
-import atexit
-import io
-import base64
-import asyncio
+import re
+from io import BytesIO
 
-from pathlib import Path
-
-from dotenv import load_dotenv
-
+from openai import OpenAI
+from supabase import create_client
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
+    ContextTypes,
     MessageHandler,
     filters,
-    ContextTypes,
 )
 
-from google import genai
-
-from supabase import create_client, Client
-
-from openai import OpenAI
-
-from prompts import LEGAL_ASSISTANT_PROMPT
-
 from ai_router import generate_answer
-
-# НОВОЕ:
-# Локальный multilingual-e5-base вместо Gemini Embedding API
+from config import (
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_VISION_MODEL,
+    SUPABASE_MATCH_COUNT,
+    SUPABASE_MATCH_THRESHOLD,
+    SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_URL,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_MESSAGE_LIMIT,
+)
 from embedding import get_query_embedding
 
 
-# ============================================================
-# 1. НАСТРОЙКА ЛОГИРОВАНИЯ
-# ============================================================
-
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
-
 logger = logging.getLogger(__name__)
 
 
-# ============================================================
-# 2. ЗАГРУЗКА .ENV
-# ============================================================
+if not TELEGRAM_BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
 
-script_dir = Path(__file__).parent
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured.")
 
-env_path = script_dir / ".env"
-
-load_dotenv(
-    dotenv_path=env_path
-)
-
-
-# ============================================================
-# 3. КЛЮЧИ
-# ============================================================
-
-TELEGRAM_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN"
-)
-
-GEMINI_API_KEY = os.getenv(
-    "GEMINI_API_KEY"
-)
-
-DEEPSEEK_API_KEY = os.getenv(
-    "DEEPSEEK_API_KEY"
-)
-
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL"
-)
-
-SUPABASE_KEY = os.getenv(
-    "SUPABASE_SERVICE_ROLE_KEY"
-)
-
-
-# ============================================================
-# 4. ПРОВЕРКА КЛЮЧЕЙ
-# ============================================================
-
-if not all([
-    TELEGRAM_TOKEN,
-    GEMINI_API_KEY,
-    DEEPSEEK_API_KEY,
+supabase = create_client(
     SUPABASE_URL,
-    SUPABASE_KEY,
-]):
+    SUPABASE_SERVICE_ROLE_KEY,
+)
 
-    raise ValueError(
-        "Проверьте наличие всех ключей "
-        "в .env или переменные окружения Railway!"
+deepseek_client = (
+    OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com",
     )
-
-
-# ============================================================
-# 5. ИНИЦИАЛИЗАЦИЯ GEMINI
-# ============================================================
-
-# Gemini используется только для генерации ответа
-# через ai_router.py.
-#
-# EMBEDDING ЧЕРЕЗ GEMINI БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ.
-
-gemini_client = genai.Client(
-    api_key=GEMINI_API_KEY
+    if DEEPSEEK_API_KEY
+    else None
 )
 
-
-# ============================================================
-# 6. ИНИЦИАЛИЗАЦИЯ DEEPSEEK
-# ============================================================
-
-deepseek_client = OpenAI(
-    api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com"
-)
+# Avoid concurrent inference against the shared SentenceTransformer instance.
+_embedding_async_lock = asyncio.Lock()
 
 
-# ============================================================
-# 7. SUPABASE
-# ============================================================
+LEGAL_ASSISTANT_PROMPT = """Ты — профессиональный помощник по охране труда и
+промышленной безопасности в Республике Беларусь.
 
-supabase: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
+Отвечай только по существу вопроса. Основой ответа являются найденные ниже
+фрагменты НПА. Не придумывай требования, номера пунктов, статьи, сроки,
+штрафы или обязанности, которых нет в контексте.
 
+Правила:
+1. Если контекст подтверждает ответ — объясни его простым языком.
+2. Если точного ответа в контексте нет — прямо скажи, что в предоставленных
+   фрагментах недостаточно данных, и не выдумывай норму.
+3. Разделяй обязательное требование НПА и практическую рекомендацию.
+4. Если приводишь ссылку на НПА, используй только название и пункт/статью,
+   которые есть в контексте.
+5. Не утверждай наличие нарушения только на основании предположения.
+6. Не добавляй фиктивные источники.
+7. Для нумерованных пунктов каждый пункт начинай с нового абзаца.
+8. Не используй Markdown-таблицы.
+9. Ответ должен быть компактным, но достаточным для практического применения.
 
-# ============================================================
-# 8. МОДЕЛИ
-# ============================================================
+КОНТЕКСТ НПА:
+{context}
 
-DEEPSEEK_VISION_MODEL = os.getenv(
-    "VISION_MODEL",
-    "deepseek-v4-flash-vision-exp"
-)
-
-
-# ============================================================
-# 9. TELEGRAM
-# ============================================================
-
-TELEGRAM_MESSAGE_LIMIT = 4000
-
-
-# ============================================================
-# 10. ГЛОБАЛЬНАЯ ПЕРЕМЕННАЯ APPLICATION
-# ============================================================
-
-app = None
+ВОПРОС ПОЛЬЗОВАТЕЛЯ:
+{question}
+"""
 
 
-# ============================================================
-# ФОРМАТИРОВАНИЕ TELEGRAM
-# ============================================================
-
-_BOLD_PATTERN = re.compile(
-    r"\*\*(.+?)\*\*",
-    re.DOTALL
-)
-
-
-_HEADER_PATTERN = re.compile(
-    r"^[ \t]*#{1,6}[ \t]+(.+?)[ \t]*$",
-    re.MULTILINE
-)
-
-
-_BULLET_PATTERN = re.compile(
-    r"^([ \t]*)[*\-][ \t]+",
-    re.MULTILINE
-)
-
-
-_HR_PATTERN = re.compile(
-    r"^[ \t]*-{3,}[ \t]*$",
-    re.MULTILINE
-)
-
-
-_ITALIC_PATTERN = re.compile(
-    r"\*(.+?)\*"
-)
+def normalize_whitespace(text: str) -> str:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def to_telegram_html(text: str) -> str:
-
     """
-    Безопасная конвертация Markdown-подобной
-    разметки в Telegram HTML.
-    """
+    Conservative Markdown-ish -> Telegram HTML conversion.
 
-    escaped = html.escape(
+    We escape HTML first and only then add our own tags. This substantially
+    reduces Telegram parse errors caused by raw '<', '>' or '&' in AI output.
+    """
+    text = normalize_whitespace(text)
+    text = html.escape(text, quote=False)
+
+    # Headers
+    text = re.sub(
+        r"(?m)^\s*#{1,6}\s*(.+?)\s*$",
+        r"<b>\1</b>",
         text,
-        quote=False
     )
 
-    escaped = _HR_PATTERN.sub(
-        "",
-        escaped
-    )
+    # Bold **text**
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
 
-    escaped = _HEADER_PATTERN.sub(
-        r"<b>\1</b>",
-        escaped
-    )
+    # Markdown bullets -> Telegram-friendly bullet.
+    text = re.sub(r"(?m)^\s*[-*]\s+", "• ", text)
 
-    escaped = _BULLET_PATTERN.sub(
-        r"\1• ",
-        escaped
-    )
+    # Horizontal rule
+    text = re.sub(r"(?m)^\s*([-_])(?:\s*\1){2,}\s*$", "────────", text)
 
-    escaped = _BOLD_PATTERN.sub(
-        r"<b>\1</b>",
-        escaped
-    )
+    # Italic *text* only when not part of **
+    text = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<i>\1</i>", text)
 
-    escaped = _ITALIC_PATTERN.sub(
-        r"<i>\1</i>",
-        escaped
-    )
-
-    return escaped
+    return text.strip()
 
 
-# ============================================================
-# РАЗБИВКА ДЛИННОГО ТЕКСТА
-# ============================================================
-
-def split_text_smart(
-    text: str,
-    limit: int = TELEGRAM_MESSAGE_LIMIT
-) -> list[str]:
-
+def split_text_smart(text: str, limit: int = TELEGRAM_MESSAGE_LIMIT):
     if len(text) <= limit:
         return [text]
 
     parts = []
-
-    remaining = text
+    remaining = text.strip()
 
     while len(remaining) > limit:
-
-        cut = remaining.rfind(
-            "\n\n",
-            0,
-            limit
-        )
-
-        if cut == -1:
-
-            cut = remaining.rfind(
-                "\n",
-                0,
-                limit
-            )
-
-        if cut == -1:
-
-            cut = remaining.rfind(
-                " ",
-                0,
-                limit
-            )
-
-        if cut == -1:
-
+        cut = remaining.rfind("\n\n", 0, limit)
+        if cut < limit // 2:
+            cut = remaining.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = remaining.rfind(" ", 0, limit)
+        if cut < limit // 2:
             cut = limit
 
-        parts.append(
-            remaining[:cut].rstrip()
-        )
-
-        remaining = remaining[
-            cut:
-        ].lstrip()
+        part = remaining[:cut].strip()
+        if part:
+            parts.append(part)
+        remaining = remaining[cut:].strip()
 
     if remaining:
-        parts.append(
-            remaining
-        )
+        parts.append(remaining)
 
     return parts
 
 
-# ============================================================
-# ОТПРАВКА ДЛИННОГО СООБЩЕНИЯ
-# ============================================================
-
 async def send_long_message(
     update: Update,
     text: str,
-    use_html: bool = True
+    use_html: bool = True,
 ):
+    if not update.effective_message:
+        return
 
-    chunks = split_text_smart(
-        text,
-        TELEGRAM_MESSAGE_LIMIT
-    )
+    chunks = split_text_smart(text)
 
     for chunk in chunks:
+        if use_html:
+            rendered = to_telegram_html(chunk)
+            try:
+                await update.effective_message.reply_text(
+                    rendered,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+                continue
+            except Exception:
+                logger.exception("HTML Telegram send failed; retrying plain text.")
 
-        formatted = (
-            to_telegram_html(chunk)
-            if use_html
-            else chunk
+        await update.effective_message.reply_text(
+            html.unescape(chunk),
+            disable_web_page_preview=True,
         )
 
-        try:
 
-            await update.message.reply_text(
-                formatted,
-                parse_mode=(
-                    "HTML"
-                    if use_html
-                    else None
-                )
-            )
-
-        except Exception as parse_err:
-
-            logger.warning(
-                f"Ошибка HTML-парсинга Telegram: "
-                f"{parse_err}. "
-                f"Отправляем обычным текстом."
-            )
-
-            await update.message.reply_text(
-                chunk
-            )
-
-
-# ============================================================
-# /START
-# ============================================================
-
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    welcome_text = (
-        "Здравствуйте! Я ваш ИИ-ассистент "
-        "по охране труда и промышленной безопасности.\n\n"
-        "Задайте мне вопрос по законодательству РБ "
-        "и нормативным актам (НПА), "
-        "и я найду релевантные нормативные положения "
-        "и дам развернутый ответ."
-    )
-
-    await update.message.reply_text(
-        welcome_text
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.effective_message.reply_text(
+        "Здравствуйте! Я помощник по охране труда и промышленной безопасности "
+        "в Республике Беларусь.\n\n"
+        "Задайте вопрос текстом или отправьте фотографию — я помогу "
+        "разобрать ситуацию."
     )
 
 
-# ============================================================
-# АНАЛИЗ ФОТО
-# ============================================================
+async def _match_npa(query_embedding):
+    def call():
+        return (
+            supabase.rpc(
+                "match_npa_chunks",
+                {
+                    "query_embedding": query_embedding,
+                    "match_threshold": SUPABASE_MATCH_THRESHOLD,
+                    "match_count": SUPABASE_MATCH_COUNT,
+                },
+            )
+            .execute()
+        )
 
-async def handle_photo(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+    response = await asyncio.to_thread(call)
+    return response.data or []
 
-    """
-    Анализ фотографии через DeepSeek Vision.
-    OpenRouter здесь НЕ используется.
-    """
+
+def build_context(rows) -> str:
+    blocks = []
+
+    for idx, row in enumerate(rows, 1):
+        doc_name = str(row.get("doc_name") or "НПА").strip()
+        point_num = str(row.get("point_num") or "Без номера").strip()
+        content = str(row.get("content") or "").strip()
+
+        if not content:
+            continue
+
+        blocks.append(
+            f"[Источник {idx}]\n"
+            f"Документ: {doc_name}\n"
+            f"Пункт/статья: {point_num}\n"
+            f"Текст: {content}"
+        )
+
+    return "\n\n".join(blocks)
+
+
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message:
+        return
+
+    question = (update.effective_message.text or "").strip()
+    if not question:
+        return
 
     try:
+        await update.effective_chat.send_action(ChatAction.TYPING)
 
-        await update.message.reply_chat_action(
-            "upload_photo"
-        )
-
-
-        # ----------------------------------------------------
-        # Получаем фотографию
-        # ----------------------------------------------------
-
-        photo = update.message.photo[-1]
-
-        tg_file = await context.bot.get_file(
-            photo.file_id
-        )
-
-
-        # ----------------------------------------------------
-        # Загружаем в память
-        # ----------------------------------------------------
-
-        photo_buffer = io.BytesIO()
-
-        await tg_file.download_to_memory(
-            photo_buffer
-        )
-
-        image_bytes = photo_buffer.getvalue()
-
-
-        # ----------------------------------------------------
-        # Проверка размера
-        # ----------------------------------------------------
-
-        if len(image_bytes) > 32 * 1024 * 1024:
-
-            await update.message.reply_text(
-                "⚠️ Фотография слишком большая "
-                "для анализа. "
-                "Отправьте изображение меньшего размера."
+        async with _embedding_async_lock:
+            query_embedding = await asyncio.to_thread(
+                get_query_embedding,
+                question,
             )
 
+        rows = await _match_npa(query_embedding)
+        npa_context = build_context(rows)
+
+        if not npa_context:
+            await update.effective_message.reply_text(
+                "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
+                "поэтому не буду придумывать нормативное требование."
+            )
             return
 
+        prompt = LEGAL_ASSISTANT_PROMPT.format(
+            context=npa_context,
+            question=question,
+        )
 
-        # ----------------------------------------------------
-        # Caption
-        # ----------------------------------------------------
+        answer = await asyncio.to_thread(generate_answer, prompt)
 
-        user_caption = (
-            update.message.caption or ""
-        ).strip()
+        sources = []
+        seen = set()
+        for row in rows:
+            doc_name = str(row.get("doc_name") or "НПА").strip()
+            point_num = str(row.get("point_num") or "").strip()
+            key = (doc_name, point_num)
+            if key in seen:
+                continue
+            seen.add(key)
+            sources.append(
+                f"• {doc_name}" + (f" — пункт {point_num}" if point_num else "")
+            )
+
+        if sources:
+            answer = (
+                answer.rstrip()
+                + "\n\n<b>📄 Источники:</b>\n"
+                + "\n".join(sources)
+            )
+
+        await send_long_message(update, answer, use_html=True)
+
+    except Exception:
+        logger.exception("Text handler failed.")
+        await update.effective_message.reply_text(
+            "Произошла ошибка при обработке запроса. "
+            "Попробуйте ещё раз через несколько секунд."
+        )
 
 
-        # ----------------------------------------------------
-        # Base64
-        # ----------------------------------------------------
+def _extract_vision_text(response) -> str:
+    if not response.choices:
+        return ""
+    content = response.choices[0].message.content
 
-        image_b64 = base64.b64encode(
-            image_bytes
-        ).decode("utf-8")
+    if isinstance(content, str):
+        return content.strip()
+
+    # Some OpenAI-compatible APIs can return content parts.
+    if isinstance(content, list):
+        pieces = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                pieces.append(str(part.get("text") or ""))
+        return "\n".join(pieces).strip()
+
+    return str(content or "").strip()
 
 
-        # ----------------------------------------------------
-        # PROMPT VISION
-        # ----------------------------------------------------
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message or not update.effective_message.photo:
+        return
 
-        vision_prompt = f"""
+    if deepseek_client is None:
+        await update.effective_message.reply_text(
+            "Анализ фотографий сейчас недоступен: не настроен DEEPSEEK_API_KEY."
+        )
+        return
 
-Ты — эксперт по охране труда,
-промышленной и пожарной безопасности
-в Республике Беларусь
-с большим практическим опытом.
+    try:
+        await update.effective_chat.send_action(ChatAction.TYPING)
 
-Тебе передана фотография производственного объекта,
-рабочего места, оборудования или территории.
+        photo = update.effective_message.photo[-1]
+        telegram_file = await context.bot.get_file(photo.file_id)
 
-Твоя задача — провести ТОЛЬКО ВИЗУАЛЬНЫЙ АНАЛИЗ фотографии.
+        buffer = BytesIO()
+        await telegram_file.download_to_memory(out=buffer)
+        image_bytes = buffer.getvalue()
 
-ВАЖНЕЙШЕЕ ПРАВИЛО:
+        if len(image_bytes) > 32 * 1024 * 1024:
+            await update.effective_message.reply_text(
+                "Фотография слишком большая для анализа."
+            )
+            return
 
-Не утверждай, что действие или объект является
-нарушением законодательства, если это невозможно
-установить только по фотографии.
+        image_b64 = base64.b64encode(image_bytes).decode("ascii")
 
-Не придумывай номера пунктов НПА, документы,
-размеры, характеристики оборудования
-или обстоятельства, которых на фото не видно.
+        prompt = """Проанализируй фотографию с точки зрения охраны труда и
+промышленной безопасности в Беларуси.
 
-Разделяй:
+Опиши только то, что реально видно на изображении.
+Укажи:
+1. Что изображено.
+2. Какие потенциально опасные факторы визуально заметны.
+3. Какие меры безопасности разумно проверить или принять.
+4. Что по фотографии определить невозможно.
 
-1. что ДОСТОВЕРНО ВИДНО на фотографии;
-2. что МОЖЕТ СВИДЕТЕЛЬСТВОВАТЬ
-   о потенциальном нарушении;
-3. что НЕВОЗМОЖНО определить по фотографии.
-
-Проверь, насколько это возможно:
-
-- СИЗ работников;
-- ограждения опасных зон;
-- состояние оборудования;
-- электрические кабели;
-- электрооборудование;
-- проходы;
-- проезды;
-- лестницы;
-- ограждения;
-- порядок и складирование материалов;
-- наличие потенциального падения предметов;
-- пожарную безопасность;
-- блокировки;
-- защитные устройства;
-- транспорт;
-- движение техники;
-- очевидные опасные факторы;
-- другие явно видимые небезопасные условия.
-
-Для каждого потенциального нарушения укажи:
-
-• Что видно;
-• Почему это потенциально опасно;
-• Уровень риска:
-  🔴 высокий / 🟠 средний / 🟡 низкий;
-• Что необходимо дополнительно проверить.
-
-Не ставь окончательный юридический диагноз
-только на основании фотографии.
-
-ФОРМАТ ОТВЕТА:
-
-🔎 ВИЗУАЛЬНЫЙ АНАЛИЗ
-
-Если явных проблем не видно:
-
-🟢 Явных нарушений по фотографии не обнаружено.
-
-Затем укажи, что всё равно невозможно
-проверить визуально.
-
-Если проблемы обнаружены:
-
-🔴 1. [краткое название]
-
-Что видно: ...
-
-Риск: ...
-
-Почему требует внимания: ...
-
-Проверить: ...
-
-🟠 2. ...
-
-В конце:
-
-⚠️ ОГРАНИЧЕНИЯ АНАЛИЗА
-
-Укажи 1–3 наиболее важных обстоятельства,
-которые невозможно определить по фотографии
-и которые могут изменить вывод.
-
-Не ссылайся на конкретные НПА в этом режиме.
-
-Нормативное обоснование будет выполняться
-отдельным этапом через базу НПА.
-
-Подпись/комментарий пользователя к фото:
-
-{user_caption if user_caption else "не указан"}
-
+Не утверждай, что конкретная норма НПА нарушена, если для этого недостаточно
+данных. Не придумывай номера НПА, пунктов или статей.
+Для нумерованных пунктов каждый пункт начинай с нового абзаца.
 """
 
-
-        # ----------------------------------------------------
-        # DEEPSEEK VISION
-        # ----------------------------------------------------
-
-        def call_deepseek():
-
-            return deepseek_client.chat.completions.create(
-
+        response = await asyncio.to_thread(
+            lambda: deepseek_client.chat.completions.create(
                 model=DEEPSEEK_VISION_MODEL,
-
                 messages=[
                     {
                         "role": "user",
                         "content": [
-
-                            {
-                                "type": "text",
-                                "text": vision_prompt
-                            },
-
+                            {"type": "text", "text": prompt},
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url":
-                                        f"data:image/jpeg;base64,{image_b64}"
-                                }
-                            }
-
-                        ]
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                },
+                            },
+                        ],
                     }
                 ],
-
-                max_tokens=1800,
-
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=1200,
             )
-
-
-        response = await asyncio.to_thread(
-            call_deepseek
         )
 
-
-        # ----------------------------------------------------
-        # Получение результата
-        # ----------------------------------------------------
-
-        result = (
-            response.choices[0].message.content
-            if response.choices
-            else None
-        )
-
-
+        result = _extract_vision_text(response)
         if not result:
+            raise RuntimeError("Vision model returned an empty response.")
 
-            result = (
-                "Не удалось получить результат "
-                "визуального анализа."
-            )
+        await send_long_message(update, result, use_html=False)
 
-
-        # ----------------------------------------------------
-        # Отправка
-        # ----------------------------------------------------
-
-        for chunk in split_text_smart(
-            result,
-            TELEGRAM_MESSAGE_LIMIT
-        ):
-
-            await update.message.reply_text(
-                chunk
-            )
-
-
-    except Exception as e:
-
-        error_text = str(e)
-
-        logger.error(
-            f"Ошибка DeepSeek Vision: {e}",
-            exc_info=True
+    except Exception:
+        logger.exception("Photo handler failed.")
+        await update.effective_message.reply_text(
+            "Не удалось проанализировать фотографию. Попробуйте отправить "
+            "её ещё раз."
         )
 
-
-        if (
-            "429" in error_text
-            or "insufficient" in error_text.lower()
-            or "balance" in error_text.lower()
-        ):
-
-            await update.message.reply_text(
-
-                "⚠️ DeepSeek API вернул ошибку "
-                "429/лимита.\n\n"
-                "Проверьте баланс и доступность "
-                "API-ключа DeepSeek.\n"
-                "После пополнения баланса "
-                "повторите отправку фотографии."
-            )
-
-
-        elif (
-            "401" in error_text
-            or "403" in error_text
-        ):
-
-            await update.message.reply_text(
-
-                "⚠️ DeepSeek API не принял "
-                "ключ доступа.\n\n"
-                "Проверьте переменную "
-                "DEEPSEEK_API_KEY в Railway."
-            )
-
-
-        else:
-
-            await update.message.reply_text(
-
-                "Не удалось проанализировать "
-                "фотографию через DeepSeek. "
-                "Попробуйте отправить изображение ещё раз."
-            )
-
-
-# ============================================================
-# ОБРАБОТКА ТЕКСТОВОГО ВОПРОСА
-# ============================================================
-
-async def handle_message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    """
-    Основной RAG-поиск.
-
-    Embedding выполняется локально через:
-
-        intfloat/multilingual-e5-base
-
-    Gemini Embedding API НЕ используется.
-
-    Генерация ответа:
-
-        Gemini
-            ↓
-        ошибка / quota
-            ↓
-        OpenRouter
-            ↓
-        резервная модель
-    """
-
-    user_query = (
-        update.message.text or ""
-    ).strip()
-
-
-    if not user_query:
-        return
-
-
-    await update.message.reply_chat_action(
-        "typing"
-    )
-
-
-    try:
-
-        # ====================================================
-        # 1. LOCAL EMBEDDING
-        # ====================================================
-
-        try:
-
-            query_vector = await asyncio.to_thread(
-                get_query_embedding,
-                user_query
-            )
-
-        except Exception as embed_err:
-
-            logger.error(
-                f"Ошибка локального embedding: "
-                f"{embed_err}",
-                exc_info=True
-            )
-
-            await update.message.reply_text(
-                "⚠️ Не удалось выполнить "
-                "векторизацию вашего запроса.\n\n"
-                "Попробуйте повторить запрос."
-            )
-
-            return
-
-
-        # ====================================================
-        # 2. ПОИСК SUPABASE
-        # ====================================================
-
-        rpc_response = supabase.rpc(
-
-            "match_npa_chunks",
-
-            {
-                "query_embedding": query_vector,
-
-                "match_threshold": 0.3,
-
-                "match_count": 4
-            }
-
-        ).execute()
-
-
-        context_chunks = (
-            rpc_response.data
-            or []
-        )
-
-
-        # ====================================================
-        # 3. ФОРМИРОВАНИЕ КОНТЕКСТА
-        # ====================================================
-
-        if context_chunks:
-
-            retrieved_text = (
-                "\n\n---\n\n".join(
-
-                    [
-
-                        (
-                            f"Источник: "
-                            f"{c.get('doc_name', 'НПА')}, "
-                            f"ст./п. "
-                            f"{c.get('point_num', '-')}\n"
-                            f"Текст: "
-                            f"{c.get('content', '')}"
-                        )
-
-                        for c in context_chunks
-
-                    ]
-
-                )
-
-            )
-
-
-        else:
-
-            retrieved_text = (
-                "Релевантные нормативные акты "
-                "в базе не найдены."
-            )
-
-
-        # ====================================================
-        # 4. ФОРМИРОВАНИЕ ПРОМПТА
-        # ====================================================
-
-        prompt = LEGAL_ASSISTANT_PROMPT.format(
-
-            retrieved_text=retrieved_text,
-
-            user_query=user_query
-
-        )
-
-
-        # ====================================================
-        # 5. AI ROUTER
-        # ====================================================
-
-        text, ai_provider = await generate_answer(
-            prompt
-        )
-
-
-        if not text:
-
-            await update.message.reply_text(
-
-                "Сервис ИИ временно не вернул "
-                "ответ. Попробуйте повторить вопрос."
-            )
-
-            return
-
-
-        text = text.strip()
-
-
-        # ====================================================
-        # 6. ИСТОЧНИКИ
-        # ====================================================
-
-        if context_chunks:
-
-            sources = sorted(
-
-                {
-
-                    c.get(
-                        "doc_name",
-                        "НПА"
-                    )
-
-                    for c in context_chunks
-
-                }
-
-            )
-
-
-            text += (
-
-                "\n\n📄 **Источники:** "
-                + "; ".join(sources)
-
-            )
-
-
-        # ====================================================
-        # 7. ОТПРАВКА
-        # ====================================================
-
-        await send_long_message(
-
-            update,
-
-            text,
-
-            use_html=True
-
-        )
-
-
-        # ====================================================
-        # 8. ЛОГ
-        # ====================================================
-
-        logger.info(
-            f"Ответ пользователю сформирован "
-            f"через {ai_provider}."
-        )
-
-
-    except Exception as e:
-
-        logger.error(
-            f"Ошибка при обработке запроса: {e}",
-            exc_info=True
-        )
-
-
-        await update.message.reply_text(
-
-            "Произошла ошибка при поиске ответа.\n\n"
-            "Попробуйте сформулировать вопрос иначе "
-            "или повторите запрос немного позже."
-        )
-
-
-# ============================================================
-# CLEANUP
-# ============================================================
-
-def cleanup():
-
-    global app
-
-
-    if app:
-
-        logger.info(
-            "Остановка бота..."
-        )
-
-
-        try:
-
-            app.stop()
-
-        except Exception as e:
-
-            logger.warning(
-                f"Ошибка при остановке бота: {e}"
-            )
-
-
-# ============================================================
-# MAIN
-# ============================================================
 
 def main():
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    global app
-
-
-    app = (
-
-        Application
-        .builder()
-        .token(TELEGRAM_TOKEN)
-        .build()
-
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(
+        MessageHandler(filters.PHOTO, photo_handler)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
     )
 
-
-    # /start
-    app.add_handler(
-
-        CommandHandler(
-            "start",
-            start
-        )
-
-    )
-
-
-    # Фото
-    app.add_handler(
-
-        MessageHandler(
-            filters.PHOTO,
-            handle_photo
-        )
-
-    )
-
-
-    # Текст
-    app.add_handler(
-
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_message
-        )
-
-    )
-
-
-    logger.info(
-        "Бот по охране труда запущен!"
-    )
-
-
-    # Корректное завершение
-    atexit.register(
-        cleanup
-    )
-
-
-    # Запуск
-    app.run_polling(
-
+    logger.info("Bot started.")
+    application.run_polling(
         drop_pending_updates=True,
-
         allowed_updates=Update.ALL_TYPES,
-
-        close_loop=False
-
+        close_loop=False,
     )
 
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
-
     main()
-```
