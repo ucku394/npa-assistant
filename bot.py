@@ -1,4 +1,18 @@
-"""Telegram bot for Belarus occupational / industrial safety questions."""
+"""
+Telegram bot for Belarus occupational / industrial safety questions.
+
+Architecture:
+Telegram
+    -> local multilingual-e5-small query embedding
+    -> Supabase vector search
+    -> Gemini reranking
+    -> Gemini answer generation
+    -> OpenRouter fallback
+    -> Telegram
+
+Photo:
+Telegram -> DeepSeek Vision -> Telegram
+"""
 
 import asyncio
 import base64
@@ -28,8 +42,10 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
 )
+from embedding import get_query_embedding
 from prompts import LEGAL_ASSISTANT_PROMPT, VISION_ANALYSIS_PROMPT
-from rag import retrieve_context
+from rag import retrieve_context, get_source_references
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,101 +53,207 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured.")
 
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError(
+        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured."
+    )
+
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+)
 
 deepseek_client = (
-    OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+    OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com",
+    )
     if DEEPSEEK_API_KEY
     else None
 )
 
-
-# ============================================================
-# TELEGRAM FORMATTING
-# ============================================================
+_embedding_async_lock = asyncio.Lock()
 
 
 def normalize_whitespace(text: str) -> str:
-    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = str(text or "")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def to_telegram_html(text: str) -> str:
-    """Convert the model's lightweight formatting to safe Telegram HTML."""
+def clean_ai_markup(text: str) -> str:
+    """
+    Removes common HTML accidentally emitted by an AI model.
+    The actual Telegram HTML is created later by to_telegram_html().
+    """
+    text = str(text or "")
+
+    replacements = {
+        "<br>": "\n",
+        "<br/>": "\n",
+        "<br />": "\n",
+        "</p>": "\n\n",
+        "<p>": "",
+        "<strong>": "",
+        "</strong>": "",
+        "<b>": "",
+        "</b>": "",
+        "<i>": "",
+        "</i>": "",
+        "<em>": "",
+        "</em>": "",
+    }
+
+    for old, new in replacements.items():
+        text = re.sub(
+            re.escape(old),
+            new,
+            text,
+            flags=re.IGNORECASE,
+        )
+
+    # Remove code fences but keep their content.
+    text = re.sub(r"```(?:html|markdown|text)?", "", text, flags=re.IGNORECASE)
+    text = text.replace("```", "")
+
+    return normalize_whitespace(text)
+
+
+def ensure_numbered_list_spacing(text: str) -> str:
+    """
+    Makes Telegram lists readable:
+    1. item
+
+    2. item
+    """
     text = normalize_whitespace(text)
+
+    # Do not add excessive spacing inside decimal numbers.
+    text = re.sub(
+        r"(?m)(^|\n)(\s*)(\d{1,2})[.)]\s+",
+        r"\1\2\3. ",
+        text,
+    )
+
+    text = re.sub(
+        r"(?m)([^\n])\n(\s*\d{1,2}\.\s+)",
+        r"\1\n\n\2",
+        text,
+    )
+
+    return text
+
+
+def to_telegram_html(text: str) -> str:
+    """
+    Safe Markdown-ish -> Telegram HTML conversion.
+
+    Important:
+    HTML is escaped BEFORE custom Telegram tags are inserted.
+    Therefore AI-generated <b> tags cannot become raw Telegram HTML.
+    """
+
+    text = clean_ai_markup(text)
+    text = ensure_numbered_list_spacing(text)
+
+    # Escape all user/AI HTML first.
     text = html.escape(text, quote=False)
 
-    # Section headings become visual cards/headings.
-    heading_patterns = [
-        r"(?m)^\s*(📌\s*КРАТКИЙ ОТВЕТ)\s*$",
-        r"(?m)^\s*(📚\s*НОРМАТИВНОЕ ОБОСНОВАНИЕ)\s*$",
-        r"(?m)^\s*(🔎\s*АНАЛИЗ)\s*$",
-        r"(?m)^\s*(⚠️\s*ВАЖНО)\s*$",
-        r"(?m)^\s*(📎\s*ИСТОЧНИКИ)\s*$",
-        r"(?m)^\s*(🔎\s*ВИЗУАЛЬНЫЙ АНАЛИЗ)\s*$",
-        r"(?m)^\s*(📷\s*Объект)\s*$",
-        r"(?m)^\s*(⚠️\s*ОГРАНИЧЕНИЯ АНАЛИЗА)\s*$",
-    ]
-    for pattern in heading_patterns:
-        text = re.sub(pattern, r"<b>\1</b>", text)
+    # Markdown headings.
+    text = re.sub(
+        r"(?m)^\s*#{1,6}\s*(.+?)\s*$",
+        r"<b>\1</b>",
+        text,
+    )
 
-    # Labels in photo analysis and source lines.
-    for label in (
-        "Что видно:",
-        "Потенциальная опасность:",
-        "Риск:",
-        "Проверить:",
-    ):
-        text = text.replace(label, f"<b>{label}</b>")
+    # Bold.
+    text = re.sub(
+        r"\*\*(.+?)\*\*",
+        r"<b>\1</b>",
+        text,
+        flags=re.DOTALL,
+    )
 
-    text = re.sub(r"(?m)^\s*#{1,6}\s*(.+?)\s*$", r"<b>\1</b>", text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
-    text = re.sub(r"(?m)^\s*[-*]\s+", "• ", text)
-    text = re.sub(r"(?m)^\s*[-_](?:\s*[-_]){2,}\s*$", "────────", text)
-    text = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<i>\1</i>", text)
+    # Bullets.
+    text = re.sub(
+        r"(?m)^\s*[-*]\s+",
+        "• ",
+        text,
+    )
+
+    # Horizontal rules.
+    text = re.sub(
+        r"(?m)^\s*([-_])(?:\s*\1){2,}\s*$",
+        "────────",
+        text,
+    )
+
+    # Single-star italic.
+    text = re.sub(
+        r"(?<!\*)\*([^*\n]+?)\*(?!\*)",
+        r"<i>\1</i>",
+        text,
+    )
 
     return text.strip()
 
 
-def split_text_smart(text: str, limit: int = TELEGRAM_MESSAGE_LIMIT) -> list[str]:
+def split_text_smart(
+    text: str,
+    limit: int = TELEGRAM_MESSAGE_LIMIT,
+) -> list[str]:
+    text = str(text or "").strip()
+
     if len(text) <= limit:
         return [text]
 
     parts = []
-    remaining = text.strip()
+    remaining = text
+
     while len(remaining) > limit:
         cut = remaining.rfind("\n\n", 0, limit)
+
         if cut < limit // 2:
             cut = remaining.rfind("\n", 0, limit)
+
         if cut < limit // 2:
             cut = remaining.rfind(" ", 0, limit)
+
         if cut < limit // 2:
             cut = limit
 
         part = remaining[:cut].strip()
+
         if part:
             parts.append(part)
+
         remaining = remaining[cut:].strip()
 
     if remaining:
         parts.append(remaining)
+
     return parts
 
 
-async def send_long_message(update: Update, text: str, use_html: bool = True):
+async def send_long_message(
+    update: Update,
+    text: str,
+    use_html: bool = True,
+):
     if not update.effective_message:
         return
 
     for chunk in split_text_smart(text):
         if use_html:
             rendered = to_telegram_html(chunk)
+
             try:
                 await update.effective_message.reply_text(
                     rendered,
@@ -139,22 +261,25 @@ async def send_long_message(update: Update, text: str, use_html: bool = True):
                     disable_web_page_preview=True,
                 )
                 continue
+
             except Exception:
-                logger.exception("HTML send failed; retrying as plain text.")
+                logger.exception(
+                    "Telegram HTML send failed; retrying plain text."
+                )
 
         await update.effective_message.reply_text(
-            html.unescape(chunk),
+            html.unescape(str(chunk)),
             disable_web_page_preview=True,
         )
 
 
-# ============================================================
-# COMMANDS
-# ============================================================
-
-async def debug_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def debug_update(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     logger.info(
-        "TELEGRAM | update=%s user=%s chat=%s text=%r photo=%s",
+        "TELEGRAM UPDATE | update_id=%s | user_id=%s | chat_id=%s | "
+        "text=%r | photo=%s",
         update.update_id,
         update.effective_user.id if update.effective_user else None,
         update.effective_chat.id if update.effective_chat else None,
@@ -163,68 +288,71 @@ async def debug_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "🛡 <b>Помощник по охране труда</b>\n\n"
-        "Задайте вопрос по охране труда, промышленной или пожарной безопасности.\n\n"
-        "📷 Можно также отправить фотографию рабочего места — я проведу визуальный анализ."
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not update.effective_message:
+        return
+
+    await update.effective_message.reply_text(
+        "Здравствуйте! Я помощник по охране труда и промышленной "
+        "безопасности в Республике Беларусь.\n\n"
+        "Задайте вопрос текстом или отправьте фотографию — я помогу "
+        "разобрать ситуацию."
     )
-    await update.effective_message.reply_text(text, parse_mode="HTML")
 
 
-# ============================================================
-# SOURCES / ANSWER
-# ============================================================
+def build_context_for_log(chunks: list[dict]) -> str:
+    return "\n".join(
+        str(chunk.get("doc_name") or "НПА")
+        for chunk in chunks
+    )
 
 
-def build_sources(chunks: list[dict]) -> str:
-    sources = []
-    seen = set()
-
-    for chunk in chunks:
-        doc = str(chunk.get("doc_name") or "НПА").strip()
-        point = str(
-            chunk.get("point_num")
-            or chunk.get("article")
-            or chunk.get("section")
-            or ""
-        ).strip()
-        key = (doc, point)
-        if key in seen:
-            continue
-        seen.add(key)
-
-        if point:
-            sources.append(f"• <b>{doc}</b> — {point}")
-        else:
-            sources.append(f"• <b>{doc}</b>")
-
-    if not sources:
-        return ""
-    return "\n\n📎 ИСТОЧНИКИ\n" + "\n".join(sources)
-
-
-async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def text_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     if not update.effective_message:
         return
 
     question = (update.effective_message.text or "").strip()
+
     if not question:
         return
 
     try:
         await update.effective_chat.send_action(ChatAction.TYPING)
 
-        rag_result = await retrieve_context(question, supabase)
+        # E5 embedding is local and CPU-bound.
+        async with _embedding_async_lock:
+            # The actual embedding is performed inside rag.py.
+            # This warm-up/import call ensures the model is ready without
+            # changing the existing architecture.
+            await asyncio.to_thread(
+                get_query_embedding,
+                question,
+            )
+
+        rag_result = await retrieve_context(
+            question,
+            supabase,
+        )
+
         chunks = rag_result["chunks"]
         npa_context = rag_result["retrieved_text"]
 
-        if not npa_context or not chunks:
+        logger.info(
+            "RAG | candidates=%s | final=%s",
+            rag_result["candidate_count"],
+            rag_result["final_count"],
+        )
+
+        if not rag_result["found"] or not npa_context:
             await update.effective_message.reply_text(
-                "🔎 <b>Нормативное основание не найдено</b>\n\n"
-                "В доступной базе не нашлось достаточно релевантного фрагмента НПА. "
-                "Я не буду придумывать требование.",
-                parse_mode="HTML",
+                "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
+                "поэтому не буду придумывать нормативное требование."
             )
             return
 
@@ -233,27 +361,43 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_query=question,
         )
 
-        answer = await asyncio.to_thread(generate_answer, prompt)
-        answer = normalize_whitespace(answer)
-        answer += build_sources(chunks)
+        answer = await asyncio.to_thread(
+            generate_answer,
+            prompt,
+        )
 
-        await send_long_message(update, answer, use_html=True)
+        answer = clean_ai_markup(answer)
+        answer = ensure_numbered_list_spacing(answer)
+
+        # Sources are taken ONLY from final RAG chunks.
+        source_refs = get_source_references(chunks)
+
+        if source_refs:
+            answer += "\n\n📎 ИСТОЧНИКИ\n\n"
+            answer += "\n\n".join(
+                f"• {source}"
+                for source in source_refs
+            )
+
+        await send_long_message(
+            update,
+            answer,
+            use_html=True,
+        )
 
     except Exception:
         logger.exception("Text handler failed.")
+
         await update.effective_message.reply_text(
-            "⚠️ Не удалось обработать запрос. Попробуйте ещё раз через несколько секунд."
+            "Произошла ошибка при обработке запроса. "
+            "Попробуйте ещё раз через несколько секунд."
         )
 
 
-# ============================================================
-# PHOTO / VISION
-# ============================================================
-
-
 def _extract_vision_text(response) -> str:
-    if not response.choices:
+    if not response or not response.choices:
         return ""
+
     content = response.choices[0].message.content
 
     if isinstance(content, str):
@@ -261,21 +405,29 @@ def _extract_vision_text(response) -> str:
 
     if isinstance(content, list):
         pieces = []
+
         for part in content:
             if isinstance(part, dict) and part.get("type") == "text":
-                pieces.append(str(part.get("text") or ""))
+                pieces.append(
+                    str(part.get("text") or "")
+                )
+
         return "\n".join(pieces).strip()
 
     return str(content or "").strip()
 
 
-async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def photo_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     if not update.effective_message or not update.effective_message.photo:
         return
 
     if deepseek_client is None:
         await update.effective_message.reply_text(
-            "📷 Анализ фотографий сейчас недоступен: не настроен DEEPSEEK_API_KEY."
+            "Анализ фотографий сейчас недоступен: "
+            "не настроен DEEPSEEK_API_KEY."
         )
         return
 
@@ -283,21 +435,36 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_chat.send_action(ChatAction.TYPING)
 
         photo = update.effective_message.photo[-1]
-        telegram_file = await context.bot.get_file(photo.file_id)
+
+        telegram_file = await context.bot.get_file(
+            photo.file_id
+        )
 
         buffer = BytesIO()
-        await telegram_file.download_to_memory(out=buffer)
+
+        await telegram_file.download_to_memory(
+            out=buffer
+        )
+
         image_bytes = buffer.getvalue()
 
         if len(image_bytes) > 32 * 1024 * 1024:
             await update.effective_message.reply_text(
-                "📷 Фотография слишком большая для анализа."
+                "Фотография слишком большая для анализа."
             )
             return
 
-        image_b64 = base64.b64encode(image_bytes).decode("ascii")
-        caption = update.effective_message.caption or ""
-        prompt = VISION_ANALYSIS_PROMPT.format(user_caption=caption)
+        image_b64 = base64.b64encode(
+            image_bytes
+        ).decode("ascii")
+
+        user_caption = (
+            update.effective_message.caption or ""
+        ).strip()
+
+        prompt = VISION_ANALYSIS_PROMPT.format(
+            user_caption=user_caption or "Подпись отсутствует.",
+        )
 
         response = await asyncio.to_thread(
             lambda: deepseek_client.chat.completions.create(
@@ -306,39 +473,53 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": prompt},
+                            {
+                                "type": "text",
+                                "text": prompt,
+                            },
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                    "url": (
+                                        "data:image/jpeg;base64,"
+                                        f"{image_b64}"
+                                    ),
                                 },
                             },
                         ],
                     }
                 ],
                 temperature=0.1,
-                max_tokens=1400,
+                max_tokens=1200,
             )
         )
 
         result = _extract_vision_text(response)
-        if not result:
-            raise RuntimeError("Vision model returned an empty response.")
 
-        await send_long_message(update, result, use_html=True)
+        if not result:
+            raise RuntimeError(
+                "Vision model returned an empty response."
+            )
+
+        await send_long_message(
+            update,
+            result,
+            use_html=True,
+        )
 
     except Exception:
         logger.exception("Photo handler failed.")
+
         await update.effective_message.reply_text(
-            "⚠️ Не удалось проанализировать фотографию. Попробуйте отправить её ещё раз."
+            "Не удалось проанализировать фотографию. "
+            "Попробуйте отправить её ещё раз."
         )
 
 
-# ============================================================
-# MAIN
-# ============================================================
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     logger.error(
         "UNHANDLED TELEGRAM ERROR: %s",
         context.error,
@@ -347,20 +528,48 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = (
+        Application
+        .builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .build()
+    )
 
     application.add_handler(
-        MessageHandler(filters.ALL, debug_update),
+        MessageHandler(
+            filters.ALL,
+            debug_update,
+        ),
         group=-100,
     )
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+
     application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
+        CommandHandler(
+            "start",
+            start,
+        )
     )
-    application.add_error_handler(error_handler)
+
+    application.add_handler(
+        MessageHandler(
+            filters.PHOTO,
+            photo_handler,
+        )
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            text_handler,
+        )
+    )
+
+    application.add_error_handler(
+        error_handler
+    )
 
     logger.info("Bot started.")
+
     application.run_polling(
         drop_pending_updates=False,
         allowed_updates=Update.ALL_TYPES,
