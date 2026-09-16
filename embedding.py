@@ -1,10 +1,31 @@
 import os
 
-# Ограничиваем количество потоков ДО импорта torch/sentence-transformers
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+# ============================================================
+# ENVIRONMENT OPTIMIZATION
+# IMPORTANT:
+# These variables must be set BEFORE importing torch.
+# ============================================================
+
+os.environ.setdefault(
+    "TOKENIZERS_PARALLELISM",
+    "false",
+)
+
+os.environ.setdefault(
+    "OMP_NUM_THREADS",
+    "1",
+)
+
+os.environ.setdefault(
+    "MKL_NUM_THREADS",
+    "1",
+)
+
+os.environ.setdefault(
+    "OPENBLAS_NUM_THREADS",
+    "1",
+)
+
 
 import logging
 import threading
@@ -16,76 +37,110 @@ import torch
 from sentence_transformers import SentenceTransformer
 
 
+# ============================================================
+# LOGGING
+# ============================================================
+
 logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# НАСТРОЙКИ
+# MODEL CONFIGURATION
 # ============================================================
 
 EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+
 EMBEDDING_DIM = 384
 
-# Для сервера с 1 GB RAM
 DEVICE = "cpu"
+
+# 1 GB RAM server:
+# keep this deliberately small.
 BATCH_SIZE = 1
+
+
+# ============================================================
+# MODEL LOCK
+# ============================================================
 
 _MODEL_LOCK = threading.Lock()
 
 
 # ============================================================
-# ОГРАНИЧЕНИЕ ПОТОКОВ PYTORCH
+# PYTORCH THREAD LIMIT
 # ============================================================
 
 try:
+
     torch.set_num_threads(1)
+
     torch.set_num_interop_threads(1)
 
     logger.info(
-        "EMBEDDING | torch threads limited | "
+        "EMBEDDING | torch threads configured | "
         "num_threads=%s | interop_threads=%s",
         torch.get_num_threads(),
         torch.get_num_interop_threads(),
     )
 
 except Exception as exc:
+
     logger.warning(
-        "EMBEDDING | cannot configure torch threads | error=%s",
+        "EMBEDDING | unable to configure torch threads | "
+        "error=%s",
         exc,
     )
 
 
 # ============================================================
-# МОНИТОРИНГ ПАМЯТИ
+# MEMORY MONITOR
 # ============================================================
 
 def _memory_info() -> str:
     """
-    Получаем RSS процесса без дополнительных библиотек.
-    Работает в Linux-контейнере.
+    Returns current process RSS memory.
+
+    Works inside Linux containers without psutil.
     """
 
     try:
-        with open("/proc/self/status", "r", encoding="utf-8") as f:
-            for line in f:
+
+        with open(
+            "/proc/self/status",
+            "r",
+            encoding="utf-8",
+        ) as file:
+
+            for line in file:
+
                 if line.startswith("VmRSS:"):
+
                     return line.strip()
 
     except Exception:
+
         pass
 
     return "VmRSS=unknown"
 
 
 # ============================================================
-# РАЗМЕРНОСТЬ МОДЕЛИ
+# MODEL DIMENSION
 # ============================================================
 
 def _dimension(model) -> int:
-    method = getattr(model, "get_embedding_dimension", None)
+
+    method = getattr(
+        model,
+        "get_embedding_dimension",
+        None,
+    )
 
     if callable(method):
-        return int(method())
+
+        return int(
+            method()
+        )
 
     legacy = getattr(
         model,
@@ -94,7 +149,10 @@ def _dimension(model) -> int:
     )
 
     if callable(legacy):
-        return int(legacy())
+
+        return int(
+            legacy()
+        )
 
     raise RuntimeError(
         "Cannot determine embedding dimension."
@@ -102,7 +160,7 @@ def _dimension(model) -> int:
 
 
 # ============================================================
-# ЗАГРУЗКА МОДЕЛИ
+# LOAD MODEL
 # ============================================================
 
 @lru_cache(maxsize=1)
@@ -145,7 +203,9 @@ def get_model():
             device=DEVICE,
         )
 
-        dimension = _dimension(model)
+        dimension = _dimension(
+            model
+        )
 
         logger.info(
             "EMBEDDING | model loaded successfully"
@@ -194,7 +254,7 @@ def get_model():
 
 
 # ============================================================
-# КОДИРОВАНИЕ
+# ENCODE
 # ============================================================
 
 def _encode(
@@ -202,12 +262,13 @@ def _encode(
 ) -> List[List[float]]:
 
     clean = [
-        str(x).strip()
-        for x in texts
-        if str(x).strip()
+        str(text).strip()
+        for text in texts
+        if str(text).strip()
     ]
 
     if not clean:
+
         return []
 
     logger.info(
@@ -233,13 +294,13 @@ def _encode(
                 show_progress_bar=False,
 
                 batch_size=BATCH_SIZE,
-
             )
 
         except Exception:
 
             logger.exception(
-                "EMBEDDING | encode FAILED | memory=%s",
+                "EMBEDDING | encode FAILED | "
+                "memory=%s",
                 _memory_info(),
             )
 
@@ -251,14 +312,19 @@ def _encode(
     )
 
     if arr.ndim == 1:
-        arr = arr.reshape(1, -1)
+
+        arr = arr.reshape(
+            1,
+            -1,
+        )
 
     if arr.shape[1] != EMBEDDING_DIM:
 
         raise RuntimeError(
             "Embedding dimension mismatch: "
             f"got {arr.shape[1]}, "
-            f"expected {EMBEDDING_DIM}"
+            f"expected {EMBEDDING_DIM} "
+            f"for {EMBEDDING_MODEL}."
         )
 
     logger.info(
@@ -280,9 +346,12 @@ def get_query_embedding(
     text: str,
 ) -> List[float]:
 
-    text = str(text).strip()
+    text = str(
+        text
+    ).strip()
 
     if not text:
+
         raise ValueError(
             "Query text is empty."
         )
@@ -303,17 +372,18 @@ def get_document_embeddings(
 ) -> List[List[float]]:
 
     texts = [
-        str(x).strip()
-        for x in texts
-        if str(x).strip()
+        str(text).strip()
+        for text in texts
+        if str(text).strip()
     ]
 
     if not texts:
+
         return []
 
     return _encode(
         [
-            f"passage: {x}"
-            for x in texts
+            f"passage: {text}"
+            for text in texts
         ]
     )
