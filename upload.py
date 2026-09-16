@@ -1,4 +1,3 @@
-```python
 """
 NPA Loader
 =========
@@ -1415,4 +1414,3 @@ def main() -> int:
         validate_embedding_model()
 
     except Exception as err
-```
