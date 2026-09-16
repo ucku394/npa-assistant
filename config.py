@@ -1,136 +1,34 @@
+# Shared configuration for the Telegram occupational-safety assistant.
+# All secrets are read from environment variables / .env.
+
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ============================================================
-# TELEGRAM
-# ============================================================
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-
-
-# ============================================================
-# GEMINI
-# ============================================================
-
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL",
-    "gemini-embedding-001"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+CHAT_MODEL = os.getenv("CHAT_MODEL", "").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "").strip()
+OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip()
+
+DEEPSEEK_VISION_MODEL = os.getenv(
+    "DEEPSEEK_VISION_MODEL",
+    "deepseek-v4-flash-vision-exp",
 ).strip()
 
-CHAT_MODEL = os.getenv(
-    "CHAT_MODEL",
-    "gemini-3.6-flash"
-).strip()
-
-
-# ============================================================
-# DEEPSEEK
-# ============================================================
-
-DEEPSEEK_API_KEY = os.getenv(
-    "DEEPSEEK_API_KEY",
-    ""
-).strip()
-
-VISION_MODEL = os.getenv(
-    "VISION_MODEL",
-    "deepseek-v4-flash-vision-exp"
-).strip()
-
-
-# ============================================================
-# SUPABASE
-# ============================================================
-
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL",
-    ""
-).strip()
-
-SUPABASE_SERVICE_ROLE_KEY = os.getenv(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    ""
-).strip()
-
-
-# ============================================================
-# RAG
-# ============================================================
-
-RAG_MATCH_THRESHOLD = float(
-    os.getenv("RAG_MATCH_THRESHOLD", "0.30")
-)
-
-RAG_MATCH_COUNT = int(
-    os.getenv("RAG_MATCH_COUNT", "10")
-)
-
-RAG_FINAL_COUNT = int(
-    os.getenv("RAG_FINAL_COUNT", "5")
-)
-
-
-# ============================================================
-# LIMITS
-# ============================================================
-
-MAX_IMAGE_SIZE_MB = int(
-    os.getenv("MAX_IMAGE_SIZE_MB", "32")
-)
-
-MAX_VISION_TOKENS = int(
-    os.getenv("MAX_VISION_TOKENS", "1800")
-)
-
-MAX_CHAT_TOKENS = int(
-    os.getenv("MAX_CHAT_TOKENS", "3000")
-)
+MAX_CHAT_TOKENS = int(os.getenv("MAX_CHAT_TOKENS", "1800"))
+SUPABASE_MATCH_THRESHOLD = float(os.getenv("SUPABASE_MATCH_THRESHOLD", "0.30"))
+SUPABASE_MATCH_COUNT = int(os.getenv("SUPABASE_MATCH_COUNT", "6"))
 
 TELEGRAM_MESSAGE_LIMIT = 4000
 
-
-# ============================================================
-# VALIDATION
-# ============================================================
-
-def validate_config():
-
-    required = {
-        "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
-        "SUPABASE_URL": SUPABASE_URL,
-        "SUPABASE_SERVICE_ROLE_KEY": SUPABASE_SERVICE_ROLE_KEY,
-    }
-
-    missing = [
-        name
-        for name, value in required.items()
-        if not value
-    ]
-
-    if missing:
-        raise RuntimeError(
-            "Не заполнены обязательные переменные окружения: "
-            + ", ".join(missing)
-        )
-# ============================================================
-# OPENROUTER
-# ============================================================
-
-OPENROUTER_API_KEY = os.getenv(
-    "OPENROUTER_API_KEY",
-    ""
-).strip()
-
-OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL",
-    "google/gemini-3.1-flash-lite"
-).strip()
-
-OPENROUTER_FALLBACK_MODEL = os.getenv(
-    "OPENROUTER_FALLBACK_MODEL",
-    "deepseek/deepseek-chat"
-).strip()
+if not CHAT_MODEL:
+    # Keep startup explicit rather than silently choosing a possibly obsolete model.
+    CHAT_MODEL = "gemini-3.6-flash"
