@@ -4,7 +4,9 @@ import logging
 import re
 from typing import Any
 from supabase import Client
-from config import RAG_MATCH_COUNT, RAG_MATCH_THRESHOLD, RAG_FINAL_COUNT
+from config import SUPABASE_MATCH_COUNT, SUPABASE_MATCH_THRESHOLD
+
+RAG_FINAL_COUNT = 5
 from embedding import get_query_embedding
 
 logger = logging.getLogger(__name__)
