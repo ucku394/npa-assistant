@@ -2,6 +2,8 @@
 Telegram bot for Belarus occupational / industrial safety questions.
 
 Architecture:
+
+TEXT:
 Telegram
     -> local multilingual-e5-small query embedding
     -> Supabase vector search
@@ -10,8 +12,10 @@ Telegram
     -> OpenRouter fallback
     -> Telegram
 
-Photo:
-Telegram -> DeepSeek Vision -> Telegram
+PHOTO:
+Telegram
+    -> DeepSeek Vision
+    -> Telegram
 """
 
 import asyncio
@@ -23,6 +27,7 @@ from io import BytesIO
 
 from openai import OpenAI
 from supabase import create_client
+
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -34,6 +39,7 @@ from telegram.ext import (
 )
 
 from ai_router import generate_answer
+
 from config import (
     DEEPSEEK_API_KEY,
     DEEPSEEK_VISION_MODEL,
@@ -42,8 +48,20 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
 )
-from prompts import LEGAL_ASSISTANT_PROMPT, VISION_ANALYSIS_PROMPT
-from rag import retrieve_context, get_source_references
+
+from prompts import (
+    LEGAL_ASSISTANT_PROMPT,
+    VISION_ANALYSIS_PROMPT,
+)
+
+from rag import (
+    retrieve_context,
+    get_source_references,
+)
+
+# IMPORTANT:
+# Import E5 model loader for startup preload.
+from embedding import get_model
 
 
 # ============================================================
@@ -52,7 +70,12 @@ from rag import retrieve_context, get_source_references
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    format=(
+        "%(asctime)s | "
+        "%(levelname)s | "
+        "%(name)s | "
+        "%(message)s"
+    ),
 )
 
 logger = logging.getLogger(__name__)
@@ -63,13 +86,21 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 if not TELEGRAM_BOT_TOKEN:
+
     raise RuntimeError(
         "TELEGRAM_BOT_TOKEN is not configured."
     )
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+
+if (
+    not SUPABASE_URL
+    or not SUPABASE_SERVICE_ROLE_KEY
+):
+
     raise RuntimeError(
-        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured."
+        "SUPABASE_URL / "
+        "SUPABASE_SERVICE_ROLE_KEY "
+        "are not configured."
     )
 
 
@@ -88,11 +119,14 @@ supabase = create_client(
 # ============================================================
 
 deepseek_client = (
+
     OpenAI(
         api_key=DEEPSEEK_API_KEY,
         base_url="https://api.deepseek.com",
     )
+
     if DEEPSEEK_API_KEY
+
     else None
 )
 
@@ -101,8 +135,13 @@ deepseek_client = (
 # TEXT UTILITIES
 # ============================================================
 
-def normalize_whitespace(text: str) -> str:
-    text = str(text or "")
+def normalize_whitespace(
+    text: str,
+) -> str:
+
+    text = str(
+        text or ""
+    )
 
     text = text.replace(
         "\r\n",
@@ -129,33 +168,53 @@ def normalize_whitespace(text: str) -> str:
     return text.strip()
 
 
-def clean_ai_markup(text: str) -> str:
-    """
-    Removes common HTML accidentally emitted by an AI model.
+def clean_ai_markup(
+    text: str,
+) -> str:
 
-    The actual Telegram HTML is created later by
+    """
+    Removes common HTML accidentally
+    emitted by AI models.
+
+    Telegram HTML is created later by
     to_telegram_html().
     """
 
-    text = str(text or "")
+    text = str(
+        text or ""
+    )
 
     replacements = {
+
         "<br>": "\n",
+
         "<br/>": "\n",
+
         "<br />": "\n",
+
         "</p>": "\n\n",
+
         "<p>": "",
+
         "<strong>": "",
+
         "</strong>": "",
+
         "<b>": "",
+
         "</b>": "",
+
         "<i>": "",
+
         "</i>": "",
+
         "<em>": "",
+
         "</em>": "",
     }
 
     for old, new in replacements.items():
+
         text = re.sub(
             re.escape(old),
             new,
@@ -163,7 +222,6 @@ def clean_ai_markup(text: str) -> str:
             flags=re.IGNORECASE,
         )
 
-    # Remove code fences but keep their content.
     text = re.sub(
         r"```(?:html|markdown|text)?",
         "",
@@ -176,31 +234,28 @@ def clean_ai_markup(text: str) -> str:
         "",
     )
 
-    return normalize_whitespace(text)
+    return normalize_whitespace(
+        text
+    )
 
 
-def ensure_numbered_list_spacing(text: str) -> str:
-    """
-    Makes Telegram lists readable:
+def ensure_numbered_list_spacing(
+    text: str,
+) -> str:
 
-    1. item
+    text = normalize_whitespace(
+        text
+    )
 
-    2. item
-    """
-
-    text = normalize_whitespace(text)
-
-    # Normalize numbered lists.
-    # Do not add excessive spacing inside decimal numbers.
     text = re.sub(
         r"(?m)(^|\n)(\s*)(\d{1,2})[.)]\s+",
         r"\1\2\3. ",
         text,
     )
 
-    # Add an empty line between numbered items.
     text = re.sub(
-        r"(?m)([^\n])\n(\s*\d{1,2}\.\s+)",
+        r"(?m)([^\n])\n"
+        r"(\s*\d{1,2}\.\s+)",
         r"\1\n\n\2",
         text,
     )
@@ -208,42 +263,31 @@ def ensure_numbered_list_spacing(text: str) -> str:
     return text
 
 
-def to_telegram_html(text: str) -> str:
-    """
-    Safe Markdown-ish -> Telegram HTML conversion.
+def to_telegram_html(
+    text: str,
+) -> str:
 
-    Important:
-    HTML is escaped BEFORE custom Telegram tags are inserted.
-
-    Therefore AI-generated HTML cannot become raw Telegram HTML.
-    """
-
-    text = clean_ai_markup(text)
+    text = clean_ai_markup(
+        text
+    )
 
     text = ensure_numbered_list_spacing(
         text
     )
 
-    # Escape all user/AI HTML first.
     text = html.escape(
         text,
         quote=False,
     )
 
-    # --------------------------------------------------------
     # Markdown headings
-    # --------------------------------------------------------
-
     text = re.sub(
         r"(?m)^\s*#{1,6}\s*(.+?)\s*$",
         r"<b>\1</b>",
         text,
     )
 
-    # --------------------------------------------------------
     # Bold
-    # --------------------------------------------------------
-
     text = re.sub(
         r"\*\*(.+?)\*\*",
         r"<b>\1</b>",
@@ -251,30 +295,21 @@ def to_telegram_html(text: str) -> str:
         flags=re.DOTALL,
     )
 
-    # --------------------------------------------------------
     # Bullets
-    # --------------------------------------------------------
-
     text = re.sub(
         r"(?m)^\s*[-*]\s+",
         "• ",
         text,
     )
 
-    # --------------------------------------------------------
     # Horizontal rules
-    # --------------------------------------------------------
-
     text = re.sub(
         r"(?m)^\s*([-_])(?:\s*\1){2,}\s*$",
         "────────",
         text,
     )
 
-    # --------------------------------------------------------
-    # Single-star italic
-    # --------------------------------------------------------
-
+    # Italic
     text = re.sub(
         r"(?<!\*)\*([^*\n]+?)\*(?!\*)",
         r"<i>\1</i>",
@@ -293,9 +328,12 @@ def split_text_smart(
     limit: int = TELEGRAM_MESSAGE_LIMIT,
 ) -> list[str]:
 
-    text = str(text or "").strip()
+    text = str(
+        text or ""
+    ).strip()
 
     if len(text) <= limit:
+
         return [text]
 
     parts = []
@@ -304,42 +342,51 @@ def split_text_smart(
 
     while len(remaining) > limit:
 
-        # Prefer paragraph boundary.
         cut = remaining.rfind(
             "\n\n",
             0,
             limit,
         )
 
-        # Then normal line boundary.
         if cut < limit // 2:
+
             cut = remaining.rfind(
                 "\n",
                 0,
                 limit,
             )
 
-        # Then word boundary.
         if cut < limit // 2:
+
             cut = remaining.rfind(
                 " ",
                 0,
                 limit,
             )
 
-        # Last resort.
         if cut < limit // 2:
+
             cut = limit
 
-        part = remaining[:cut].strip()
+        part = remaining[
+            :cut
+        ].strip()
 
         if part:
-            parts.append(part)
 
-        remaining = remaining[cut:].strip()
+            parts.append(
+                part
+            )
+
+        remaining = remaining[
+            cut:
+        ].strip()
 
     if remaining:
-        parts.append(remaining)
+
+        parts.append(
+            remaining
+        )
 
     return parts
 
@@ -349,10 +396,14 @@ async def send_long_message(
     text: str,
     use_html: bool = True,
 ):
+
     if not update.effective_message:
+
         return
 
-    for chunk in split_text_smart(text):
+    for chunk in split_text_smart(
+        text
+    ):
 
         if use_html:
 
@@ -362,10 +413,14 @@ async def send_long_message(
 
             try:
 
-                await update.effective_message.reply_text(
-                    rendered,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True,
+                await (
+                    update
+                    .effective_message
+                    .reply_text(
+                        rendered,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
                 )
 
                 continue
@@ -373,14 +428,19 @@ async def send_long_message(
             except Exception:
 
                 logger.exception(
-                    "Telegram HTML send failed; retrying plain text."
+                    "Telegram HTML send failed; "
+                    "retrying plain text."
                 )
 
-        await update.effective_message.reply_text(
-            html.unescape(
-                str(chunk)
-            ),
-            disable_web_page_preview=True,
+        await (
+            update
+            .effective_message
+            .reply_text(
+                html.unescape(
+                    str(chunk)
+                ),
+                disable_web_page_preview=True,
+            )
         )
 
 
@@ -392,25 +452,35 @@ async def debug_update(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
+
     logger.info(
-        "TELEGRAM UPDATE | update_id=%s | user_id=%s | chat_id=%s | "
-        "text=%r | photo=%s",
+        "TELEGRAM UPDATE | "
+        "update_id=%s | "
+        "user_id=%s | "
+        "chat_id=%s | "
+        "text=%r | "
+        "photo=%s",
+
         update.update_id,
+
         (
             update.effective_user.id
             if update.effective_user
             else None
         ),
+
         (
             update.effective_chat.id
             if update.effective_chat
             else None
         ),
+
         (
             update.effective_message.text
             if update.effective_message
             else None
         ),
+
         bool(
             update.effective_message
             and update.effective_message.photo
@@ -426,31 +496,17 @@ async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
+
     if not update.effective_message:
+
         return
 
     await update.effective_message.reply_text(
+
         "Здравствуйте! Я помощник по охране труда и "
         "промышленной безопасности в Республике Беларусь.\n\n"
         "Задайте вопрос текстом или отправьте фотографию — "
         "я помогу разобрать ситуацию."
-    )
-
-
-# ============================================================
-# CONTEXT LOG
-# ============================================================
-
-def build_context_for_log(
-    chunks: list[dict],
-) -> str:
-
-    return "\n".join(
-        str(
-            chunk.get("doc_name")
-            or "НПА"
-        )
-        for chunk in chunks
     )
 
 
@@ -464,21 +520,21 @@ async def text_handler(
 ):
 
     if not update.effective_message:
+
         return
 
     question = (
-        update.effective_message.text
+        update
+        .effective_message
+        .text
         or ""
     ).strip()
 
     if not question:
+
         return
 
     try:
-
-        # ----------------------------------------------------
-        # Show typing indicator.
-        # ----------------------------------------------------
 
         await update.effective_chat.send_action(
             ChatAction.TYPING
@@ -487,20 +543,10 @@ async def text_handler(
         # ----------------------------------------------------
         # RAG
         #
-        # ВАЖНО:
-        # embedding НЕ вызывается здесь отдельно.
+        # E5 embedding is performed ONLY inside
+        # retrieve_context().
         #
-        # retrieve_context() сам выполняет:
-        #
-        # question
-        #    ↓
-        # E5 embedding
-        #    ↓
-        # Supabase
-        #    ↓
-        # Gemini reranking
-        #
-        # Это устраняет двойную векторизацию.
+        # There is NO second embedding here.
         # ----------------------------------------------------
 
         rag_result = await retrieve_context(
@@ -518,16 +564,18 @@ async def text_handler(
 
         logger.info(
             "RAG | candidates=%s | final=%s",
+
             rag_result[
                 "candidate_count"
             ],
+
             rag_result[
                 "final_count"
             ],
         )
 
         # ----------------------------------------------------
-        # No relevant NPA found.
+        # No relevant NPA
         # ----------------------------------------------------
 
         if (
@@ -535,16 +583,20 @@ async def text_handler(
             or not npa_context
         ):
 
-            await update.effective_message.reply_text(
-                "Я не нашёл достаточно релевантных фрагментов "
-                "НПА в базе, поэтому не буду придумывать "
-                "нормативное требование."
+            await (
+                update
+                .effective_message
+                .reply_text(
+                    "Я не нашёл достаточно релевантных "
+                    "фрагментов НПА в базе, поэтому не буду "
+                    "придумывать нормативное требование."
+                )
             )
 
             return
 
         # ----------------------------------------------------
-        # Legal assistant prompt.
+        # Legal assistant prompt
         # ----------------------------------------------------
 
         prompt = LEGAL_ASSISTANT_PROMPT.format(
@@ -553,9 +605,7 @@ async def text_handler(
         )
 
         # ----------------------------------------------------
-        # Generate answer.
-        #
-        # ai_router.py handles Gemini/OpenRouter logic.
+        # AI answer
         # ----------------------------------------------------
 
         answer = await asyncio.to_thread(
@@ -564,7 +614,7 @@ async def text_handler(
         )
 
         # ----------------------------------------------------
-        # Clean model output.
+        # Clean answer
         # ----------------------------------------------------
 
         answer = clean_ai_markup(
@@ -576,9 +626,7 @@ async def text_handler(
         )
 
         # ----------------------------------------------------
-        # Sources.
-        #
-        # ONLY final RAG chunks are used.
+        # Sources
         # ----------------------------------------------------
 
         source_refs = get_source_references(
@@ -597,7 +645,7 @@ async def text_handler(
             )
 
         # ----------------------------------------------------
-        # Send answer.
+        # Send
         # ----------------------------------------------------
 
         await send_long_message(
@@ -612,9 +660,13 @@ async def text_handler(
             "Text handler failed."
         )
 
-        await update.effective_message.reply_text(
-            "Произошла ошибка при обработке запроса. "
-            "Попробуйте ещё раз через несколько секунд."
+        await (
+            update
+            .effective_message
+            .reply_text(
+                "Произошла ошибка при обработке запроса. "
+                "Попробуйте ещё раз через несколько секунд."
+            )
         )
 
 
@@ -627,13 +679,16 @@ def _extract_vision_text(
 ) -> str:
 
     if not response:
+
         return ""
 
     if not response.choices:
+
         return ""
 
     content = (
-        response.choices[0]
+        response
+        .choices[0]
         .message
         .content
     )
@@ -692,37 +747,36 @@ async def photo_handler(
         not update.effective_message
         or not update.effective_message.photo
     ):
-        return
 
-    # --------------------------------------------------------
-    # Check DeepSeek configuration.
-    # --------------------------------------------------------
+        return
 
     if deepseek_client is None:
 
-        await update.effective_message.reply_text(
-            "Анализ фотографий сейчас недоступен: "
-            "не настроен DEEPSEEK_API_KEY."
+        await (
+            update
+            .effective_message
+            .reply_text(
+                "Анализ фотографий сейчас недоступен: "
+                "не настроен DEEPSEEK_API_KEY."
+            )
         )
 
         return
 
     try:
 
-        # ----------------------------------------------------
-        # Typing indicator.
-        # ----------------------------------------------------
-
         await update.effective_chat.send_action(
             ChatAction.TYPING
         )
 
         # ----------------------------------------------------
-        # Get highest-resolution Telegram photo.
+        # Highest resolution Telegram photo
         # ----------------------------------------------------
 
         photo = (
-            update.effective_message.photo[-1]
+            update
+            .effective_message
+            .photo[-1]
         )
 
         telegram_file = (
@@ -732,7 +786,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # Download photo to memory.
+        # Download into memory
         # ----------------------------------------------------
 
         buffer = BytesIO()
@@ -746,38 +800,51 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # File size protection.
+        # Size protection
         # ----------------------------------------------------
 
-        if len(image_bytes) > 32 * 1024 * 1024:
+        if (
+            len(image_bytes)
+            > 32 * 1024 * 1024
+        ):
 
-            await update.effective_message.reply_text(
-                "Фотография слишком большая для анализа."
+            await (
+                update
+                .effective_message
+                .reply_text(
+                    "Фотография слишком большая "
+                    "для анализа."
+                )
             )
 
             return
 
         # ----------------------------------------------------
-        # Convert image to Base64.
+        # Base64
         # ----------------------------------------------------
 
-        image_b64 = base64.b64encode(
-            image_bytes
-        ).decode(
-            "ascii"
+        image_b64 = (
+            base64.b64encode(
+                image_bytes
+            )
+            .decode(
+                "ascii"
+            )
         )
 
         # ----------------------------------------------------
-        # Optional user caption.
+        # User caption
         # ----------------------------------------------------
 
         user_caption = (
-            update.effective_message.caption
+            update
+            .effective_message
+            .caption
             or ""
         ).strip()
 
         # ----------------------------------------------------
-        # Vision prompt.
+        # Vision prompt
         # ----------------------------------------------------
 
         prompt = VISION_ANALYSIS_PROMPT.format(
@@ -788,12 +855,16 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # DeepSeek Vision.
+        # DeepSeek Vision
         # ----------------------------------------------------
 
         response = await asyncio.to_thread(
 
-            lambda: deepseek_client.chat.completions.create(
+            lambda:
+            deepseek_client
+            .chat
+            .completions
+            .create(
 
                 model=DEEPSEEK_VISION_MODEL,
 
@@ -801,10 +872,12 @@ async def photo_handler(
                     {
                         "role": "user",
                         "content": [
+
                             {
                                 "type": "text",
                                 "text": prompt,
                             },
+
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -825,7 +898,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # Extract response.
+        # Extract result
         # ----------------------------------------------------
 
         result = _extract_vision_text(
@@ -835,11 +908,12 @@ async def photo_handler(
         if not result:
 
             raise RuntimeError(
-                "Vision model returned an empty response."
+                "Vision model returned "
+                "an empty response."
             )
 
         # ----------------------------------------------------
-        # Send result.
+        # Send result
         # ----------------------------------------------------
 
         await send_long_message(
@@ -854,9 +928,13 @@ async def photo_handler(
             "Photo handler failed."
         )
 
-        await update.effective_message.reply_text(
-            "Не удалось проанализировать фотографию. "
-            "Попробуйте отправить её ещё раз."
+        await (
+            update
+            .effective_message
+            .reply_text(
+                "Не удалось проанализировать фотографию. "
+                "Попробуйте отправить её ещё раз."
+            )
         )
 
 
@@ -877,10 +955,110 @@ async def error_handler(
 
 
 # ============================================================
+# EMBEDDING MODEL PRELOAD
+# ============================================================
+
+def preload_embedding_model():
+    """
+    Loads E5 BEFORE Telegram polling starts.
+
+    Benefits:
+
+    1. Model is not loaded during the first user request.
+    2. Startup logs clearly show model loading.
+    3. If E5 cannot fit into available RAM,
+       the failure happens during startup.
+    4. Telegram polling does not start with an unloaded model.
+    """
+
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "STARTUP | preloading embedding model..."
+    )
+
+    try:
+
+        model = get_model()
+
+        dimension = None
+
+        # Newer SentenceTransformer API
+        get_dimension = getattr(
+            model,
+            "get_embedding_dimension",
+            None,
+        )
+
+        if callable(
+            get_dimension
+        ):
+
+            dimension = int(
+                get_dimension()
+            )
+
+        else:
+
+            # Older SentenceTransformer API
+            get_dimension = getattr(
+                model,
+                "get_sentence_embedding_dimension",
+                None,
+            )
+
+            if callable(
+                get_dimension
+            ):
+
+                dimension = int(
+                    get_dimension()
+                )
+
+        logger.info(
+            "STARTUP | embedding model READY | "
+            "dimension=%s",
+            dimension,
+        )
+
+        logger.info(
+            "STARTUP | embedding model preload completed."
+        )
+
+    except Exception:
+
+        logger.exception(
+            "STARTUP | embedding model preload FAILED."
+        )
+
+        raise
+
+    logger.info(
+        "============================================================"
+    )
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
 def main():
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # Load E5 BEFORE Telegram polling.
+    #
+    # This is the key change for the 1 GB RAM server.
+    # --------------------------------------------------------
+
+    preload_embedding_model()
+
+    # --------------------------------------------------------
+    # Telegram application
+    # --------------------------------------------------------
 
     application = (
         Application
@@ -892,9 +1070,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Debug handler.
-    #
-    # group=-100 ensures it executes before regular handlers.
+    # Debug handler
     # --------------------------------------------------------
 
     application.add_handler(
@@ -956,7 +1132,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Polling
+    # Telegram polling
     # --------------------------------------------------------
 
     application.run_polling(
@@ -974,4 +1150,5 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
+
     main()
