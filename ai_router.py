@@ -1,15 +1,14 @@
 """
-AI text-generation router.
+AI text generation router.
 
-Primary: Gemini
-Fallback: OpenRouter
+Primary:
+    Gemini
 
-The router is deliberately independent from bot.py so both ingestion/query
-code and the Telegram layer have a single, predictable configuration source.
+Fallback:
+    OpenRouter
 """
 
 import logging
-from typing import Optional
 
 from google import genai
 from openai import OpenAI
@@ -23,9 +22,22 @@ from config import (
     OPENROUTER_MODEL,
 )
 
+
 logger = logging.getLogger(__name__)
 
-_gemini = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# ============================================================
+# CLIENTS
+# ============================================================
+
+_gemini = (
+    genai.Client(
+        api_key=GEMINI_API_KEY
+    )
+    if GEMINI_API_KEY
+    else None
+)
+
 
 _openrouter = (
     OpenAI(
@@ -37,17 +49,40 @@ _openrouter = (
 )
 
 
+# ============================================================
+# HELPERS
+# ============================================================
+
 def _clean_text(value) -> str:
+
     if value is None:
         return ""
+
     return str(value).strip()
 
 
-def generate_with_gemini(prompt: str) -> str:
+# ============================================================
+# GEMINI
+# ============================================================
+
+def generate_with_gemini(
+    prompt: str,
+) -> str:
+
     if _gemini is None:
-        raise RuntimeError("GEMINI_API_KEY is not configured.")
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured."
+        )
+
     if not prompt.strip():
-        raise ValueError("Prompt is empty.")
+        raise ValueError(
+            "Prompt is empty."
+        )
+
+    logger.info(
+        "GEMINI | request started | model=%s",
+        CHAT_MODEL,
+    )
 
     response = _gemini.models.generate_content(
         model=CHAT_MODEL,
@@ -58,19 +93,54 @@ def generate_with_gemini(prompt: str) -> str:
         },
     )
 
-    text = _clean_text(getattr(response, "text", None))
+    text = _clean_text(
+        getattr(
+            response,
+            "text",
+            None,
+        )
+    )
+
     if not text:
-        raise RuntimeError("Gemini returned an empty response.")
+        raise RuntimeError(
+            "Gemini returned an empty response."
+        )
+
+    logger.info(
+        "GEMINI | response received | chars=%s",
+        len(text),
+    )
+
     return text
 
 
-def generate_with_openrouter(prompt: str) -> str:
+# ============================================================
+# OPENROUTER
+# ============================================================
+
+def generate_with_openrouter(
+    prompt: str,
+) -> str:
+
     if _openrouter is None:
-        raise RuntimeError("OPENROUTER_API_KEY is not configured.")
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is not configured."
+        )
+
     if not OPENROUTER_MODEL:
-        raise RuntimeError("OPENROUTER_MODEL is not configured.")
+        raise RuntimeError(
+            "OPENROUTER_MODEL is not configured."
+        )
+
     if not prompt.strip():
-        raise ValueError("Prompt is empty.")
+        raise ValueError(
+            "Prompt is empty."
+        )
+
+    logger.info(
+        "OPENROUTER | request started | model=%s",
+        OPENROUTER_MODEL,
+    )
 
     kwargs = {
         "model": OPENROUTER_MODEL,
@@ -78,54 +148,112 @@ def generate_with_openrouter(prompt: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "Ты профессиональный помощник по охране труда и промышленной "
-                    "безопасности. Отвечай точно, нейтрально и по существу."
+                    "Ты профессиональный помощник по охране труда "
+                    "и промышленной безопасности. "
+                    "Отвечай точно, нейтрально и по существу."
                 ),
             },
-            {"role": "user", "content": prompt},
+            {
+                "role": "user",
+                "content": prompt,
+            },
         ],
         "temperature": 0.1,
         "max_tokens": MAX_CHAT_TOKENS,
     }
 
-    # OpenRouter can use a fallback model on the same request.
     if OPENROUTER_FALLBACK_MODEL:
-        kwargs["extra_body"] = {"models": [OPENROUTER_FALLBACK_MODEL]}
 
-    response = _openrouter.chat.completions.create(**kwargs)
+        kwargs["extra_body"] = {
+            "models": [
+                OPENROUTER_FALLBACK_MODEL
+            ]
+        }
+
+    response = (
+        _openrouter
+        .chat
+        .completions
+        .create(**kwargs)
+    )
 
     if not response.choices:
-        raise RuntimeError("OpenRouter returned no choices.")
+        raise RuntimeError(
+            "OpenRouter returned no choices."
+        )
 
-    text = _clean_text(response.choices[0].message.content)
+    text = _clean_text(
+        response.choices[0]
+        .message
+        .content
+    )
+
     if not text:
-        raise RuntimeError("OpenRouter returned an empty response.")
+        raise RuntimeError(
+            "OpenRouter returned an empty response."
+        )
+
+    logger.info(
+        "OPENROUTER | response received | chars=%s",
+        len(text),
+    )
+
     return text
 
 
-def generate_answer(prompt: str) -> str:
-    """
-    Try Gemini first. On any provider failure, try OpenRouter.
-    This makes a transient quota/model/provider problem non-fatal.
-    """
-    gemini_error: Optional[Exception] = None
+# ============================================================
+# MAIN ROUTER
+# ============================================================
+
+def generate_answer(
+    prompt: str,
+) -> str:
+
+    gemini_error = None
+
+    # --------------------------------------------------------
+    # GEMINI
+    # --------------------------------------------------------
 
     try:
-        return generate_with_gemini(prompt)
+
+        return generate_with_gemini(
+            prompt
+        )
+
     except Exception as exc:
+
         gemini_error = exc
-        logger.exception("Gemini generation failed; trying OpenRouter.")
+
+        logger.exception(
+            "GEMINI | failed, switching to OpenRouter"
+        )
+
+    # --------------------------------------------------------
+    # OPENROUTER
+    # --------------------------------------------------------
 
     if _openrouter is None:
+
         raise RuntimeError(
-            f"Gemini failed and OpenRouter is not configured: {gemini_error}"
+            "Gemini failed and OpenRouter is not configured: "
+            f"{gemini_error}"
         ) from gemini_error
 
     try:
-        return generate_with_openrouter(prompt)
+
+        return generate_with_openrouter(
+            prompt
+        )
+
     except Exception as exc:
-        logger.exception("OpenRouter generation failed.")
+
+        logger.exception(
+            "OPENROUTER | failed"
+        )
+
         raise RuntimeError(
-            f"Both AI providers failed. Gemini: {gemini_error}; "
+            "Both AI providers failed. "
+            f"Gemini: {gemini_error}; "
             f"OpenRouter: {exc}"
         ) from exc
