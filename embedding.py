@@ -389,4 +389,18 @@ def get_document_embeddings(
             f"passage: {text}"
             for text in texts
         ]
+        def warmup_model():
+    """
+    Предварительная загрузка embedding-модели в память.
+    Не изменяет основную логику кодирования.
+    """
+    logger.info("EMBEDDING | warmup started")
+    model = get_model()
+    logger.info(
+        "EMBEDDING | warmup completed | model=%s | dimension=%s | device=%s",
+        EMBEDDING_MODEL,
+        EMBEDDING_DIM,
+        DEVICE,
+    )
+    return model
     )
