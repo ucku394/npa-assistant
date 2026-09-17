@@ -222,18 +222,23 @@ def _search_chunks(
     query_vector: List[float],
 ) -> List[Dict[str, Any]]:
 
-    response = (
-    supabase
-    .rpc(
-        "match_npa_chunks",
-        {
-            "match_count": match_count,
-            "match_threshold": 0.0,
-            "query_embedding": query_embedding,
-        },
+    match_count = max(
+        RAG_FINAL_COUNT * 3,
+        15,
     )
-    .execute()
-)
+
+    response = (
+        supabase
+        .rpc(
+            "match_npa_chunks",
+            {
+                "match_count": match_count,
+                "match_threshold": 0.0,
+                "query_embedding": query_vector,
+            },
+        )
+        .execute()
+    )
 
     return response.data or []
 
