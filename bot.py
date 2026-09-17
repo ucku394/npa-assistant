@@ -56,7 +56,7 @@ from prompts import (
 
 from rag import (
     retrieve_context,
-    get_source_references,
+    build_source_id,
 )
 
 # IMPORTANT:
