@@ -123,7 +123,10 @@ def _memory_info() -> str:
 
     return "VmRSS=unknown"
 
-
+logger.info(
+    "EMBEDDING | memory after module imports: %s",
+    _memory_info(),
+)
 # ============================================================
 # MODEL DIMENSION
 # ============================================================
