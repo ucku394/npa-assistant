@@ -82,6 +82,138 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# Я Добавил
+# ============================================================
+def extract_used_source_ids(answer: str) -> list[str]:
+    """
+    Извлекает SOURCE_ID, которые модель реально указала
+    в своём ответе.
+    """
+
+    if not answer:
+        return []
+
+    matches = re.findall(
+        r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]",
+        answer,
+    )
+
+    result = []
+    seen = set()
+
+    for source_id in matches:
+
+        source_id = source_id.strip()
+
+        if not source_id:
+            continue
+
+        if source_id not in seen:
+            seen.add(source_id)
+            result.append(source_id)
+
+    return result
+
+
+def build_used_source_references(
+    chunks,
+    used_source_ids,
+) -> list[str]:
+    """
+    Возвращает только те источники RAG,
+    которые модель явно использовала.
+    """
+
+    if not chunks or not used_source_ids:
+        return []
+
+    used = set(used_source_ids)
+
+    references = []
+    seen = set()
+
+    for index, chunk in enumerate(
+        chunks,
+        start=1,
+    ):
+
+        source_id = (
+            chunk.get("_source_id")
+            or build_source_id(
+                chunk,
+                index,
+            )
+        )
+
+        if source_id not in used:
+            continue
+
+        document_name = (
+            chunk.get("document")
+            or chunk.get("document_name")
+            or chunk.get("doc_name")
+            or chunk.get("title")
+            or chunk.get("npa_name")
+            or chunk.get("source")
+            or "Неизвестный НПА"
+        )
+
+        point = (
+            chunk.get("point")
+            or chunk.get("point_number")
+            or chunk.get("article")
+            or chunk.get("article_number")
+            or chunk.get("paragraph")
+            or chunk.get("section")
+            or ""
+        )
+
+        document_name = str(
+            document_name
+        ).strip()
+
+        point = str(
+            point
+        ).strip()
+
+        if point:
+
+            reference = (
+                f"{document_name} — "
+                f"пункт/статья {point}"
+            )
+
+        else:
+
+            reference = document_name
+
+        if reference not in seen:
+
+            seen.add(reference)
+            references.append(reference)
+
+    return references
+
+
+def remove_source_markers(
+    answer: str,
+) -> str:
+    """
+    Удаляет технические SOURCE-маркеры
+    перед отправкой пользователю.
+    """
+
+    if not answer:
+        return ""
+
+    answer = re.sub(
+        r"\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]",
+        "",
+        answer,
+    )
+
+    return answer.strip()
+# ============================================================
 # CONFIG VALIDATION
 # ============================================================
 
