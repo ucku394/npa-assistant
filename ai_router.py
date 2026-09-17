@@ -1,3 +1,4 @@
+```python
 """
 AI text-generation router.
 
@@ -5,9 +6,18 @@ Primary: Gemini
 Fallback: OpenRouter
 
 The router is independent from bot.py.
+
+Features:
+- Gemini as primary provider
+- OpenRouter as fallback provider
+- Gemini Circuit Breaker
+- Automatic temporary Gemini disable after 429/quota errors
+- Automatic return to Gemini after cooldown
+- No repeated useless Gemini requests while quota is exhausted
 """
 
 import logging
+import time
 from typing import Optional
 
 from google import genai
@@ -23,6 +33,26 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# GEMINI CIRCUIT BREAKER SETTINGS
+# ============================================================
+
+# Сколько секунд Gemini считается временно недоступным
+# после ошибки quota/rate-limit.
+#
+# 1800 секунд = 30 минут.
+#
+# Это не означает, что Gemini восстановится через 30 минут.
+# Это защита от постоянных бесполезных запросов к API.
+GEMINI_COOLDOWN_SECONDS = 1800
+
+
+# Время Unix, до которого Gemini считается отключённым.
+#
+# 0 = Gemini доступен.
+_gemini_disabled_until = 0.0
 
 
 # ============================================================
@@ -82,6 +112,95 @@ def _validate_prompt(prompt: str) -> str:
 
 
 # ============================================================
+# GEMINI CIRCUIT BREAKER
+# ============================================================
+
+def _gemini_is_available() -> bool:
+    """
+    Проверяет, можно ли сейчас обращаться к Gemini.
+
+    Если Gemini временно отключён, возвращает False.
+    """
+
+    global _gemini_disabled_until
+
+    current_time = time.time()
+
+    # Gemini снова доступен
+    if current_time >= _gemini_disabled_until:
+
+        # Если ранее Gemini был отключён,
+        # фиксируем возвращение в рабочее состояние.
+        if _gemini_disabled_until > 0:
+
+            logger.info(
+                "AI Router | Gemini cooldown expired | "
+                "Gemini will be tried again"
+            )
+
+            _gemini_disabled_until = 0.0
+
+        return True
+
+    # Gemini ещё находится в cooldown
+    remaining = int(
+        _gemini_disabled_until - current_time
+    )
+
+    logger.info(
+        "AI Router | Gemini temporarily disabled | "
+        "remaining=%ss",
+        remaining,
+    )
+
+    return False
+
+
+def _disable_gemini(reason: str):
+    """
+    Временно отключает Gemini.
+
+    Используется после quota/rate-limit ошибок.
+    """
+
+    global _gemini_disabled_until
+
+    _gemini_disabled_until = (
+        time.time() + GEMINI_COOLDOWN_SECONDS
+    )
+
+    logger.warning(
+        "AI Router | Gemini disabled for %ss | "
+        "reason=%s",
+        GEMINI_COOLDOWN_SECONDS,
+        reason,
+    )
+
+
+def _is_gemini_quota_error(exc: Exception) -> bool:
+    """
+    Определяет, связана ли ошибка Gemini
+    с исчерпанием квоты или rate limit.
+    """
+
+    error_text = str(exc).lower()
+
+    quota_markers = [
+        "resource_exhausted",
+        "quota exceeded",
+        "quota",
+        "rate limit",
+        "429",
+        "too many requests",
+    ]
+
+    return any(
+        marker in error_text
+        for marker in quota_markers
+    )
+
+
+# ============================================================
 # GEMINI
 # ============================================================
 
@@ -91,6 +210,7 @@ def generate_with_gemini(prompt: str) -> str:
     """
 
     if _gemini is None:
+
         raise RuntimeError(
             "GEMINI_API_KEY is not configured."
         )
@@ -116,6 +236,7 @@ def generate_with_gemini(prompt: str) -> str:
     )
 
     if not text:
+
         raise RuntimeError(
             "Gemini returned an empty response."
         )
@@ -137,11 +258,13 @@ def generate_with_openrouter(prompt: str) -> str:
     """
 
     if _openrouter is None:
+
         raise RuntimeError(
             "OPENROUTER_API_KEY is not configured."
         )
 
     if not OPENROUTER_MODEL:
+
         raise RuntimeError(
             "OPENROUTER_MODEL is not configured."
         )
@@ -216,11 +339,13 @@ def generate_with_openrouter(prompt: str) -> str:
     )
 
     if not response:
+
         raise RuntimeError(
             "OpenRouter returned no response."
         )
 
     if not response.choices:
+
         raise RuntimeError(
             "OpenRouter returned no choices."
         )
@@ -232,6 +357,7 @@ def generate_with_openrouter(prompt: str) -> str:
     )
 
     if not text:
+
         raise RuntimeError(
             "OpenRouter returned an empty response."
         )
@@ -257,9 +383,24 @@ def generate_answer(prompt: str) -> str:
     """
     Основной AI Router.
 
-    1. Сначала Gemini.
-    2. Если Gemini недоступен — OpenRouter.
-    3. Gemini при ошибке НЕ повторяется.
+    Логика:
+
+    1. Если Gemini доступен:
+       → сначала пробуем Gemini.
+
+    2. Если Gemini возвращает quota/rate-limit:
+       → временно отключаем Gemini.
+       → сразу переключаемся на OpenRouter.
+
+    3. Пока Gemini находится в cooldown:
+       → запросы к Gemini вообще не выполняются.
+       → сразу используется OpenRouter.
+
+    4. После окончания cooldown:
+       → следующая генерация снова попробует Gemini.
+
+    5. Если OpenRouter также недоступен:
+       → возвращается ошибка обоих провайдеров.
     """
 
     prompt = _validate_prompt(prompt)
@@ -270,21 +411,40 @@ def generate_answer(prompt: str) -> str:
     # 1. GEMINI
     # ========================================================
 
-    try:
+    if _gemini_is_available():
 
-        return generate_with_gemini(
-            prompt
-        )
+        try:
 
-    except Exception as exc:
+            return generate_with_gemini(
+                prompt
+            )
 
-        gemini_error = exc
+        except Exception as exc:
 
-        logger.warning(
-            "AI Router | Gemini unavailable | "
-            "switching immediately to OpenRouter | "
-            "error=%s",
-            exc,
+            gemini_error = exc
+
+            # ------------------------------------------------
+            # Если ошибка связана с квотой или rate limit
+            # ------------------------------------------------
+
+            if _is_gemini_quota_error(exc):
+
+                _disable_gemini(
+                    reason=str(exc)
+                )
+
+            logger.warning(
+                "AI Router | Gemini unavailable | "
+                "switching immediately to OpenRouter | "
+                "error=%s",
+                exc,
+            )
+
+    else:
+
+        logger.info(
+            "AI Router | Gemini skipped | "
+            "temporarily disabled"
         )
 
     # ========================================================
@@ -312,8 +472,13 @@ def generate_answer(prompt: str) -> str:
             exc_info=True,
         )
 
+        # ----------------------------------------------------
+        # Оба провайдера не сработали
+        # ----------------------------------------------------
+
         raise RuntimeError(
             "Both AI providers failed.\n"
             f"Gemini: {gemini_error}\n"
             f"OpenRouter: {exc}"
         ) from exc
+```
