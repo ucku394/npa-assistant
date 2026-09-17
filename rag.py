@@ -147,6 +147,42 @@ def detect_legal_domain(user_query: str) -> str:
     return "general"
 
 
+
+# ============================================================
+# ОПРЕДЕЛЕНИЕ ТЕМЫ ЗАПРОСА
+# ============================================================
+
+def detect_topic(user_query: str) -> str:
+    """
+    Определяет узкую тему запроса.
+
+    Сейчас выделяется наиболее важная специализированная тема:
+    workplace_attestation — аттестация рабочих мест по условиям труда.
+
+    Если тема не определена, возвращается "general".
+    """
+
+    query = str(user_query or "").strip().lower()
+
+    if not query:
+        return "general"
+
+    workplace_attestation_patterns = [
+        r"\bаттестаци\w*\s+рабоч\w*\s+мест\w*",
+        r"\bоценк\w*\s+услов\w*\s+труд\w*",
+        r"\bуслов\w*\s+труд\w*\s+при\s+аттестаци\w*",
+        r"\bаттестаци\w*\s+по\s+услов\w*\s+труд\w*",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in workplace_attestation_patterns
+    ):
+        return "workplace_attestation"
+
+    return "general"
+
+
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
@@ -469,36 +505,44 @@ def _search_chunks(
     supabase,
     query_vector: List[float],
     legal_domain: str,
+    topic: str,
 ) -> List[Dict[str, Any]]:
     """
-    Поиск НПА только в соответствующей области
-    + general.
+    Поиск НПА по правовой области + узкой теме.
 
-    ВАЖНО:
-    Для industrial_safety мы НЕ разрешаем
-    использовать occupational_safety.
+    В область поиска входят:
+    - выбранный legal_domain;
+    - general.
+
+    Если topic специализированная, дополнительно разрешаются:
+    - выбранный topic;
+    - general.
+
+    Для industrial_safety occupational_safety НЕ добавляется.
     """
 
     match_count = max(
-        RAG_FINAL_COUNT * 3,
-        15,
+        RAG_FINAL_COUNT * 4,
+        20,
     )
 
     response = (
         supabase
         .rpc(
-            "match_npa_chunks_v2",
+            "match_npa_chunks_v3",
             {
                 "match_count": match_count,
                 "match_threshold": 0.0,
                 "query_embedding": query_vector,
                 "legal_domain_filter": legal_domain,
+                "topic_filter": topic,
             },
         )
         .execute()
     )
 
     return response.data or []
+
 
 
 def _semantic_score(
@@ -539,6 +583,55 @@ def _sort_by_semantic_similarity(
     )
 
 
+def _get_document_key(chunk: Dict[str, Any]) -> str:
+    """Стабильный ключ документа для диверсификации результатов."""
+    return _get_document_name(chunk).strip().lower()
+
+
+def _diversify_chunks(
+    chunks: List[Dict[str, Any]],
+    limit: int,
+    max_per_document: int = 2,
+) -> List[Dict[str, Any]]:
+    """
+    Не позволяет одному НПА занять весь TOP-N.
+
+    Сначала сохраняется семантический порядок, затем ограничивается
+    количество чанков от одного документа.
+    """
+    selected: List[Dict[str, Any]] = []
+    per_document: Dict[str, int] = {}
+
+    for chunk in chunks:
+        document_key = _get_document_key(chunk)
+        count = per_document.get(document_key, 0)
+
+        if count >= max_per_document:
+            continue
+
+        selected.append(chunk)
+        per_document[document_key] = count + 1
+
+        if len(selected) >= limit:
+            break
+
+    # Если строгая диверсификация не заполнила TOP-N, добираем
+    # оставшиеся чанки в исходном порядке.
+    if len(selected) < limit:
+        selected_ids = {id(chunk) for chunk in selected}
+
+        for chunk in chunks:
+            if id(chunk) in selected_ids:
+                continue
+
+            selected.append(chunk)
+
+            if len(selected) >= limit:
+                break
+
+    return selected
+
+
 # ============================================================
 # ОСНОВНОЙ RAG
 # ============================================================
@@ -561,9 +654,14 @@ async def retrieve_context(
         user_query
     )
 
+    topic = detect_topic(
+        user_query
+    )
+
     logger.info(
-        "RAG | legal_domain=%s",
+        "RAG | legal_domain=%s | topic=%s",
         legal_domain,
+        topic,
     )
 
     # --------------------------------------------------------
@@ -589,7 +687,9 @@ async def retrieve_context(
             "final_count": 0,
             "source_references": [],
             "legal_domain": legal_domain,
+            "topic": topic,
             "domain_specific_count": 0,
+            "topic_specific_count": 0,
         }
 
     if len(query_vector) != 384:
@@ -609,6 +709,7 @@ async def retrieve_context(
         supabase,
         query_vector,
         legal_domain,
+        topic,
     )
 
     candidate_count = len(
@@ -631,7 +732,9 @@ async def retrieve_context(
             "final_count": 0,
             "source_references": [],
             "legal_domain": legal_domain,
+            "topic": topic,
             "domain_specific_count": 0,
+            "topic_specific_count": 0,
         }
 
     # --------------------------------------------------------
@@ -647,10 +750,21 @@ async def retrieve_context(
         )
     )
 
+    topic_specific_count = sum(
+        1
+        for chunk in candidate_chunks
+        if (
+            (chunk.get("topic") or "general")
+            == topic
+        )
+    )
+
     logger.info(
-        "RAG | domain=%s | specialized=%s",
+        "RAG | domain=%s | specialized=%s | topic=%s | topic_specific=%s",
         legal_domain,
         domain_specific_count,
+        topic,
+        topic_specific_count,
     )
 
     # --------------------------------------------------------
@@ -667,9 +781,11 @@ async def retrieve_context(
     # 5. TOP-N
     # --------------------------------------------------------
 
-    final_chunks = ranked_chunks[
-        :RAG_FINAL_COUNT
-    ]
+    final_chunks = _diversify_chunks(
+        ranked_chunks,
+        RAG_FINAL_COUNT,
+        max_per_document=2,
+    )
 
     # --------------------------------------------------------
     # 6. SOURCE_ID
@@ -742,7 +858,9 @@ async def retrieve_context(
         "final_count": len(final_chunks),
         "source_references": source_references,
         "legal_domain": legal_domain,
+        "topic": topic,
         "domain_specific_count": domain_specific_count,
+        "topic_specific_count": topic_specific_count,
     }
 
 
