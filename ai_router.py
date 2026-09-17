@@ -405,41 +405,165 @@ def generate_with_openrouter(
         OPENROUTER_MODEL,
     )
 
-    response = openrouter_client.chat.completions.create(
-        model=OPENROUTER_MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": LEGAL_SYSTEM_PROMPT,
+    try:
+        response = openrouter_client.chat.completions.create(
+            model=OPENROUTER_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": LEGAL_SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.1,
+            max_tokens=1800,
+            extra_body={
+                "models": [
+                    OPENROUTER_FALLBACK_MODEL
+                ]
             },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        temperature=0.1,
-        max_tokens=1800,
-        extra_body={
-            "models": [
-                OPENROUTER_FALLBACK_MODEL
-            ]
-        },
-    )
+        )
 
-    text = _clean_text(
-        response.choices[0].message.content
-    )
+    except Exception as e:
 
-    if not text:
+        logger.exception(
+            "AI | OpenRouter request failed: %s",
+            e,
+        )
+
+        raise
+
+    # ========================================================
+    # DIAGNOSTICS
+    # ========================================================
+
+    if response is None:
+
         raise RuntimeError(
-            "OpenRouter returned empty response"
+            "OpenRouter returned no response object"
         )
 
     logger.info(
-        "AI | OpenRouter success"
+        "AI | OpenRouter response received | type=%s",
+        type(response).__name__,
     )
 
-    return text
+    choices = getattr(
+        response,
+        "choices",
+        None,
+    )
+
+    if not choices:
+
+        logger.error(
+            "AI | OpenRouter returned empty choices | response=%r",
+            response,
+        )
+
+        raise RuntimeError(
+            "OpenRouter returned no choices"
+        )
+
+    choice = choices[0]
+
+    finish_reason = getattr(
+        choice,
+        "finish_reason",
+        None,
+    )
+
+    logger.info(
+        "AI | OpenRouter finish_reason=%s",
+        finish_reason,
+    )
+
+    message = getattr(
+        choice,
+        "message",
+        None,
+    )
+
+    if message is None:
+
+        logger.error(
+            "AI | OpenRouter choice has no message | choice=%r",
+            choice,
+        )
+
+        raise RuntimeError(
+            "OpenRouter response contains no message"
+        )
+
+    content = getattr(
+        message,
+        "content",
+        None,
+    )
+
+    reasoning = getattr(
+        message,
+        "reasoning",
+        None,
+    )
+
+    logger.info(
+        "AI | OpenRouter content_length=%s | reasoning_length=%s",
+        len(content) if content else 0,
+        len(reasoning) if reasoning else 0,
+    )
+
+    # ========================================================
+    # NORMAL RESPONSE
+    # ========================================================
+
+    text = _clean_text(
+        content
+    )
+
+    if text:
+
+        logger.info(
+            "AI | OpenRouter success | chars=%s",
+            len(text),
+        )
+
+        return text
+
+    # ========================================================
+    # REASONING FALLBACK
+    # ========================================================
+
+    reasoning_text = _clean_text(
+        reasoning
+    )
+
+    if reasoning_text:
+
+        logger.warning(
+            "AI | OpenRouter content empty, reasoning returned | chars=%s",
+            len(reasoning_text),
+        )
+
+        return reasoning_text
+
+    # ========================================================
+    # EMPTY RESPONSE
+    # ========================================================
+
+    logger.error(
+        "AI | OpenRouter returned empty content | "
+        "finish_reason=%s | choice=%r",
+        finish_reason,
+        choice,
+    )
+
+    raise RuntimeError(
+        "OpenRouter returned empty response"
+    )
 
 
 # ============================================================
