@@ -4,7 +4,7 @@ import os
 import re
 from typing import Any, Dict, List
 
-from embeddings import get_query_embedding
+from embedding import get_query_embedding
 
 logger = logging.getLogger(__name__)
 
