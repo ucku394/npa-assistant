@@ -2,489 +2,297 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any, Optional
+from typing import Any, Dict, List
 
-from supabase import Client
-
-from config import (
-    SUPABASE_MATCH_THRESHOLD,
-    SUPABASE_MATCH_COUNT,
-)
-
-from embedding import get_query_embedding
+from embeddings import get_query_embedding
 
 logger = logging.getLogger(__name__)
 
-
-# =========================================================
-# НАСТРОЙКИ
-# =========================================================
-
-# Сколько документов передавать AI для анализа.
-#
-# ВАЖНО:
-# Это количество найденных кандидатов, а не количество
-# источников, которые обязательно должны попасть в ответ.
-RAG_FINAL_COUNT = int(
-    os.getenv("RAG_FINAL_COUNT", "5")
-)
+RAG_FINAL_COUNT = int(os.getenv("RAG_FINAL_COUNT", "5"))
 
 
-# =========================================================
+# ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-# =========================================================
+# ============================================================
 
-def _safe_float(
-    value: Any,
-) -> Optional[float]:
-    """
-    Безопасно преобразует similarity/score в float.
-    """
-
+def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
-
-        if value is None or value == "":
-            return None
-
         return float(value)
+    except (TypeError, ValueError):
+        return default
 
-    except (
-        TypeError,
-        ValueError,
+
+def _normalize_identifier(value: Any) -> str:
+    """
+    Делает безопасную часть SOURCE_ID.
+    """
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+
+    text = re.sub(r"\s+", "_", text)
+    text = re.sub(r"[^A-Za-zА-Яа-яЁё0-9_./-]+", "", text)
+    text = re.sub(r"_+", "_", text)
+
+    return text.strip("_")
+
+
+def _get_document_name(chunk: Dict[str, Any]) -> str:
+    """
+    Пытаемся определить название НПА из разных возможных полей БД.
+    """
+    for key in (
+        "document",
+        "document_name",
+        "doc_name",
+        "title",
+        "npa_name",
+        "source",
     ):
+        value = chunk.get(key)
 
-        return None
+        if value:
+            return str(value).strip()
+
+    return "Неизвестный НПА"
 
 
-def _semantic_score(
-    chunk: dict[str, Any],
-) -> float:
+def _get_point_number(chunk: Dict[str, Any]) -> str:
     """
-    Получает semantic similarity
-    из результата Supabase.
+    Получаем пункт/статью/раздел.
+    """
+    for key in (
+        "point",
+        "point_number",
+        "article",
+        "article_number",
+        "paragraph",
+        "section",
+    ):
+        value = chunk.get(key)
+
+        if value is not None and str(value).strip():
+            return str(value).strip()
+
+    return ""
+
+
+def _extract_npa_number(document_name: str) -> str:
+    """
+    Пытаемся получить номер НПА из его названия.
+
+    Например:
+    'Постановление № 175 от 28.11.2008'
+    -> '175'
+    """
+    if not document_name:
+        return ""
+
+    patterns = [
+        r"№\s*([0-9]+(?:[-/][A-Za-zА-Яа-я0-9]+)*)",
+        r"N\s*([0-9]+(?:[-/][A-Za-zА-Яа-я0-9]+)*)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, document_name, flags=re.IGNORECASE)
+
+        if match:
+            return match.group(1)
+
+    return ""
+
+
+def build_source_id(chunk: Dict[str, Any], index: int = 0) -> str:
+    """
+    Создаёт стабильный идентификатор источника.
+
+    Приоритет:
+    1. source_id из БД
+    2. npa_number + point
+    3. название документа + point
+    4. fallback по индексу
     """
 
-    value = _safe_float(
-        chunk.get(
-            "similarity",
-            chunk.get("score"),
-        )
+    # Если SOURCE_ID уже есть в БД — используем его.
+    existing_source_id = (
+        chunk.get("source_id")
+        or chunk.get("_source_id")
     )
 
-    return (
-        value
-        if value is not None
-        else 0.0
-    )
+    if existing_source_id:
+        return _normalize_identifier(existing_source_id)
+
+    document_name = _get_document_name(chunk)
+    point = _get_point_number(chunk)
+
+    npa_number = _extract_npa_number(document_name)
+
+    if npa_number:
+        base = f"NPA_{npa_number}"
+    else:
+        base = f"NPA_{_normalize_identifier(document_name)[:80]}"
+
+    if point:
+        normalized_point = _normalize_identifier(point)
+        return f"{base}_P{normalized_point}"
+
+    if index:
+        return f"{base}_CHUNK{index}"
+
+    return base
 
 
-def _normalize_identifier(
-    value: Any,
-) -> str:
+# ============================================================
+# ФОРМАТИРОВАНИЕ
+# ============================================================
+
+def _format_chunk(chunk: Dict[str, Any], index: int) -> str:
     """
-    Нормализует значение для формирования SOURCE_ID.
-    """
-
-    value = str(
-        value or ""
-    ).strip()
-
-    if not value:
-        return "UNKNOWN"
-
-    # Оставляем буквы, цифры и _
-    value = re.sub(
-        r"[^A-Za-zА-Яа-яЁё0-9]+",
-        "_",
-        value,
-    )
-
-    value = re.sub(
-        r"_+",
-        "_",
-        value,
-    )
-
-    return value.strip("_")
-
-
-def _get_document_name(
-    chunk: dict[str, Any],
-) -> str:
-    """
-    Возвращает название НПА.
+    Форматирует один RAG-фрагмент для передачи AI.
     """
 
-    return str(
-        chunk.get("doc_name")
-        or "НПА"
-    ).strip()
+    document_name = _get_document_name(chunk)
+    point = _get_point_number(chunk)
 
-
-def _get_point_number(
-    chunk: dict[str, Any],
-) -> str:
-    """
-    Возвращает номер пункта/статьи/раздела.
-    """
-
-    value = (
-        chunk.get("point_num")
-        or chunk.get("article")
-        or chunk.get("section")
+    text = (
+        chunk.get("text")
+        or chunk.get("content")
+        or chunk.get("chunk_text")
         or ""
     )
 
-    return str(
-        value
-    ).strip()
-
-
-def _build_source_id(
-    chunk: dict[str, Any],
-    index: int,
-) -> str:
-    """
-    Формирует стабильный идентификатор источника.
-
-    Пример:
-
-    NPA_175_P51
-
-    или:
-
-    NPA_ЗООТ_P123
-    """
-
-    # Если SOURCE_ID уже существует в БД —
-    # используем его.
-    existing_id = (
-        chunk.get("source_id")
-        or chunk.get("source")
-        or chunk.get("chunk_id")
+    similarity = _safe_float(
+        chunk.get("similarity")
+        or chunk.get("score")
+        or chunk.get("distance"),
+        0.0,
     )
 
-    if existing_id:
+    source_id = build_source_id(chunk, index)
 
-        return _normalize_identifier(
-            existing_id
-        )
-
-    doc_name = _get_document_name(
-        chunk
-    )
-
-    point_num = _get_point_number(
-        chunk
-    )
-
-    doc_clean = _normalize_identifier(
-        doc_name
-    )
-
-    point_clean = _normalize_identifier(
-        point_num
-    )
-
-    if point_clean:
-
-        return (
-            f"NPA_{doc_clean}_P{point_clean}"
-        )
-
-    return (
-        f"NPA_{doc_clean}_CHUNK{index}"
-    )
-
-
-# =========================================================
-# ФОРМАТИРОВАНИЕ ФРАГМЕНТА
-# =========================================================
-
-def _format_chunk(
-    chunk: dict[str, Any],
-    index: int,
-) -> str:
-    """
-    Приводит один найденный фрагмент НПА
-    к юридически однозначному формату.
-    """
-
-    doc_name = _get_document_name(
-        chunk
-    )
-
-    point_num = _get_point_number(
-        chunk
-    )
-
-    content = str(
-        chunk.get("content") or ""
-    ).strip()
-
-    source_id = _build_source_id(
-        chunk,
-        index,
-    )
-
-    # Сохраняем SOURCE_ID внутри chunk,
-    # чтобы его можно было использовать дальше.
     chunk["_source_id"] = source_id
 
-    result = (
-        f"SOURCE_ID: {source_id}\n"
-        f"Документ: {doc_name}\n"
-    )
+    lines = [
+        f"SOURCE_ID: {source_id}",
+        f"DOCUMENT: {document_name}",
+    ]
 
-    if point_num:
+    if point:
+        lines.append(f"POINT_OR_ARTICLE: {point}")
 
-        result += (
-            f"Пункт/статья: "
-            f"{point_num}\n"
-        )
+    lines.append(f"TEXT: {str(text).strip()}")
 
-    result += (
-        f"Текст НПА:\n"
-        f"{content}"
-    )
+    # Similarity нужен для внутреннего контроля,
+    # но модель не должна использовать его как юридическое доказательство.
+    lines.append(f"SEARCH_SIMILARITY: {similarity:.4f}")
 
-    return result
+    return "\n".join(lines)
 
 
-# =========================================================
-# SUPABASE SEARCH
-# =========================================================
-
-def _search_chunks(
-    supabase: Client,
-    query_vector: list[float],
-) -> list[dict[str, Any]]:
+def _build_retrieved_text(chunks: List[Dict[str, Any]]) -> str:
     """
-    Выполняет векторный поиск в Supabase.
-    """
-
-    response = supabase.rpc(
-        "match_npa_chunks",
-        {
-            "query_embedding": query_vector,
-            "match_threshold": (
-                SUPABASE_MATCH_THRESHOLD
-            ),
-            "match_count": (
-                SUPABASE_MATCH_COUNT
-            ),
-        },
-    ).execute()
-
-    return response.data or []
-
-
-# =========================================================
-# СОРТИРОВКА
-# =========================================================
-
-def _sort_by_semantic_similarity(
-    chunks: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """
-    Сортирует найденные фрагменты
-    по semantic similarity.
-    """
-
-    result = []
-
-    for index, chunk in enumerate(
-        chunks
-    ):
-
-        item = dict(chunk)
-
-        item["_semantic_score"] = (
-            _semantic_score(chunk)
-        )
-
-        item["_original_index"] = (
-            index
-        )
-
-        result.append(item)
-
-    result.sort(
-        key=lambda item: (
-            item["_semantic_score"],
-            -item["_original_index"],
-        ),
-        reverse=True,
-    )
-
-    return result
-
-
-# =========================================================
-# ФОРМИРОВАНИЕ КОНТЕКСТА
-# =========================================================
-
-def _build_retrieved_text(
-    chunks: list[dict[str, Any]],
-) -> str:
-    """
-    Формирует юридический контекст
-    для передачи AI.
-
-    ВАЖНО:
-
-    Найденный источник ≠ источник,
-    который обязательно должен быть
-    указан в финальном ответе.
+    Формирует весь RAG-контекст.
     """
 
     blocks = []
 
-    for index, chunk in enumerate(
+    for index, chunk in enumerate(chunks, start=1):
+        source_id = build_source_id(chunk, index)
+
+        chunk["_source_id"] = source_id
+
+        block = [
+            f"===== RAG SOURCE {index} =====",
+            _format_chunk(chunk, index),
+            f"===== END RAG SOURCE {index} =====",
+        ]
+
+        blocks.append("\n".join(block))
+
+    return "\n\n".join(blocks)
+
+
+# ============================================================
+# SUPABASE
+# ============================================================
+
+def _search_chunks(
+    supabase,
+    query_vector: List[float],
+) -> List[Dict[str, Any]]:
+
+    response = (
+        supabase
+        .rpc(
+            "match_npa_chunks",
+            {
+                "query_embedding": query_vector,
+                "match_count": max(RAG_FINAL_COUNT * 3, 15),
+            },
+        )
+        .execute()
+    )
+
+    return response.data or []
+
+
+def _semantic_score(chunk: Dict[str, Any]) -> float:
+    """
+    Унифицированное получение similarity.
+    """
+
+    if "similarity" in chunk:
+        return _safe_float(chunk["similarity"])
+
+    if "score" in chunk:
+        return _safe_float(chunk["score"])
+
+    # Если RPC возвращает distance,
+    # меньшая distance = большая близость.
+    if "distance" in chunk:
+        distance = _safe_float(chunk["distance"])
+        return 1.0 - distance
+
+    return 0.0
+
+
+def _sort_by_semantic_similarity(
+    chunks: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+
+    return sorted(
         chunks,
-        start=1,
-    ):
-
-        chunk_text = _format_chunk(
-            chunk,
-            index,
-        )
-
-        semantic = chunk.get(
-            "_semantic_score"
-        )
-
-        source_id = chunk.get(
-            "_source_id"
-        )
-
-        metadata = []
-
-        if source_id:
-
-            metadata.append(
-                f"SOURCE_ID: {source_id}"
-            )
-
-        if semantic is not None:
-
-            metadata.append(
-                "Semantic similarity: "
-                f"{semantic:.4f}"
-            )
-
-        metadata_text = ""
-
-        if metadata:
-
-            metadata_text = (
-                "\n"
-                + "\n".join(
-                    metadata
-                )
-            )
-
-        blocks.append(
-            f"===== "
-            f"RAG SOURCE {index} "
-            f"=====\n"
-            f"{chunk_text}"
-            f"{metadata_text}"
-        )
-
-    return "\n\n".join(
-        blocks
+        key=_semantic_score,
+        reverse=True,
     )
 
 
-# =========================================================
+# ============================================================
 # ОСНОВНОЙ RAG
-# =========================================================
+# ============================================================
 
 async def retrieve_context(
     user_query: str,
-    supabase: Client,
-) -> dict[str, Any]:
-    """
-    Основная функция RAG.
-
-    Алгоритм:
-
-    1. Получаем embedding вопроса.
-    2. Ищем похожие фрагменты НПА.
-    3. Сортируем по similarity.
-    4. Берём TOP-N.
-    5. Присваиваем каждому SOURCE_ID.
-    6. Формируем юридически структурированный
-       контекст для AI.
-
-    Gemini здесь НЕ используется.
-    """
-
-    user_query = (
-        user_query or ""
-    ).strip()
-
-    if not user_query:
-
-        return {
-            "chunks": [],
-            "retrieved_text": "",
-            "found": False,
-            "candidate_count": 0,
-            "final_count": 0,
-            "source_references": [],
-        }
+    supabase,
+) -> Dict[str, Any]:
 
     logger.info(
         "RAG | query=%s",
         user_query,
     )
 
-    # =====================================================
-    # ШАГ 1. EMBEDDING
-    # =====================================================
+    # --------------------------------------------------------
+    # 1. Embedding
+    # --------------------------------------------------------
 
     query_vector = await asyncio.to_thread(
         get_query_embedding,
         user_query,
     )
 
-    logger.info(
-        "RAG | embedding dimension=%s",
-        len(query_vector),
-    )
-
-    if len(query_vector) != 384:
-
-        raise RuntimeError(
-            "Unexpected embedding dimension: "
-            f"{len(query_vector)}; "
-            "expected 384."
-        )
-
-    # =====================================================
-    # ШАГ 2. ПОИСК
-    # =====================================================
-
-    candidate_chunks = (
-        await asyncio.to_thread(
-            _search_chunks,
-            supabase,
-            query_vector,
-        )
-    )
-
-    logger.info(
-        "RAG | candidates=%s",
-        len(candidate_chunks),
-    )
-
-    if not candidate_chunks:
-
-        logger.info(
-            "RAG | no relevant chunks found"
-        )
+    if not query_vector:
+        logger.warning("RAG | embedding is empty")
 
         return {
             "chunks": [],
@@ -495,259 +303,153 @@ async def retrieve_context(
             "source_references": [],
         }
 
-    # =====================================================
-    # ШАГ 3. СОРТИРОВКА
-    # =====================================================
-
-    ranked_chunks = (
-        _sort_by_semantic_similarity(
-            candidate_chunks
+    if len(query_vector) != 384:
+        raise ValueError(
+            f"Unexpected embedding dimension: {len(query_vector)}. "
+            f"Expected 384."
         )
+
+    # --------------------------------------------------------
+    # 2. Search Supabase
+    # --------------------------------------------------------
+
+    candidate_chunks = await asyncio.to_thread(
+        _search_chunks,
+        supabase,
+        query_vector,
     )
 
-    # =====================================================
-    # ШАГ 4. TOP-N
-    # =====================================================
-
-    final_chunks = ranked_chunks[
-        :RAG_FINAL_COUNT
-    ]
+    candidate_count = len(candidate_chunks)
 
     logger.info(
-        "RAG | final chunks=%s",
-        len(final_chunks),
+        "RAG | candidates=%s",
+        candidate_count,
     )
 
-    # =====================================================
-    # ШАГ 5. SOURCE ID
-    # =====================================================
+    if not candidate_chunks:
+        return {
+            "chunks": [],
+            "retrieved_text": "",
+            "found": False,
+            "candidate_count": 0,
+            "final_count": 0,
+            "source_references": [],
+        }
 
-    for index, chunk in enumerate(
-        final_chunks,
-        start=1,
-    ):
+    # --------------------------------------------------------
+    # 3. Semantic sorting
+    # --------------------------------------------------------
 
-        source_id = _build_source_id(
+    ranked_chunks = _sort_by_semantic_similarity(
+        candidate_chunks
+    )
+
+    # --------------------------------------------------------
+    # 4. TOP-N
+    # --------------------------------------------------------
+
+    final_chunks = ranked_chunks[:RAG_FINAL_COUNT]
+
+    # --------------------------------------------------------
+    # 5. SOURCE_ID
+    # --------------------------------------------------------
+
+    source_references = []
+
+    for index, chunk in enumerate(final_chunks, start=1):
+
+        source_id = build_source_id(
             chunk,
             index,
         )
 
-        chunk["_source_id"] = (
-            source_id
-        )
+        chunk["_source_id"] = source_id
 
-    # =====================================================
-    # ЛОГИРОВАНИЕ
-    # =====================================================
+        document_name = _get_document_name(chunk)
+        point = _get_point_number(chunk)
 
-    for index, chunk in enumerate(
-        final_chunks,
-        start=1,
-    ):
+        if point:
+            reference = (
+                f"{document_name} — пункт/статья {point}"
+            )
+        else:
+            reference = document_name
 
-        doc_name = _get_document_name(
-            chunk
-        )
-
-        point_num = _get_point_number(
-            chunk
-        )
-
-        similarity = chunk.get(
-            "_semantic_score",
-            0.0,
-        )
-
-        source_id = chunk.get(
-            "_source_id",
-            "UNKNOWN",
+        source_references.append(
+            {
+                "source_id": source_id,
+                "reference": reference,
+            }
         )
 
         logger.info(
-            "RAG | TOP %s | "
-            "source_id=%s | "
-            "similarity=%.4f | "
-            "document=%s | "
-            "point=%s",
+            "RAG | TOP %s | source=%s | similarity=%.4f",
             index,
             source_id,
-            similarity,
-            doc_name,
-            point_num,
+            _semantic_score(chunk),
         )
 
-    # =====================================================
-    # ШАГ 6. КОНТЕКСТ
-    # =====================================================
+    # --------------------------------------------------------
+    # 6. Context
+    # --------------------------------------------------------
 
-    retrieved_text = (
-        _build_retrieved_text(
-            final_chunks
-        )
-    )
-
-    # =====================================================
-    # ШАГ 7. ССЫЛКИ НА ВСЕ НАЙДЕННЫЕ НОРМЫ
-    #
-    # ВАЖНО:
-    # Это именно RAG candidates.
-    # Они НЕ означают, что AI обязан
-    # сослаться на все эти нормы.
-    # =====================================================
-
-    source_references = (
-        get_source_references(
-            final_chunks
-        )
+    retrieved_text = _build_retrieved_text(
+        final_chunks
     )
 
     return {
         "chunks": final_chunks,
         "retrieved_text": retrieved_text,
         "found": bool(final_chunks),
-        "candidate_count": len(
-            candidate_chunks
-        ),
-        "final_count": len(
-            final_chunks
-        ),
-        "source_references": (
-            source_references
-        ),
+        "candidate_count": candidate_count,
+        "final_count": len(final_chunks),
+        "source_references": source_references,
     }
 
 
-# =========================================================
+# ============================================================
 # ИСТОЧНИКИ
-# =========================================================
+# ============================================================
 
 def get_source_references(
-    chunks: list[dict[str, Any]],
-) -> list[str]:
-    """
-    Возвращает уникальные ссылки
-    на найденные фрагменты.
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
 
-    Формат:
-
-    Документ — пункт/статья
-    """
-
-    result = []
-
+    references = []
     seen = set()
 
-    for chunk in chunks:
+    for index, chunk in enumerate(chunks, start=1):
 
-        doc_name = _get_document_name(
-            chunk
-        )
+        document_name = _get_document_name(chunk)
+        point = _get_point_number(chunk)
 
-        point_num = _get_point_number(
-            chunk
-        )
-
-        key = (
-            doc_name,
-            point_num,
-        )
-
-        if key in seen:
-
-            continue
-
-        seen.add(key)
-
-        if point_num:
-
-            result.append(
-                f"{doc_name} — "
-                f"{point_num}"
+        if point:
+            reference = (
+                f"{document_name} — пункт/статья {point}"
             )
-
         else:
+            reference = document_name
 
-            result.append(
-                doc_name
-            )
+        if reference not in seen:
+            seen.add(reference)
+            references.append(reference)
 
-    return result
+    return references
 
 
 def get_source_names(
-    chunks: list[dict[str, Any]],
-) -> list[str]:
-    """
-    Возвращает уникальные названия НПА.
-    """
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
 
-    result = []
-
+    names = []
     seen = set()
 
     for chunk in chunks:
 
-        name = _get_document_name(
-            chunk
-        )
+        document_name = _get_document_name(chunk)
 
-        if (
-            name
-            and name not in seen
-        ):
+        if document_name not in seen:
+            seen.add(document_name)
+            names.append(document_name)
 
-            seen.add(name)
-
-            result.append(
-                name
-            )
-
-    return result
-
-
-def get_source_ids(
-    chunks: list[dict[str, Any]],
-) -> list[str]:
-    """
-    Возвращает SOURCE_ID найденных
-    фрагментов.
-
-    Например:
-
-    [
-        "NPA_175_P51",
-        "NPA_175_P53",
-        "NPA_175_P47"
-    ]
-    """
-
-    result = []
-
-    seen = set()
-
-    for index, chunk in enumerate(
-        chunks,
-        start=1,
-    ):
-
-        source_id = (
-            chunk.get("_source_id")
-            or _build_source_id(
-                chunk,
-                index,
-            )
-        )
-
-        if source_id in seen:
-
-            continue
-
-        seen.add(
-            source_id
-        )
-
-        result.append(
-            source_id
-        )
-
-    return result
+    return names
