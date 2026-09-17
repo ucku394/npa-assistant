@@ -7,9 +7,11 @@ TEXT:
 Telegram
     -> local multilingual-e5-small query embedding
     -> Supabase vector search
-    -> Gemini reranking
+    -> semantic similarity sorting
+    -> TOP-N RAG chunks
     -> Gemini answer generation
     -> OpenRouter fallback
+    -> SOURCE_ID extraction
     -> Telegram
 
 PHOTO:
@@ -82,12 +84,19 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# Я Добавил
+# SOURCE ID FUNCTIONS
 # ============================================================
+
 def extract_used_source_ids(answer: str) -> list[str]:
     """
     Извлекает SOURCE_ID, которые модель реально указала
     в своём ответе.
+
+    Пример:
+
+    [SOURCE:NPA_175_P51]
+
+    -> ["NPA_175_P51"]
     """
 
     if not answer:
@@ -122,6 +131,14 @@ def build_used_source_references(
     """
     Возвращает только те источники RAG,
     которые модель явно использовала.
+
+    ВАЖНО:
+
+    RAG может найти 5 источников,
+    но модель может использовать только 1 или 2.
+
+    В список попадут только реально указанные
+    моделью SOURCE_ID.
     """
 
     if not chunks or not used_source_ids:
@@ -137,6 +154,13 @@ def build_used_source_references(
         start=1,
     ):
 
+        # ----------------------------------------------------
+        # Получаем SOURCE_ID.
+        #
+        # Сначала используем уже созданный rag.py ID.
+        # Если его нет — создаём заново.
+        # ----------------------------------------------------
+
         source_id = (
             chunk.get("_source_id")
             or build_source_id(
@@ -145,8 +169,16 @@ def build_used_source_references(
             )
         )
 
+        # ----------------------------------------------------
+        # Этот RAG-фрагмент модель не использовала.
+        # ----------------------------------------------------
+
         if source_id not in used:
             continue
+
+        # ----------------------------------------------------
+        # Название документа
+        # ----------------------------------------------------
 
         document_name = (
             chunk.get("document")
@@ -157,6 +189,10 @@ def build_used_source_references(
             or chunk.get("source")
             or "Неизвестный НПА"
         )
+
+        # ----------------------------------------------------
+        # Пункт / статья
+        # ----------------------------------------------------
 
         point = (
             chunk.get("point")
@@ -176,6 +212,10 @@ def build_used_source_references(
             point
         ).strip()
 
+        # ----------------------------------------------------
+        # Формируем человекочитаемый источник
+        # ----------------------------------------------------
+
         if point:
 
             reference = (
@@ -186,6 +226,10 @@ def build_used_source_references(
         else:
 
             reference = document_name
+
+        # ----------------------------------------------------
+        # Убираем дубли
+        # ----------------------------------------------------
 
         if reference not in seen:
 
@@ -201,6 +245,15 @@ def remove_source_markers(
     """
     Удаляет технические SOURCE-маркеры
     перед отправкой пользователю.
+
+    Например:
+
+    Было:
+    Требование установлено пунктом 51.
+    [SOURCE:NPA_175_P51]
+
+    Станет:
+    Требование установлено пунктом 51.
     """
 
     if not answer:
@@ -213,6 +266,8 @@ def remove_source_markers(
     )
 
     return answer.strip()
+
+
 # ============================================================
 # CONFIG VALIDATION
 # ============================================================
@@ -757,15 +812,46 @@ async def text_handler(
             answer
         )
 
-        # ----------------------------------------------------
-        # Sources
-        # ----------------------------------------------------
+        # ====================================================
+        # SOURCE ID EXTRACTION
+        # ====================================================
 
-        source_refs = get_source_references(
-            chunks
+        used_source_ids = extract_used_source_ids(
+            answer
         )
 
-        if source_refs:
+        logger.info(
+            "LEGAL | used SOURCE_IDs=%s",
+            used_source_ids,
+        )
+
+        # ====================================================
+        # SOURCE VALIDATION
+        # ====================================================
+
+        used_source_refs = build_used_source_references(
+            chunks,
+            used_source_ids,
+        )
+
+        logger.info(
+            "LEGAL | validated source references=%s",
+            used_source_refs,
+        )
+
+        # ====================================================
+        # REMOVE TECHNICAL SOURCE MARKERS
+        # ====================================================
+
+        answer = remove_source_markers(
+            answer
+        )
+
+        # ====================================================
+        # ADD ONLY USED SOURCES
+        # ====================================================
+
+        if used_source_refs:
 
             answer += (
                 "\n\n📎 ИСТОЧНИКИ\n\n"
@@ -773,7 +859,15 @@ async def text_handler(
 
             answer += "\n\n".join(
                 f"• {source}"
-                for source in source_refs
+                for source in used_source_refs
+            )
+
+        else:
+
+            logger.warning(
+                "LEGAL | AI did not provide "
+                "valid SOURCE_IDs. "
+                "No automatic sources will be added."
             )
 
         # ----------------------------------------------------
@@ -1092,7 +1186,7 @@ async def error_handler(
 
 def preload_embedding_model():
     """
-    Loads E5 BEFORE Telegram polling starts.
+    Loads E5 BEFORE Telegram polling.
 
     Benefits:
 
