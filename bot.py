@@ -61,10 +61,6 @@ from rag import (
     build_source_id,
 )
 
-# IMPORTANT:
-# Import E5 model loader for startup preload.
-from embedding import get_model
-
 
 # ============================================================
 # LOGGING
@@ -733,6 +729,10 @@ async def text_handler(
         # E5 embedding is performed ONLY inside
         # retrieve_context().
         #
+        # The embedding model is loaded lazily
+        # on the first RAG request.
+        #
+        # There is NO startup preload.
         # There is NO second embedding here.
         # ----------------------------------------------------
 
@@ -1181,92 +1181,6 @@ async def error_handler(
 
 
 # ============================================================
-# EMBEDDING MODEL PRELOAD
-# ============================================================
-
-def preload_embedding_model():
-    """
-    Loads E5 BEFORE Telegram polling.
-
-    Benefits:
-
-    1. Model is not loaded during the first user request.
-    2. Startup logs clearly show model loading.
-    3. If E5 cannot fit into available RAM,
-       the failure happens during startup.
-    4. Telegram polling does not start with an unloaded model.
-    """
-
-    logger.info(
-        "============================================================"
-    )
-
-    logger.info(
-        "STARTUP | preloading embedding model..."
-    )
-
-    try:
-
-        model = get_model()
-
-        dimension = None
-
-        # Newer SentenceTransformer API
-        get_dimension = getattr(
-            model,
-            "get_embedding_dimension",
-            None,
-        )
-
-        if callable(
-            get_dimension
-        ):
-
-            dimension = int(
-                get_dimension()
-            )
-
-        else:
-
-            # Older SentenceTransformer API
-            get_dimension = getattr(
-                model,
-                "get_sentence_embedding_dimension",
-                None,
-            )
-
-            if callable(
-                get_dimension
-            ):
-
-                dimension = int(
-                    get_dimension()
-                )
-
-        logger.info(
-            "STARTUP | embedding model READY | "
-            "dimension=%s",
-            dimension,
-        )
-
-        logger.info(
-            "STARTUP | embedding model preload completed."
-        )
-
-    except Exception:
-
-        logger.exception(
-            "STARTUP | embedding model preload FAILED."
-        )
-
-        raise
-
-    logger.info(
-        "============================================================"
-    )
-
-
-# ============================================================
 # MAIN
 # ============================================================
 
@@ -1275,12 +1189,31 @@ def main():
     # --------------------------------------------------------
     # IMPORTANT:
     #
-    # Load E5 BEFORE Telegram polling.
+    # Embedding model is NO LONGER preloaded here.
     #
-    # This is the key change for the 1 GB RAM server.
+    # multilingual-e5-small will be loaded lazily when
+    # retrieve_context() performs the first query embedding.
+    #
+    # This prevents Railway from loading the heavy model
+    # before Telegram polling starts.
     # --------------------------------------------------------
 
-    preload_embedding_model()
+    logger.info(
+        "============================================================"
+    )
+
+    logger.info(
+        "STARTUP | embedding model preload DISABLED"
+    )
+
+    logger.info(
+        "STARTUP | multilingual-e5-small will load lazily "
+        "on first RAG request"
+    )
+
+    logger.info(
+        "============================================================"
+    )
 
     # --------------------------------------------------------
     # Telegram application
