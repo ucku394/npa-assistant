@@ -1,4 +1,3 @@
-```python
 """
 AI text-generation router.
 
@@ -481,4 +480,3 @@ def generate_answer(prompt: str) -> str:
             f"Gemini: {gemini_error}\n"
             f"OpenRouter: {exc}"
         ) from exc
-```
