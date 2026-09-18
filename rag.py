@@ -462,6 +462,11 @@ def _safe_float(
 def _normalize_identifier(
     value: Any,
 ) -> str:
+    """
+    Универсальная нормализация идентификатора.
+
+    Используется для названий документов и уже готовых SOURCE_ID.
+    """
 
     if value is None:
         return ""
@@ -487,6 +492,103 @@ def _normalize_identifier(
     )
 
     return text.strip("_")
+
+
+def _normalize_point_identifier(
+    value: Any,
+) -> str:
+    """
+    Нормализация номера пункта/статьи для SOURCE_ID.
+
+    В БД пункт может храниться как:
+        1.
+        3.
+        5.7
+        12.1
+
+    Для SOURCE_ID необходимо получать:
+        1
+        3
+        5.7
+        12.1
+
+    Главное исправление:
+        NPA_253_P1. -> NPA_253_P1
+    """
+
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+
+    # Убираем точки/пунктуацию только в конце.
+    # Внутренние точки сохраняем:
+    # 5.7 -> 5.7
+    text = re.sub(
+        r"[.,;:]+$",
+        "",
+        text,
+    )
+
+    # Пробелы внутри номера заменяем на "_".
+    text = re.sub(
+        r"\s+",
+        "_",
+        text,
+    )
+
+    # Для номера пункта оставляем цифры,
+    # латиницу/кириллицу, "_" и "-".
+    # Внутреннюю "." сохраняем.
+    text = re.sub(
+        r"[^A-Za-zА-Яа-яЁё0-9_.-]+",
+        "",
+        text,
+    )
+
+    text = re.sub(
+        r"_+",
+        "_",
+        text,
+    )
+
+    # Ещё раз гарантированно убираем точку/пунктуацию в конце.
+    text = re.sub(
+        r"[.,;:]+$",
+        "",
+        text,
+    )
+
+    return text.strip("_")
+
+
+def _normalize_source_id(
+    value: Any,
+) -> str:
+    """
+    Нормализует SOURCE_ID.
+
+    Нужна для совместимости:
+        NPA_253_P1.
+        NPA_253_P1
+        NPA_253_P1;
+        NPA_253_P1:
+    будут считаться одним SOURCE_ID.
+    """
+
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+
+    # Удаляем пунктуацию в конце.
+    text = re.sub(
+        r"[.,;:]+$",
+        "",
+        text,
+    )
+
+    return _normalize_identifier(text)
 
 
 def _get_document_name(
@@ -600,7 +702,7 @@ def build_source_id(
     )
 
     if existing_source_id:
-        return _normalize_identifier(
+        return _normalize_source_id(
             existing_source_id
         )
 
@@ -629,11 +731,26 @@ def build_source_id(
 
     if point:
 
-        normalized_point = _normalize_identifier(
+        # ====================================================
+        # ИСПРАВЛЕНИЕ SOURCE_ID
+        # ====================================================
+        #
+        # Было:
+        #     _normalize_identifier(point)
+        #
+        # Для point="1." получалось:
+        #     "1."
+        #
+        # Теперь:
+        #     "1." -> "1"
+        #     "5.7" -> "5.7"
+        #
+        normalized_point = _normalize_point_identifier(
             point
         )
 
-        return f"{base}_P{normalized_point}"
+        if normalized_point:
+            return f"{base}_P{normalized_point}"
 
     text = (
         chunk.get("content")
@@ -1305,13 +1422,6 @@ async def retrieve_context(
     # ========================================================
     # TARGETED LEGAL SEARCH
     # ========================================================
-    #
-    # КЛЮЧЕВОЕ ИЗМЕНЕНИЕ.
-    #
-    # Если вопрос специализированный,
-    # дополнительно ищем нормативные документы
-    # непосредственно по тексту БД.
-    # ========================================================
 
     targeted_chunks = await _get_targeted_chunks(
         supabase,
@@ -1437,14 +1547,6 @@ async def retrieve_context(
             chunk
             for chunk in ranked_chunks
             if _is_attestation_document(
-                chunk
-            )
-        ]
-
-        other_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if not _is_attestation_document(
                 chunk
             )
         ]
