@@ -25,6 +25,9 @@ import logging
 import re
 from io import BytesIO
 
+import os
+from google import genai
+
 from openai import OpenAI
 from supabase import create_client
 
