@@ -10,22 +10,77 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
-# Reduce unnecessary Hugging Face background activity
-os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+# Prevent Hugging Face from spawning unnecessary parallel work
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
 
 import gc
 import logging
+import os as _os
 import threading
 from functools import lru_cache
 from typing import Iterable, List, Sequence
 
 import numpy as np
 import torch
+from sentence_transformers import SentenceTransformer
+
+
+# ============================================================
+# LOGGING
+# ============================================================
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# MODEL CONFIGURATION
+# ============================================================
+
+EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+
+# multilingual-e5-small = 384 dimensions
+EMBEDDING_DIM = 384
+
+DEVICE = "cpu"
+
+# Keep batches deliberately small for Railway RAM limits.
+BATCH_SIZE = 1
+
+
+# ============================================================
+# MODEL LOCK
+# ============================================================
+
+_MODEL_LOCK = threading.Lock()
+
+
+# ============================================================
+# PYTORCH THREAD LIMIT
+# ============================================================
+
+try:
+    torch.set_num_threads(1)
+
+    # This can only be changed before parallel work starts.
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        pass
+
+    logger.info(
+        "EMBEDDING | torch threads configured | "
+        "num_threads=%s | interop_threads=%s",
+        torch.get_num_threads(),
+        torch.get_num_interop_threads(),
+    )
+
+except Exception as exc:
+    logger.warning(
+        "EMBEDDING | unable to configure torch threads | error=%s",
+        exc,
+    )
 
 
 # ============================================================
@@ -58,6 +113,10 @@ def _memory_info() -> str:
 
 
 def _log_memory(label: str) -> None:
+    """
+    Log current process memory with a readable label.
+    """
+
     logger.info(
         "MEMORY | %s | %s",
         label,
@@ -66,71 +125,7 @@ def _log_memory(label: str) -> None:
 
 
 # ============================================================
-# TORCH
-# ============================================================
-
-_log_memory("before torch configuration")
-
-try:
-
-    torch.set_num_threads(1)
-
-    try:
-        torch.set_num_interop_threads(1)
-    except RuntimeError:
-        pass
-
-    logger.info(
-        "EMBEDDING | torch threads configured | "
-        "num_threads=%s | interop_threads=%s",
-        torch.get_num_threads(),
-        torch.get_num_interop_threads(),
-    )
-
-except Exception as exc:
-
-    logger.warning(
-        "EMBEDDING | unable to configure torch threads | "
-        "error=%s",
-        exc,
-    )
-
-_log_memory("after torch import")
-
-
-# ============================================================
-# SENTENCE TRANSFORMERS
-# ============================================================
-
-from sentence_transformers import SentenceTransformer
-
-_log_memory("after sentence_transformers import")
-
-
-# ============================================================
-# MODEL CONFIGURATION
-# ============================================================
-
-EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
-
-# multilingual-e5-small = 384 dimensions
-EMBEDDING_DIM = 384
-
-DEVICE = "cpu"
-
-# One query at a time.
-BATCH_SIZE = 1
-
-
-# ============================================================
-# MODEL LOCK
-# ============================================================
-
-_MODEL_LOCK = threading.Lock()
-
-
-# ============================================================
-# MODULE STATUS
+# STARTUP MEMORY
 # ============================================================
 
 logger.info(
@@ -156,13 +151,8 @@ logger.info(
     DEVICE,
 )
 
-logger.info(
-    "EMBEDDING | batch_size=%s",
-    BATCH_SIZE,
-)
-
 _log_memory(
-    "after embedding module initialization"
+    "after module imports"
 )
 
 logger.info(
@@ -222,12 +212,14 @@ def get_model():
     """
     Lazy-load the embedding model.
 
-    The model is loaded only on the first embedding request.
+    IMPORTANT:
+    The model is NOT loaded when this module is imported.
 
-    After successful loading the same model instance is reused.
+    It is loaded only when get_model() is actually called.
+    After the first successful load it remains cached.
     """
 
-    pid = os.getpid()
+    pid = _os.getpid()
 
     logger.info(
         "============================================================"
@@ -271,18 +263,27 @@ def get_model():
             "after SentenceTransformer creation"
         )
 
-        # ----------------------------------------------------
-        # DIMENSION CHECK
-        # ----------------------------------------------------
-
         dimension = _dimension(
             model
         )
 
         logger.info(
-            "EMBEDDING | detected dimension=%s",
+            "EMBEDDING | model loaded successfully"
+        )
+
+        logger.info(
+            "EMBEDDING | dimension=%s",
             dimension,
         )
+
+        logger.info(
+            "EMBEDDING | memory after loading: %s",
+            _memory_info(),
+        )
+
+        # ----------------------------------------------------
+        # DIMENSION VALIDATION
+        # ----------------------------------------------------
 
         if dimension != EMBEDDING_DIM:
 
@@ -293,31 +294,23 @@ def get_model():
             )
 
         # ----------------------------------------------------
-        # EVAL MODE
+        # CPU / EVAL MODE
         # ----------------------------------------------------
 
         try:
-
             model.eval()
-
         except Exception as exc:
-
             logger.warning(
-                "EMBEDDING | model.eval() failed | "
-                "error=%s",
+                "EMBEDDING | model.eval() failed | error=%s",
                 exc,
             )
 
-        _log_memory(
-            "model ready"
-        )
-
-        logger.info(
-            "EMBEDDING | model loaded successfully"
-        )
-
         logger.info(
             "EMBEDDING | model validation OK"
+        )
+
+        _log_memory(
+            "model ready"
         )
 
         logger.info(
@@ -332,11 +325,16 @@ def get_model():
             "EMBEDDING | MODEL LOADING FAILED"
         )
 
-        _log_memory(
-            "memory at model loading failure"
+        logger.error(
+            "EMBEDDING | memory at failure: %s",
+            _memory_info(),
         )
 
-        gc.collect()
+        # Try to release temporary objects.
+        try:
+            gc.collect()
+        except Exception:
+            pass
 
         raise
 
@@ -350,6 +348,8 @@ def _encode(
 ) -> List[List[float]]:
     """
     Encode texts using multilingual-e5-small.
+
+    The model is loaded lazily on first call.
     """
 
     clean = [
@@ -387,17 +387,25 @@ def _encode(
         try:
 
             # ------------------------------------------------
-            # INFERENCE MODE
+            # IMPORTANT:
+            # inference_mode reduces unnecessary autograd
+            # overhead and memory usage.
             # ------------------------------------------------
 
             with torch.inference_mode():
 
                 vectors = model.encode(
                     clean,
+
                     normalize_embeddings=True,
+
                     convert_to_numpy=True,
+
                     show_progress_bar=False,
+
                     batch_size=BATCH_SIZE,
+
+                    # Do not create a tensor graph.
                     convert_to_tensor=False,
                 )
 
@@ -413,6 +421,7 @@ def _encode(
 
         finally:
 
+            # Release temporary Python objects when possible.
             gc.collect()
 
         _log_memory(
@@ -420,7 +429,7 @@ def _encode(
         )
 
     # ========================================================
-    # NUMPY
+    # NUMPY CONVERSION
     # ========================================================
 
     arr = np.asarray(
@@ -473,8 +482,7 @@ def get_query_embedding(
     """
     Create embedding for a user query.
 
-    E5 format:
-
+    E5 models expect:
         query: <text>
     """
 
@@ -505,8 +513,7 @@ def get_document_embeddings(
     """
     Create embeddings for document chunks.
 
-    E5 format:
-
+    E5 models expect:
         passage: <text>
     """
 
@@ -534,9 +541,13 @@ def get_document_embeddings(
 
 def warmup_model():
     """
-    Explicitly load the model.
+    Explicitly load the embedding model.
 
-    Do NOT call this during normal Railway startup.
+    IMPORTANT:
+    This function must NOT be called during normal Railway
+    startup if you want lazy loading.
+
+    It is kept for compatibility and manual diagnostics.
     """
 
     logger.info(
@@ -553,6 +564,14 @@ def warmup_model():
         "after warmup"
     )
 
+    logger.info(
+        "EMBEDDING | warmup completed | "
+        "model=%s | dimension=%s | device=%s",
+        EMBEDDING_MODEL,
+        EMBEDDING_DIM,
+        DEVICE,
+    )
+
     return model
 
 
@@ -562,27 +581,23 @@ def warmup_model():
 
 def is_model_loaded() -> bool:
     """
-    Returns True if the model is already cached.
+    Returns True if the cached model already exists.
     """
 
     try:
 
-        return (
-            get_model.cache_info().currsize > 0
-        )
+        return get_model.cache_info().currsize > 0
 
     except Exception:
 
         return False
 
 
-# ============================================================
-# CLEAR MODEL CACHE
-# ============================================================
-
 def clear_model_cache() -> None:
     """
-    Explicitly unload the cached model.
+    Explicitly unload the embedding model.
+
+    Useful for diagnostics or memory recovery.
     """
 
     logger.info(
@@ -596,8 +611,7 @@ def clear_model_cache() -> None:
     except Exception as exc:
 
         logger.warning(
-            "EMBEDDING | cache clear failed | "
-            "error=%s",
+            "EMBEDDING | cache clear failed | error=%s",
             exc,
         )
 
