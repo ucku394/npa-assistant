@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 
 RAG_FINAL_COUNT = int(os.getenv("RAG_FINAL_COUNT", "5"))
 
+# Для юридического RAG лучше дать модели больше кандидатов,
+# а затем выбрать наиболее релевантные.
+RAG_CANDIDATE_COUNT = max(
+    RAG_FINAL_COUNT * 6,
+    30,
+)
+
 
 # ============================================================
 # ОПРЕДЕЛЕНИЕ ОБЛАСТИ ЗАПРОСА
@@ -18,13 +25,15 @@ RAG_FINAL_COUNT = int(os.getenv("RAG_FINAL_COUNT", "5"))
 
 def detect_legal_domain(user_query: str) -> str:
     """
-    Определяет основную область законодательства,
-    к которой относится вопрос пользователя.
+    Определяет основную правовую область запроса.
 
-    Важно:
-    - сначала проверяются более специфичные области;
-    - отсутствие специализированной базы НЕ означает,
-      что можно использовать нормы другой области.
+    Приоритет:
+    1. промышленная безопасность
+    2. пожарная безопасность
+    3. электробезопасность
+    4. охрана труда
+    5. санитарные требования
+    6. general
     """
 
     query = str(user_query or "").strip().lower()
@@ -147,25 +156,43 @@ def detect_legal_domain(user_query: str) -> str:
     return "general"
 
 
-
 # ============================================================
-# ОПРЕДЕЛЕНИЕ ТЕМЫ ЗАПРОСА
+# ОПРЕДЕЛЕНИЕ ТЕМЫ
 # ============================================================
 
 def detect_topic(user_query: str) -> str:
     """
-    Определяет узкую тему запроса.
-
-    Сейчас выделяется наиболее важная специализированная тема:
-    workplace_attestation — аттестация рабочих мест по условиям труда.
-
-    Если тема не определена, возвращается "general".
+    Определяет специализированную тему запроса.
     """
 
     query = str(user_query or "").strip().lower()
 
     if not query:
         return "general"
+
+    # --------------------------------------------------------
+    # НЕСЧАСТНЫЕ СЛУЧАИ
+    # --------------------------------------------------------
+
+    accident_patterns = [
+        r"\bнесчастн\w*\s+случа\w*",
+        r"\bрасследован\w*\s+несчастн\w*",
+        r"\bучет\w*\s+несчастн\w*",
+        r"\bпотерпевш\w*",
+        r"\bтравм\w*\s+на\s+производств\w*",
+        r"\bтравм\w*\s+работник\w*",
+        r"\bпроисшеств\w*\s+на\s+производств\w*",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in accident_patterns
+    ):
+        return "accident_investigation"
+
+    # --------------------------------------------------------
+    # АТТЕСТАЦИЯ РАБОЧИХ МЕСТ
+    # --------------------------------------------------------
 
     workplace_attestation_patterns = [
         r"\bаттестаци\w*\s+рабоч\w*\s+мест\w*",
@@ -187,37 +214,51 @@ def detect_topic(user_query: str) -> str:
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
 
-def _safe_float(value: Any, default: float = 0.0) -> float:
+def _safe_float(
+    value: Any,
+    default: float = 0.0,
+) -> float:
+
     try:
         return float(value)
+
     except (TypeError, ValueError):
         return default
 
 
-def _normalize_identifier(value: Any) -> str:
-    """
-    Делает безопасную часть SOURCE_ID.
-    """
+def _normalize_identifier(
+    value: Any,
+) -> str:
+
     if value is None:
         return ""
 
     text = str(value).strip()
 
-    text = re.sub(r"\s+", "_", text)
+    text = re.sub(
+        r"\s+",
+        "_",
+        text,
+    )
+
     text = re.sub(
         r"[^A-Za-zА-Яа-яЁё0-9_./-]+",
         "",
         text,
     )
-    text = re.sub(r"_+", "_", text)
+
+    text = re.sub(
+        r"_+",
+        "_",
+        text,
+    )
 
     return text.strip("_")
 
 
-def _get_document_name(chunk: Dict[str, Any]) -> str:
-    """
-    Определяет название НПА.
-    """
+def _get_document_name(
+    chunk: Dict[str, Any],
+) -> str:
 
     for key in (
         "document",
@@ -227,6 +268,7 @@ def _get_document_name(chunk: Dict[str, Any]) -> str:
         "npa_name",
         "source",
     ):
+
         value = chunk.get(key)
 
         if value:
@@ -235,15 +277,11 @@ def _get_document_name(chunk: Dict[str, Any]) -> str:
     return "Неизвестный НПА"
 
 
-def _get_point_number(chunk: Dict[str, Any]) -> str:
-    """
-    Получаем пункт/статью/раздел.
+def _get_point_number(
+    chunk: Dict[str, Any],
+) -> str:
 
-    ВАЖНО:
-    В таблице Supabase поле называется point_num,
-    поэтому оно проверяется первым.
-    """
-
+    # В БД основное поле — point_num.
     for key in (
         "point_num",
         "point",
@@ -253,6 +291,7 @@ def _get_point_number(chunk: Dict[str, Any]) -> str:
         "paragraph",
         "section",
     ):
+
         value = chunk.get(key)
 
         if value is not None and str(value).strip():
@@ -278,6 +317,7 @@ def _get_point_number(chunk: Dict[str, Any]) -> str:
     ]
 
     for pattern in patterns:
+
         match = re.search(
             pattern,
             text,
@@ -290,10 +330,9 @@ def _get_point_number(chunk: Dict[str, Any]) -> str:
     return ""
 
 
-def _extract_npa_number(document_name: str) -> str:
-    """
-    Пытаемся получить номер НПА из названия.
-    """
+def _extract_npa_number(
+    document_name: str,
+) -> str:
 
     if not document_name:
         return ""
@@ -304,6 +343,7 @@ def _extract_npa_number(document_name: str) -> str:
     ]
 
     for pattern in patterns:
+
         match = re.search(
             pattern,
             document_name,
@@ -321,16 +361,13 @@ def build_source_id(
     index: int = 0,
 ) -> str:
     """
-    Создаёт стабильный идентификатор источника.
+    Создаёт стабильный SOURCE_ID.
 
     Приоритет:
 
     1. source_id из БД
     2. NPA + point/article
-    3. NPA + стабильный hash текста
-
-    ВАЖНО:
-    SOURCE_ID НЕ зависит от позиции результата поиска.
+    3. NPA + hash текста
     """
 
     existing_source_id = (
@@ -339,22 +376,33 @@ def build_source_id(
     )
 
     if existing_source_id:
+
         return _normalize_identifier(
             existing_source_id
         )
 
-    document_name = _get_document_name(chunk)
-    point = _get_point_number(chunk)
+    document_name = _get_document_name(
+        chunk
+    )
+
+    point = _get_point_number(
+        chunk
+    )
 
     npa_number = _extract_npa_number(
         document_name
     )
 
     if npa_number:
+
         base = f"NPA_{npa_number}"
+
     else:
+
         normalized_document = (
-            _normalize_identifier(document_name)
+            _normalize_identifier(
+                document_name
+            )
         )
 
         base = (
@@ -364,8 +412,11 @@ def build_source_id(
         )
 
     if point:
-        normalized_point = _normalize_identifier(
-            point
+
+        normalized_point = (
+            _normalize_identifier(
+                point
+            )
         )
 
         return (
@@ -391,35 +442,27 @@ def build_source_id(
 
 
 # ============================================================
-# ФОРМАТИРОВАНИЕ
+# ФОРМАТИРОВАНИЕ RAG
 # ============================================================
 
 def _format_chunk(
     chunk: Dict[str, Any],
     index: int,
 ) -> str:
-    """
-    Форматирует один RAG-фрагмент.
-    """
 
     document_name = _get_document_name(
         chunk
     )
 
-    point = _get_point_number(chunk)
+    point = _get_point_number(
+        chunk
+    )
 
     text = (
         chunk.get("text")
         or chunk.get("content")
         or chunk.get("chunk_text")
         or ""
-    )
-
-    similarity = _safe_float(
-        chunk.get("similarity")
-        or chunk.get("score")
-        or chunk.get("distance"),
-        0.0,
     )
 
     source_id = build_source_id(
@@ -434,27 +477,40 @@ def _format_chunk(
         or ""
     )
 
+    topic = (
+        chunk.get("topic")
+        or ""
+    )
+
     lines = [
         f"SOURCE_ID: {source_id}",
         f"DOCUMENT: {document_name}",
     ]
 
     if legal_domain:
+
         lines.append(
             f"LEGAL_DOMAIN: {legal_domain}"
         )
 
+    if topic:
+
+        lines.append(
+            f"TOPIC: {topic}"
+        )
+
     if point:
+
         lines.append(
             f"POINT_OR_ARTICLE: {point}"
         )
 
     lines.append(
-        f"TEXT: {str(text).strip()}"
+        "TEXT:"
     )
 
     lines.append(
-        f"SEARCH_SIMILARITY: {similarity:.4f}"
+        str(text).strip()
     )
 
     return "\n".join(lines)
@@ -463,9 +519,6 @@ def _format_chunk(
 def _build_retrieved_text(
     chunks: List[Dict[str, Any]],
 ) -> str:
-    """
-    Формирует весь RAG-контекст.
-    """
 
     blocks = []
 
@@ -507,31 +560,13 @@ def _search_chunks(
     legal_domain: str,
     topic: str,
 ) -> List[Dict[str, Any]]:
-    """
-    Поиск НПА по правовой области + узкой теме.
-
-    В область поиска входят:
-    - выбранный legal_domain;
-    - general.
-
-    Если topic специализированная, дополнительно разрешаются:
-    - выбранный topic;
-    - general.
-
-    Для industrial_safety occupational_safety НЕ добавляется.
-    """
-
-    match_count = max(
-        RAG_FINAL_COUNT * 4,
-        20,
-    )
 
     response = (
         supabase
         .rpc(
             "match_npa_chunks_v3",
             {
-                "match_count": match_count,
+                "match_count": RAG_CANDIDATE_COUNT,
                 "match_threshold": 0.0,
                 "query_embedding": query_vector,
                 "legal_domain_filter": legal_domain,
@@ -544,25 +579,28 @@ def _search_chunks(
     return response.data or []
 
 
+# ============================================================
+# SEMANTIC SORT
+# ============================================================
 
 def _semantic_score(
     chunk: Dict[str, Any],
 ) -> float:
-    """
-    Унифицированное получение similarity.
-    """
 
     if "similarity" in chunk:
+
         return _safe_float(
             chunk["similarity"]
         )
 
     if "score" in chunk:
+
         return _safe_float(
             chunk["score"]
         )
 
     if "distance" in chunk:
+
         distance = _safe_float(
             chunk["distance"]
         )
@@ -583,44 +621,73 @@ def _sort_by_semantic_similarity(
     )
 
 
-def _get_document_key(chunk: Dict[str, Any]) -> str:
-    """Стабильный ключ документа для диверсификации результатов."""
-    return _get_document_name(chunk).strip().lower()
+# ============================================================
+# DIVERSIFICATION
+# ============================================================
+
+def _get_document_key(
+    chunk: Dict[str, Any],
+) -> str:
+
+    return (
+        _get_document_name(chunk)
+        .strip()
+        .lower()
+    )
 
 
 def _diversify_chunks(
     chunks: List[Dict[str, Any]],
     limit: int,
-    max_per_document: int = 2,
+    max_per_document: int = 4,
 ) -> List[Dict[str, Any]]:
     """
-    Не позволяет одному НПА занять весь TOP-N.
+    Мягкая диверсификация.
 
-    Сначала сохраняется семантический порядок, затем ограничивается
-    количество чанков от одного документа.
+    В юридическом RAG несколько последовательных пунктов
+    одного НПА могут быть необходимы для полного ответа.
+
+    Поэтому один документ может занять до 4 позиций TOP-N.
     """
+
     selected: List[Dict[str, Any]] = []
+
     per_document: Dict[str, int] = {}
 
     for chunk in chunks:
-        document_key = _get_document_key(chunk)
-        count = per_document.get(document_key, 0)
+
+        document_key = _get_document_key(
+            chunk
+        )
+
+        count = per_document.get(
+            document_key,
+            0,
+        )
 
         if count >= max_per_document:
             continue
 
         selected.append(chunk)
-        per_document[document_key] = count + 1
+
+        per_document[document_key] = (
+            count + 1
+        )
 
         if len(selected) >= limit:
             break
 
-    # Если строгая диверсификация не заполнила TOP-N, добираем
-    # оставшиеся чанки в исходном порядке.
+    # Если строгая диверсификация не заполнила TOP-N,
+    # добираем остальные по исходному semantic ranking.
     if len(selected) < limit:
-        selected_ids = {id(chunk) for chunk in selected}
+
+        selected_ids = {
+            id(chunk)
+            for chunk in selected
+        }
 
         for chunk in chunks:
+
             if id(chunk) in selected_ids:
                 continue
 
@@ -647,7 +714,7 @@ async def retrieve_context(
     )
 
     # --------------------------------------------------------
-    # 0. Определение области законодательства
+    # 0. Domain + topic
     # --------------------------------------------------------
 
     legal_domain = detect_legal_domain(
@@ -695,13 +762,13 @@ async def retrieve_context(
     if len(query_vector) != 384:
 
         raise ValueError(
-            f"Unexpected embedding dimension: "
+            "Unexpected embedding dimension: "
             f"{len(query_vector)}. "
-            f"Expected 384."
+            "Expected 384."
         )
 
     # --------------------------------------------------------
-    # 2. Search Supabase
+    # 2. Supabase
     # --------------------------------------------------------
 
     candidate_chunks = await asyncio.to_thread(
@@ -738,29 +805,28 @@ async def retrieve_context(
         }
 
     # --------------------------------------------------------
-    # 3. Сколько найдено специализированных чанков
+    # 3. Statistics
     # --------------------------------------------------------
 
     domain_specific_count = sum(
         1
         for chunk in candidate_chunks
-        if (
-            chunk.get("legal_domain")
-            == legal_domain
-        )
+        if chunk.get("legal_domain")
+        == legal_domain
     )
 
     topic_specific_count = sum(
         1
         for chunk in candidate_chunks
         if (
-            (chunk.get("topic") or "general")
-            == topic
-        )
+            chunk.get("topic")
+            or "general"
+        ) == topic
     )
 
     logger.info(
-        "RAG | domain=%s | specialized=%s | topic=%s | topic_specific=%s",
+        "RAG | domain=%s | specialized=%s | "
+        "topic=%s | topic_specific=%s",
         legal_domain,
         domain_specific_count,
         topic,
@@ -768,7 +834,7 @@ async def retrieve_context(
     )
 
     # --------------------------------------------------------
-    # 4. Semantic sorting
+    # 4. Semantic ranking
     # --------------------------------------------------------
 
     ranked_chunks = (
@@ -778,17 +844,17 @@ async def retrieve_context(
     )
 
     # --------------------------------------------------------
-    # 5. TOP-N
+    # 5. Final TOP-N
     # --------------------------------------------------------
 
     final_chunks = _diversify_chunks(
         ranked_chunks,
         RAG_FINAL_COUNT,
-        max_per_document=2,
+        max_per_document=4,
     )
 
     # --------------------------------------------------------
-    # 6. SOURCE_ID
+    # 6. SOURCE IDs + references
     # --------------------------------------------------------
 
     source_references = []
@@ -833,15 +899,16 @@ async def retrieve_context(
 
         logger.info(
             "RAG | TOP %s | domain=%s | "
-            "source=%s | similarity=%.4f",
+            "topic=%s | source=%s | similarity=%.4f",
             index,
             legal_domain,
+            topic,
             source_id,
             _semantic_score(chunk),
         )
 
     # --------------------------------------------------------
-    # 7. Context
+    # 7. Build context
     # --------------------------------------------------------
 
     retrieved_text = (
@@ -875,10 +942,7 @@ def get_source_references(
     references = []
     seen = set()
 
-    for index, chunk in enumerate(
-        chunks,
-        start=1,
-    ):
+    for chunk in chunks:
 
         document_name = (
             _get_document_name(chunk)
