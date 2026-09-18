@@ -33,6 +33,15 @@ REINDEX_ALL = (
     os.getenv("REINDEX_ALL", "false").lower() == "true"
 )
 
+# Если указать список документов через запятую, будут переиндексированы
+# только они. Например:
+# REINDEX_DOCS=Трудовой кодекс Республики Беларусь 2026,Правила по охране труда № 53
+REINDEX_DOCS = {
+    item.strip()
+    for item in os.getenv("REINDEX_DOCS", "").split(",")
+    if item.strip()
+}
+
 EMBEDDING_BATCH_SIZE = int(
     os.getenv("EMBEDDING_BATCH_SIZE", "8")
 )
@@ -148,6 +157,12 @@ DOC_NAME_MAP: Dict[str, str] = {
 
     "Трудовой кодекс Республики Беларусь 2026":
         "Трудовой кодекс Республики Беларусь 2026",
+        
+    "Об утверждении Инструкции по оценке условий труда при аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 35":
+        "Об утверждении Инструкции по оценке условий труда при аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 35",
+        
+    "Об аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 253":
+        "Об аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 253",
 }
 
 
@@ -739,6 +754,58 @@ def test_supabase_connection(
 
 
 # ============================================================
+# DOCUMENT EXISTENCE / DUPLICATE PROTECTION
+# ============================================================
+
+def document_exists(
+    supabase,
+    doc_name: str,
+) -> bool:
+    """
+    Проверяет, есть ли уже chunks данного НПА в Supabase.
+
+    При обычном запуске существующий документ пропускается.
+    Это предотвращает повторную загрузку всего корпуса.
+    """
+
+    def operation():
+        return (
+            supabase
+            .table("npa_chunks")
+            .select("id")
+            .eq("doc_name", doc_name)
+            .limit(1)
+            .execute()
+        )
+
+    response = supabase_execute(
+        operation,
+        f"DOCUMENT EXISTS | {doc_name}",
+    )
+
+    return bool(response.data)
+
+
+def should_reindex_document(
+    doc_name: str,
+) -> bool:
+    """
+    Определяет, нужно ли принудительно переиндексировать документ.
+
+    REINDEX_ALL=true  -> все документы.
+    REINDEX_DOCS      -> только перечисленные документы.
+    """
+
+    if REINDEX_ALL:
+        return True
+
+    if REINDEX_DOCS and doc_name in REINDEX_DOCS:
+        return True
+
+    return False
+
+
+# ============================================================
 # DELETE DOCUMENT
 # ============================================================
 
@@ -1022,13 +1089,36 @@ def process_file(
     )
 
     # --------------------------------------------------------
-    # REINDEX
+    # DUPLICATE PROTECTION / REINDEX
     # --------------------------------------------------------
 
-    if REINDEX_ALL:
+    force_reindex = should_reindex_document(doc_name)
+
+    if force_reindex:
+        logger.info(
+            "REINDEX | принудительная переиндексация: %s",
+            doc_name,
+        )
 
         delete_document_vectors(
             supabase,
+            doc_name,
+        )
+
+    else:
+        if document_exists(
+            supabase,
+            doc_name,
+        ):
+            logger.info(
+                "SKIP EXISTING | документ уже есть в Supabase: %s",
+                doc_name,
+            )
+
+            return 0, 1
+
+        logger.info(
+            "NEW DOCUMENT | документ отсутствует в Supabase: %s",
             doc_name,
         )
 
@@ -1038,12 +1128,28 @@ def process_file(
 
     prepared_chunks = []
 
+    # Защита от повторов, которые могут возникнуть
+    # непосредственно при извлечении текста из DOCX.
+    seen_chunks = set()
+    duplicate_chunks = 0
+
     for point_num, content in chunks:
 
         content = content.strip()
 
         if not content:
             continue
+
+        chunk_key = (
+            str(point_num).strip(),
+            content,
+        )
+
+        if chunk_key in seen_chunks:
+            duplicate_chunks += 1
+            continue
+
+        seen_chunks.add(chunk_key)
 
         prepared_chunks.append(
             {
@@ -1053,8 +1159,8 @@ def process_file(
                 "content": content,
 
                 # ====================================================
-                # НОВОЕ:
-                # сохраняем классификацию каждого chunk
+                # КЛАССИФИКАЦИЯ:
+                # сохраняем legal_domain и topic каждого chunk
                 # ====================================================
 
                 "legal_domain": legal_domain,
@@ -1062,8 +1168,14 @@ def process_file(
             }
         )
 
+    if duplicate_chunks:
+        logger.warning(
+            "CHUNKS | удалено внутренних дублей=%s",
+            duplicate_chunks,
+        )
+
     logger.info(
-        "CHUNKS | to upload=%s",
+        "CHUNKS | unique to upload=%s",
         len(prepared_chunks),
     )
 
@@ -1214,6 +1326,11 @@ def main() -> int:
     logger.info(
         "REINDEX_ALL | %s",
         REINDEX_ALL,
+    )
+
+    logger.info(
+        "REINDEX_DOCS | %s",
+        sorted(REINDEX_DOCS) if REINDEX_DOCS else "не задан",
     )
 
     logger.info(
@@ -1421,6 +1538,11 @@ def main() -> int:
     )
 
     logger.info(
+        "Reindex docs: %s",
+        sorted(REINDEX_DOCS) if REINDEX_DOCS else "не задан",
+    )
+
+    logger.info(
         "Documents found: %s",
         len(files),
     )
@@ -1466,7 +1588,9 @@ def main() -> int:
     logger.info("")
 
     logger.info(
-        "ВСЕ ДОКУМЕНТЫ УСПЕШНО ОБРАБОТАНЫ."
+        "ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО. "
+        "Новые документы загружены, существующие пропущены, "
+        "принудительно выбранные документы переиндексированы."
     )
 
     return 0
