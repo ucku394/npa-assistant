@@ -1,17 +1,15 @@
 """
 Telegram bot for Belarus occupational / industrial safety questions.
 
-Architecture:
-
 TEXT:
 Telegram
     -> local multilingual-e5-small query embedding
     -> Supabase vector search
     -> semantic similarity sorting
     -> TOP-N RAG chunks
-    -> Gemini answer generation
+    -> Gemini
     -> OpenRouter fallback
-    -> SOURCE_ID extraction
+    -> SOURCE_ID validation
     -> Telegram
 
 PHOTO:
@@ -83,30 +81,41 @@ logger = logging.getLogger(__name__)
 # SOURCE ID FUNCTIONS
 # ============================================================
 
-def extract_used_source_ids(answer: str) -> list[str]:
+def extract_used_source_ids(
+    answer: str,
+) -> list[str]:
     """
-    Извлекает SOURCE_ID, которые модель реально указала
-    в своём ответе.
+    Извлекает SOURCE_ID из ответа модели.
 
-    Пример:
+    Основной формат:
 
-    [SOURCE:NPA_175_P51]
+        [SOURCE:NPA_175_P51]
 
-    -> ["NPA_175_P51"]
+    Дополнительно распознаёт сырой SOURCE_ID,
+    если модель нарушила формат:
+
+        NPA_175_P51
+
+    Сырые ID не считаются доверенными до проверки
+    по реально найденным RAG chunks.
     """
 
     if not answer:
         return []
 
-    matches = re.findall(
+    result = []
+    seen = set()
+
+    # --------------------------------------------------------
+    # 1. Правильный формат
+    # --------------------------------------------------------
+
+    marked_matches = re.findall(
         r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]",
         answer,
     )
 
-    result = []
-    seen = set()
-
-    for source_id in matches:
+    for source_id in marked_matches:
 
         source_id = source_id.strip()
 
@@ -114,6 +123,28 @@ def extract_used_source_ids(answer: str) -> list[str]:
             continue
 
         if source_id not in seen:
+
+            seen.add(source_id)
+            result.append(source_id)
+
+    # --------------------------------------------------------
+    # 2. Сырой SOURCE_ID
+    # --------------------------------------------------------
+
+    raw_matches = re.findall(
+        r"\bNPA_[A-Za-zА-Яа-яЁё0-9_./-]+\b",
+        answer,
+    )
+
+    for source_id in raw_matches:
+
+        source_id = source_id.strip()
+
+        if not source_id:
+            continue
+
+        if source_id not in seen:
+
             seen.add(source_id)
             result.append(source_id)
 
@@ -125,22 +156,20 @@ def build_used_source_references(
     used_source_ids,
 ) -> list[str]:
     """
-    Возвращает только те источники RAG,
-    которые модель явно использовала.
+    Возвращает только те источники, которые:
 
-    ВАЖНО:
-
-    RAG может найти 5 источников,
-    но модель может использовать только 1 или 2.
-
-    В список попадут только реально указанные
-    моделью SOURCE_ID.
+    1. реально присутствуют среди RAG chunks;
+    2. были указаны моделью.
     """
 
     if not chunks or not used_source_ids:
         return []
 
-    used = set(used_source_ids)
+    used = {
+        str(source_id).strip()
+        for source_id in used_source_ids
+        if source_id
+    }
 
     references = []
     seen = set()
@@ -150,13 +179,6 @@ def build_used_source_references(
         start=1,
     ):
 
-        # ----------------------------------------------------
-        # Получаем SOURCE_ID.
-        #
-        # Сначала используем уже созданный rag.py ID.
-        # Если его нет — создаём заново.
-        # ----------------------------------------------------
-
         source_id = (
             chunk.get("_source_id")
             or build_source_id(
@@ -165,15 +187,14 @@ def build_used_source_references(
             )
         )
 
-        # ----------------------------------------------------
-        # Этот RAG-фрагмент модель не использовала.
-        # ----------------------------------------------------
+        if not source_id:
+            continue
 
         if source_id not in used:
             continue
 
         # ----------------------------------------------------
-        # Название документа
+        # Название НПА
         # ----------------------------------------------------
 
         document_name = (
@@ -186,12 +207,19 @@ def build_used_source_references(
             or "Неизвестный НПА"
         )
 
+        document_name = str(
+            document_name
+        ).strip()
+
         # ----------------------------------------------------
         # Пункт / статья
+        #
+        # point_num — основное поле БД.
         # ----------------------------------------------------
 
         point = (
-            chunk.get("point")
+            chunk.get("point_num")
+            or chunk.get("point")
             or chunk.get("point_number")
             or chunk.get("article")
             or chunk.get("article_number")
@@ -200,17 +228,9 @@ def build_used_source_references(
             or ""
         )
 
-        document_name = str(
-            document_name
-        ).strip()
-
         point = str(
             point
         ).strip()
-
-        # ----------------------------------------------------
-        # Формируем человекочитаемый источник
-        # ----------------------------------------------------
 
         if point:
 
@@ -223,10 +243,6 @@ def build_used_source_references(
 
             reference = document_name
 
-        # ----------------------------------------------------
-        # Убираем дубли
-        # ----------------------------------------------------
-
         if reference not in seen:
 
             seen.add(reference)
@@ -237,27 +253,73 @@ def build_used_source_references(
 
 def remove_source_markers(
     answer: str,
+    valid_source_ids=None,
 ) -> str:
     """
-    Удаляет технические SOURCE-маркеры
-    перед отправкой пользователю.
+    Удаляет технические SOURCE-маркеры.
 
-    Например:
-
-    Было:
-    Требование установлено пунктом 51.
-    [SOURCE:NPA_175_P51]
-
-    Станет:
-    Требование установлено пунктом 51.
+    Также удаляет сырые внутренние SOURCE_ID,
+    но только если они подтверждены RAG.
     """
 
     if not answer:
         return ""
 
+    # --------------------------------------------------------
+    # Правильные SOURCE markers
+    # --------------------------------------------------------
+
     answer = re.sub(
         r"\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]",
         "",
+        answer,
+    )
+
+    # --------------------------------------------------------
+    # Сырые валидированные SOURCE_ID
+    # --------------------------------------------------------
+
+    if valid_source_ids:
+
+        valid_ids = sorted(
+            {
+                str(source_id).strip()
+                for source_id in valid_source_ids
+                if source_id
+            },
+            key=len,
+            reverse=True,
+        )
+
+        for source_id in valid_ids:
+
+            answer = re.sub(
+                rf"(?<![A-Za-zА-Яа-яЁё0-9_])"
+                rf"{re.escape(source_id)}"
+                rf"(?![A-Za-zА-Яа-яЁё0-9_])",
+                "",
+                answer,
+            )
+
+    # --------------------------------------------------------
+    # Очистка после удаления ID
+    # --------------------------------------------------------
+
+    answer = re.sub(
+        r"[ \t]+([,.;:])",
+        r"\1",
+        answer,
+    )
+
+    answer = re.sub(
+        r"[ \t]+\n",
+        "\n",
+        answer,
+    )
+
+    answer = re.sub(
+        r"\n{3,}",
+        "\n\n",
         answer,
     )
 
@@ -355,14 +417,6 @@ def clean_ai_markup(
     text: str,
 ) -> str:
 
-    """
-    Removes common HTML accidentally
-    emitted by AI models.
-
-    Telegram HTML is created later by
-    to_telegram_html().
-    """
-
     text = str(
         text or ""
     )
@@ -370,29 +424,22 @@ def clean_ai_markup(
     replacements = {
 
         "<br>": "\n",
-
         "<br/>": "\n",
-
         "<br />": "\n",
 
         "</p>": "\n\n",
-
         "<p>": "",
 
         "<strong>": "",
-
         "</strong>": "",
 
         "<b>": "",
-
         "</b>": "",
 
         "<i>": "",
-
         "</i>": "",
 
         "<em>": "",
-
         "</em>": "",
     }
 
@@ -581,7 +628,6 @@ async def send_long_message(
 ):
 
     if not update.effective_message:
-
         return
 
     for chunk in split_text_smart(
@@ -681,7 +727,6 @@ async def start(
 ):
 
     if not update.effective_message:
-
         return
 
     await update.effective_message.reply_text(
@@ -703,7 +748,6 @@ async def text_handler(
 ):
 
     if not update.effective_message:
-
         return
 
     question = (
@@ -714,7 +758,6 @@ async def text_handler(
     ).strip()
 
     if not question:
-
         return
 
     try:
@@ -725,15 +768,6 @@ async def text_handler(
 
         # ----------------------------------------------------
         # RAG
-        #
-        # E5 embedding is performed ONLY inside
-        # retrieve_context().
-        #
-        # The embedding model is loaded lazily
-        # on the first RAG request.
-        #
-        # There is NO startup preload.
-        # There is NO second embedding here.
         # ----------------------------------------------------
 
         rag_result = await retrieve_context(
@@ -750,7 +784,8 @@ async def text_handler(
         ]
 
         logger.info(
-            "RAG | candidates=%s | final=%s",
+            "RAG | candidates=%s | final=%s | "
+            "domain=%s | topic=%s",
 
             rag_result[
                 "candidate_count"
@@ -759,10 +794,18 @@ async def text_handler(
             rag_result[
                 "final_count"
             ],
+
+            rag_result[
+                "legal_domain"
+            ],
+
+            rag_result[
+                "topic"
+            ],
         )
 
         # ----------------------------------------------------
-        # No relevant NPA
+        # No RAG context
         # ----------------------------------------------------
 
         if (
@@ -783,7 +826,7 @@ async def text_handler(
             return
 
         # ----------------------------------------------------
-        # Legal assistant prompt
+        # Prompt
         # ----------------------------------------------------
 
         prompt = LEGAL_ASSISTANT_PROMPT.format(
@@ -792,7 +835,7 @@ async def text_handler(
         )
 
         # ----------------------------------------------------
-        # AI answer
+        # AI
         # ----------------------------------------------------
 
         answer = await asyncio.to_thread(
@@ -800,8 +843,14 @@ async def text_handler(
             prompt,
         )
 
+        if not answer:
+
+            raise RuntimeError(
+                "AI returned empty answer."
+            )
+
         # ----------------------------------------------------
-        # Clean answer
+        # Clean
         # ----------------------------------------------------
 
         answer = clean_ai_markup(
@@ -813,25 +862,61 @@ async def text_handler(
         )
 
         # ====================================================
-        # SOURCE ID EXTRACTION
+        # VALID RAG SOURCE IDS
         # ====================================================
 
-        used_source_ids = extract_used_source_ids(
-            answer
+        valid_rag_source_ids = []
+
+        for index, chunk in enumerate(
+            chunks,
+            start=1,
+        ):
+
+            source_id = (
+                chunk.get("_source_id")
+                or build_source_id(
+                    chunk,
+                    index,
+                )
+            )
+
+            if source_id:
+
+                chunk["_source_id"] = source_id
+
+                valid_rag_source_ids.append(
+                    source_id
+                )
+
+        logger.info(
+            "LEGAL | valid RAG SOURCE_IDs=%s",
+            valid_rag_source_ids,
+        )
+
+        # ====================================================
+        # EXTRACT SOURCE IDS
+        # ====================================================
+
+        used_source_ids = (
+            extract_used_source_ids(
+                answer
+            )
         )
 
         logger.info(
-            "LEGAL | used SOURCE_IDs=%s",
+            "LEGAL | detected SOURCE_IDs=%s",
             used_source_ids,
         )
 
         # ====================================================
-        # SOURCE VALIDATION
+        # VALIDATE
         # ====================================================
 
-        used_source_refs = build_used_source_references(
-            chunks,
-            used_source_ids,
+        used_source_refs = (
+            build_used_source_references(
+                chunks,
+                used_source_ids,
+            )
         )
 
         logger.info(
@@ -840,15 +925,16 @@ async def text_handler(
         )
 
         # ====================================================
-        # REMOVE TECHNICAL SOURCE MARKERS
+        # REMOVE INTERNAL IDS
         # ====================================================
 
         answer = remove_source_markers(
-            answer
+            answer,
+            valid_source_ids=valid_rag_source_ids,
         )
 
         # ====================================================
-        # ADD ONLY USED SOURCES
+        # ADD HUMAN-READABLE SOURCES
         # ====================================================
 
         if used_source_refs:
@@ -869,6 +955,18 @@ async def text_handler(
                 "valid SOURCE_IDs. "
                 "No automatic sources will be added."
             )
+
+        # ----------------------------------------------------
+        # Final cleanup
+        # ----------------------------------------------------
+
+        answer = clean_ai_markup(
+            answer
+        )
+
+        answer = ensure_numbered_list_spacing(
+            answer
+        )
 
         # ----------------------------------------------------
         # Send
@@ -905,11 +1003,9 @@ def _extract_vision_text(
 ) -> str:
 
     if not response:
-
         return ""
 
     if not response.choices:
-
         return ""
 
     content = (
@@ -996,7 +1092,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # Highest resolution Telegram photo
+        # Highest resolution
         # ----------------------------------------------------
 
         photo = (
@@ -1012,7 +1108,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # Download into memory
+        # Download
         # ----------------------------------------------------
 
         buffer = BytesIO()
@@ -1059,7 +1155,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # User caption
+        # Caption
         # ----------------------------------------------------
 
         user_caption = (
@@ -1070,7 +1166,7 @@ async def photo_handler(
         ).strip()
 
         # ----------------------------------------------------
-        # Vision prompt
+        # Prompt
         # ----------------------------------------------------
 
         prompt = VISION_ANALYSIS_PROMPT.format(
@@ -1124,7 +1220,7 @@ async def photo_handler(
         )
 
         # ----------------------------------------------------
-        # Extract result
+        # Extract
         # ----------------------------------------------------
 
         result = _extract_vision_text(
@@ -1139,7 +1235,7 @@ async def photo_handler(
             )
 
         # ----------------------------------------------------
-        # Send result
+        # Send
         # ----------------------------------------------------
 
         await send_long_message(
@@ -1186,18 +1282,6 @@ async def error_handler(
 
 def main():
 
-    # --------------------------------------------------------
-    # IMPORTANT:
-    #
-    # Embedding model is NO LONGER preloaded here.
-    #
-    # multilingual-e5-small will be loaded lazily when
-    # retrieve_context() performs the first query embedding.
-    #
-    # This prevents Railway from loading the heavy model
-    # before Telegram polling starts.
-    # --------------------------------------------------------
-
     logger.info(
         "============================================================"
     )
@@ -1216,7 +1300,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Telegram application
+    # Telegram
     # --------------------------------------------------------
 
     application = (
@@ -1229,7 +1313,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Debug handler
+    # Debug
     # --------------------------------------------------------
 
     application.add_handler(
@@ -1279,7 +1363,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Global errors
+    # Errors
     # --------------------------------------------------------
 
     application.add_error_handler(
@@ -1291,7 +1375,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Telegram polling
+    # Polling
     # --------------------------------------------------------
 
     application.run_polling(
