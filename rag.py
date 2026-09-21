@@ -2411,7 +2411,312 @@ def _is_ppe_nonprovision_document(
 
 # ============================================================
 # ОСНОВНОЙ RAG
-# ====================================================async def retrieve_context(
+# ====================================================
+# ============================================================
+# МНОГОЗАПРОСНЫЙ ЮРИДИЧЕСКИЙ ПОИСК
+# ============================================================
+
+def detect_query_intents(user_query: str) -> List[str]:
+    query = str(user_query or "").strip().lower()
+    patterns = {
+        "refusal": [r"\bотказ\w*", r"\bне\s+приступ\w*", r"\bприостанов\w*", r"\bне\s+выполнять\b"],
+        "danger": [r"\bопасн\w*", r"\bугроз\w*", r"\bриск\w*", r"\bаварийн\w*"],
+        "employee_right": [r"\bимеет\s+ли\s+прав\w*", r"\bправ\w*.*\bработник\w*", r"\bвправ\w*", r"\bможет\s+ли\s+работник\w*"],
+        "employer_duty": [r"\bобязан\w*.*\bработодател\w*", r"\bобязанност\w*.*\bработодател\w*", r"\bнанимател\w*.*\bобязан\w*", r"\bобеспеч\w*.*\bработник\w*"],
+        "procedure": [r"\bперв\w*\s+шаг\w*", r"\bчто\s+делать\b", r"\bпорядок\w*", r"\bдейств\w*.*\bработник\w*", r"\bсначала\b"],
+        "liability": [r"\bответственност\w*", r"\bштраф\w*", r"\bнаказан\w*", r"\bвзыскан\w*"],
+    }
+    return [
+        intent for intent, pats in patterns.items()
+        if any(re.search(p, query, flags=re.IGNORECASE) for p in pats)
+    ]
+
+
+def is_cross_reference_query(intents: List[str]) -> bool:
+    return len(set(intents) & {
+        "refusal", "danger", "employee_right",
+        "employer_duty", "procedure", "liability",
+    }) >= 2
+
+
+def build_search_queries(
+    user_query: str,
+    topic: str,
+    legal_domain: str,
+    intents: List[str],
+) -> List[str]:
+
+    original = str(user_query or "").strip()
+    queries = [original]
+
+    topic_queries = {
+        "ppe_nonprovision": [
+            f"СИЗ не выданы повреждены неисправны работник безопасность труда {original}",
+            "право работника отказаться от выполнения работы при угрозе жизни и здоровью",
+            "действия работника при возникновении опасности для жизни и здоровья",
+            "обязанности нанимателя по обеспечению безопасных условий труда и средствами индивидуальной защиты",
+            "неприступление к работе или отказ от выполнения опасной работы трудовое законодательство",
+        ],
+        "accident_investigation": [
+            f"несчастный случай расследование {original}",
+            "порядок расследования несчастного случая на производстве права потерпевшего",
+            "акт Н-1 утверждение вручение потерпевшему родственникам",
+            "обязанности нанимателя после окончания расследования несчастного случая",
+        ],
+        "workplace_attestation": [
+            f"аттестация рабочих мест условия труда {original}",
+            "основания проведения аттестации рабочих мест по условиям труда",
+            "результаты аттестации рабочие места вредные условия труда дополнительные отпуска",
+        ],
+        "medical_examinations": [
+            f"обязательные медицинские осмотры работников {original}",
+            "кто обязан организовать и оплачивать медицинские осмотры работников",
+            "предварительные периодические медицинские осмотры порядок направления работников",
+        ],
+        "occupational_training": [
+            f"стажировка допуск к самостоятельной работе {original}",
+            "минимальная продолжительность стажировки по охране труда",
+            "стажировка рабочие дни рабочие смены повышенная опасность проверка знаний",
+        ],
+    }
+
+    queries.extend(topic_queries.get(topic, []))
+
+    if "employee_right" in intents:
+        queries.append(f"право работника охрана труда безопасные условия труда {original}")
+    if "employer_duty" in intents:
+        queries.append(f"обязанность нанимателя обеспечить безопасные условия труда {original}")
+    if "danger" in intents:
+        queries.append(f"угроза жизни и здоровью работника опасность труд {original}")
+    if "procedure" in intents:
+        queries.append(f"порядок действий работника при нарушении требований охраны труда {original}")
+
+    result, seen = [], set()
+    for q in queries:
+        qn = re.sub(r"\s+", " ", q).strip().lower()
+        if qn and qn not in seen:
+            seen.add(qn)
+            result.append(q.strip())
+
+    return result[:8]
+
+
+def _merge_search_results(
+    groups: List[List[Dict[str, Any]]],
+    query_roles: List[str],
+) -> List[Dict[str, Any]]:
+
+    merged: Dict[str, Dict[str, Any]] = {}
+
+    for group_index, group in enumerate(groups):
+        role = query_roles[group_index] if group_index < len(query_roles) else "semantic"
+
+        for chunk in group:
+            document = _get_document_name(chunk)
+            point = _get_point_number(chunk)
+            content = str(chunk.get("content") or "").strip()
+            key = (
+                document.lower(),
+                point.lower(),
+                content[:300].lower(),
+            )
+            score = _semantic_score(chunk)
+
+            if key not in merged:
+                item = dict(chunk)
+                item["_best_similarity"] = score
+                item["_search_hits"] = 1
+                item["_query_roles"] = [role]
+                merged[key] = item
+                continue
+
+            item = merged[key]
+            if score > _safe_float(item.get("_best_similarity")):
+                item["_best_similarity"] = score
+                for field in ("similarity", "score", "distance"):
+                    if field in chunk:
+                        item[field] = chunk[field]
+                        break
+
+            item["_search_hits"] = int(item.get("_search_hits", 0)) + 1
+            roles = item.setdefault("_query_roles", [])
+            if role not in roles:
+                roles.append(role)
+
+    return list(merged.values())
+
+
+def _intent_relevance_score(
+    chunk: Dict[str, Any],
+    intents: List[str],
+) -> float:
+
+    if not intents:
+        return 0.0
+
+    text = " ".join([
+        str(chunk.get("doc_name") or chunk.get("document") or ""),
+        str(chunk.get("content") or chunk.get("text") or ""),
+    ]).lower()
+
+    markers = {
+        "refusal": ["отказ", "не приступ", "приостанов", "не выполнять"],
+        "danger": ["угроз", "опасност", "жизни", "здоров", "риск"],
+        "employee_right": ["имеет право", "право работника", "вправе"],
+        "employer_duty": ["обязан", "обязанность нанимателя", "наниматель обязан", "работодатель обязан"],
+        "procedure": ["порядок", "действия работника", "немедленно сообщ", "уведом"],
+        "liability": ["ответственност", "штраф", "взыскан", "наказан"],
+    }
+
+    score = 0.0
+    for intent in intents:
+        matches = sum(1 for marker in markers.get(intent, []) if marker in text)
+        score += min(matches * 0.18, 0.35)
+
+    return min(score, 1.0)
+
+
+def _legal_relevance_score(
+    chunk: Dict[str, Any],
+    query_terms: List[str],
+    topic: str,
+    intents: List[str],
+    cross_reference: bool,
+) -> float:
+
+    semantic = _safe_float(
+        chunk.get("_best_similarity", _semantic_score(chunk))
+    )
+    keyword = _keyword_score(chunk, query_terms)
+    topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
+    intent_score = _intent_relevance_score(chunk, intents)
+    hits = int(chunk.get("_search_hits", 1))
+    repeated_bonus = min(max(hits - 1, 0) * 0.025, 0.10)
+
+    topic_weight = 0.08 if cross_reference else 0.15
+    keyword_weight = 0.17 if cross_reference else 0.15
+
+    return (
+        semantic * 0.62
+        + keyword * keyword_weight
+        + topic_score * topic_weight
+        + intent_score * 0.18
+        + repeated_bonus
+    )
+
+
+def _legal_chunk_role(
+    chunk: Dict[str, Any],
+    topic: str,
+    intents: List[str],
+) -> str:
+
+    document = str(chunk.get("doc_name") or chunk.get("document") or "").lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {content}"
+
+    if topic == "ppe_nonprovision" and (
+        "209" in document
+        or "средств индивидуальной защиты" in document
+        or "сиз" in document
+    ) and any(
+        marker in content
+        for marker in ("не выдан", "невыдач", "поврежден", "неисправн", "отказ")
+    ):
+        return "ppe_specific"
+
+    if any(x in text for x in ("имеет право", "право работника", "работник вправе", "вправе")):
+        return "employee_right"
+    if any(x in text for x in ("обязанность нанимателя", "наниматель обязан", "работодатель обязан", "обязан обеспечить")):
+        return "employer_duty"
+    if any(x in text for x in ("действия работника", "немедленно сообщ", "уведом", "порядок действий", "не приступать", "приостановить работу")):
+        return "procedure"
+    if any(x in text for x in ("угроз", "опасност", "жизни и здоров", "жизни или здоров")):
+        return "danger"
+    if any(x in text for x in ("ответственност", "штраф", "взыскан", "дисциплинарн")):
+        return "liability"
+
+    return "general"
+
+
+def _select_legal_diverse_chunks(
+    ranked_chunks: List[Dict[str, Any]],
+    limit: int,
+    topic: str,
+    intents: List[str],
+    cross_reference: bool,
+) -> List[Dict[str, Any]]:
+
+    if not ranked_chunks or limit <= 0:
+        return []
+
+    selected: List[Dict[str, Any]] = []
+    selected_keys = set()
+    roles_seen = set()
+    documents_seen: Dict[str, int] = {}
+
+    if cross_reference:
+        for chunk in ranked_chunks:
+            role = _legal_chunk_role(chunk, topic, intents)
+            document_key = _get_document_key(chunk)
+            point_key = _get_point_number(chunk).lower()
+            key = (
+                document_key,
+                point_key,
+                str(chunk.get("content") or "")[:200].lower(),
+            )
+
+            if key in selected_keys or role in roles_seen:
+                continue
+
+            selected.append(chunk)
+            selected_keys.add(key)
+            roles_seen.add(role)
+            documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+
+            if len(selected) >= limit:
+                return selected
+
+    max_per_document = 2 if cross_reference else 4
+
+    for chunk in ranked_chunks:
+        document_key = _get_document_key(chunk)
+        if documents_seen.get(document_key, 0) >= max_per_document:
+            continue
+
+        point_key = _get_point_number(chunk).lower()
+        key = (
+            document_key,
+            point_key,
+            str(chunk.get("content") or "")[:200].lower(),
+        )
+
+        if key in selected_keys:
+            continue
+
+        selected.append(chunk)
+        selected_keys.add(key)
+        documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+
+        if len(selected) >= limit:
+            return selected
+
+    for chunk in ranked_chunks:
+        key = (
+            _get_document_key(chunk),
+            _get_point_number(chunk).lower(),
+            str(chunk.get("content") or "")[:200].lower(),
+        )
+        if key not in selected_keys:
+            selected.append(chunk)
+            selected_keys.add(key)
+            if len(selected) >= limit:
+                break
+
+    return selected
+
+
+async def retrieve_context(
     user_query: str,
     supabase,
 ) -> Dict[str, Any]:
