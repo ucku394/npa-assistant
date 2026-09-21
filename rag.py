@@ -1244,7 +1244,7 @@ def _build_retrieved_text(
 def _search_chunks(
     supabase,
     query_vector: List[float],
-    legal_domain: str,
+    legal_domain: Optional[str],
     topic_filter: Optional[str],
 ) -> List[Dict[str, Any]]:
 
@@ -2411,9 +2411,7 @@ def _is_ppe_nonprovision_document(
 
 # ============================================================
 # ОСНОВНОЙ RAG
-# ============================================================
-
-async def retrieve_context(
+# ====================================================async def retrieve_context(
     user_query: str,
     supabase,
 ) -> Dict[str, Any]:
@@ -2431,35 +2429,77 @@ async def retrieve_context(
         user_query
     )
 
-    topic_filter = _get_topic_filter(
-        topic
-    )
-
     query_terms = _extract_query_terms(
         user_query
     )
 
+    intents = detect_query_intents(
+        user_query
+    )
+
+    cross_reference = is_cross_reference_query(
+        intents
+    )
+
+    search_queries = build_search_queries(
+        user_query,
+        topic,
+        legal_domain,
+        intents,
+    )
+
     logger.info(
-        "RAG | legal_domain=%s | topic=%s | topic_filter=%s | terms=%s",
+        "RAG | legal_domain=%s | topic=%s | intents=%s | cross_reference=%s",
         legal_domain,
         topic,
-        topic_filter,
-        query_terms,
+        intents,
+        cross_reference,
+    )
+
+    logger.info(
+        "RAG | search_queries=%s",
+        search_queries,
     )
 
     # ========================================================
-    # EMBEDDING
+    # EMBEDDINGS
+    # ========================================================
+    #
+    # Embeddings создаём последовательно: локальная модель
+    # может быть CPU/RAM-ограниченной. Сам поиск Supabase
+    # ниже выполняется параллельно.
     # ========================================================
 
-    query_vector = await asyncio.to_thread(
-        get_query_embedding,
-        user_query,
-    )
+    query_vectors: List[List[float]] = []
+    valid_queries: List[str] = []
 
-    if not query_vector:
+    for search_query in search_queries:
+
+        vector = await asyncio.to_thread(
+            get_query_embedding,
+            search_query,
+        )
+
+        if not vector:
+            logger.warning(
+                "RAG | empty embedding | query=%s",
+                search_query,
+            )
+            continue
+
+        if len(vector) != 384:
+            raise ValueError(
+                "Unexpected embedding dimension: "
+                f"{len(vector)}. Expected 384."
+            )
+
+        query_vectors.append(vector)
+        valid_queries.append(search_query)
+
+    if not query_vectors:
 
         logger.warning(
-            "RAG | embedding is empty"
+            "RAG | all embeddings are empty"
         )
 
         return {
@@ -2471,65 +2511,105 @@ async def retrieve_context(
             "source_references": [],
             "legal_domain": legal_domain,
             "topic": topic,
+            "intents": intents,
+            "cross_reference": cross_reference,
             "domain_specific_count": 0,
             "topic_specific_count": 0,
         }
 
-    if len(query_vector) != 384:
-
-        raise ValueError(
-            "Unexpected embedding dimension: "
-            f"{len(query_vector)}. Expected 384."
-        )
-
     # ========================================================
-    # PRIMARY VECTOR SEARCH
+    # MULTI-QUERY VECTOR SEARCH
     # ========================================================
-
-    candidate_chunks = await asyncio.to_thread(
-        _search_chunks,
-        supabase,
-        query_vector,
-        legal_domain,
-        topic_filter,
-    )
-
-    logger.info(
-        "RAG | primary candidates=%s",
-        len(candidate_chunks),
-    )
-
-    # ========================================================
-    # FALLBACK БЕЗ TOPIC
+    #
+    # ВАЖНО:
+    # topic_filter здесь намеренно НЕ используется.
+    #
+    # Например, вопрос про отсутствие/повреждение СИЗ может
+    # одновременно требовать:
+    #   - Правила обеспечения СИЗ;
+    #   - общую норму о праве работника;
+    #   - норму о действиях при опасности;
+    #   - обязанность нанимателя.
+    #
+    # Жёсткий topic filter способен физически удалить
+    # юридически применимую норму до rerank.
     # ========================================================
 
-    if (
-        topic_filter is not None
-        and len(candidate_chunks)
-        < RAG_MIN_CANDIDATES
-    ):
+    async def _run_search(
+        vector: List[float],
+        search_query: str,
+        remove_domain_filter: bool = False,
+    ) -> List[Dict[str, Any]]:
 
-        logger.info(
-            "RAG | topic search insufficient, "
-            "retrying without topic filter"
-        )
-
-        fallback_chunks = await asyncio.to_thread(
+        return await asyncio.to_thread(
             _search_chunks,
             supabase,
-            query_vector,
-            legal_domain,
+            vector,
+            None if remove_domain_filter else legal_domain,
             None,
         )
 
-        if len(fallback_chunks) > len(
-            candidate_chunks
-        ):
+    search_tasks = [
+        _run_search(
+            vector,
+            search_query,
+            remove_domain_filter=(
+                cross_reference and index == 0
+            ),
+        )
+        for index, (vector, search_query)
+        in enumerate(
+            zip(query_vectors, valid_queries)
+        )
+    ]
 
-            candidate_chunks = fallback_chunks
+    search_groups = await asyncio.gather(
+        *search_tasks,
+        return_exceptions=True,
+    )
+
+    clean_groups: List[List[Dict[str, Any]]] = []
+
+    for index, result in enumerate(search_groups):
+
+        if isinstance(result, Exception):
+
+            logger.warning(
+                "RAG | search failed | query=%s | error=%s",
+                valid_queries[index],
+                result,
+            )
+            clean_groups.append([])
+            continue
+
+        clean_groups.append(
+            result or []
+        )
+
+        logger.info(
+            "RAG | search[%s] candidates=%s | query=%s",
+            index,
+            len(result or []),
+            valid_queries[index],
+        )
+
+    query_roles = [
+        "main" if index == 0 else "expanded"
+        for index in range(len(clean_groups))
+    ]
+
+    candidate_chunks = _merge_search_results(
+        clean_groups,
+        query_roles,
+    )
 
     # ========================================================
     # TARGETED LEGAL SEARCH
+    # ========================================================
+    #
+    # Сохраняем существующий точечный поиск для №209, №253,
+    # №74, №175 и Н-1, но теперь он лишь добавляет кандидатов,
+    # а не определяет весь ответ.
     # ========================================================
 
     targeted_chunks = await _get_targeted_chunks(
@@ -2545,9 +2625,14 @@ async def retrieve_context(
             len(targeted_chunks),
         )
 
-        candidate_chunks = _deduplicate_chunks(
-            candidate_chunks
-            + targeted_chunks
+        targeted_merged = _merge_search_results(
+            [targeted_chunks],
+            ["targeted"],
+        )
+
+        candidate_chunks = _merge_search_results(
+            [candidate_chunks, targeted_merged],
+            ["merged", "targeted"],
         )
 
     else:
@@ -2562,7 +2647,7 @@ async def retrieve_context(
     )
 
     logger.info(
-        "RAG | total candidates after merge=%s",
+        "RAG | total candidates after multi-query merge=%s",
         candidate_count,
     )
 
@@ -2577,6 +2662,8 @@ async def retrieve_context(
             "source_references": [],
             "legal_domain": legal_domain,
             "topic": topic,
+            "intents": intents,
+            "cross_reference": cross_reference,
             "domain_specific_count": 0,
             "topic_specific_count": 0,
         }
@@ -2600,7 +2687,7 @@ async def retrieve_context(
     )
 
     logger.info(
-        "RAG | domain=%s | specialized=%s | topic=%s | topic_specific=%s",
+        "RAG | domain=%s | domain_specific=%s | topic=%s | topic_specific=%s",
         legal_domain,
         domain_specific_count,
         topic,
@@ -2608,7 +2695,7 @@ async def retrieve_context(
     )
 
     # ========================================================
-    # СПЕЦИАЛЬНАЯ ПРОВЕРКА АТТЕСТАЦИИ
+    # ДИАГНОСТИКА СПЕЦИАЛИЗИРОВАННЫХ ТЕМ
     # ========================================================
 
     if topic == "workplace_attestation":
@@ -2616,106 +2703,39 @@ async def retrieve_context(
         attestation_chunks = [
             chunk
             for chunk in candidate_chunks
-            if _is_attestation_document(
-                chunk
-            )
+            if _is_attestation_document(chunk)
         ]
 
         logger.info(
-            "RAG | workplace_attestation | "
-            "NPA_253_candidates=%s",
+            "RAG | workplace_attestation | NPA_253_candidates=%s",
             len(attestation_chunks),
         )
-
-        for chunk in attestation_chunks[:10]:
-
-            logger.info(
-                "RAG | NPA_253 | doc=%s | point=%s",
-                _get_document_name(chunk),
-                _get_point_number(chunk),
-            )
-
-    # ========================================================
-    # СПЕЦИАЛЬНАЯ ПРОВЕРКА МЕДИЦИНСКИХ ОСМОТРОВ
-    # ========================================================
 
     if topic == "medical_examinations":
 
         medical_chunks = [
             chunk
             for chunk in candidate_chunks
-            if _is_medical_exam_document(
-                chunk
-            )
+            if _is_medical_exam_document(chunk)
         ]
 
         logger.info(
-            "RAG | medical_examinations | "
-            "medical_candidates=%s",
+            "RAG | medical_examinations | medical_candidates=%s",
             len(medical_chunks),
         )
-
-        for chunk in medical_chunks[:10]:
-
-            logger.info(
-                "RAG | MEDICAL | doc=%s | point=%s",
-                _get_document_name(chunk),
-                _get_point_number(chunk),
-            )
-
-    # ========================================================
-    # СПЕЦИАЛЬНАЯ ПРОВЕРКА СИЗ
-    # ========================================================
 
     if topic == "ppe_nonprovision":
 
         ppe_chunks = [
             chunk
             for chunk in candidate_chunks
-            if _is_ppe_nonprovision_document(
-                chunk
-            )
+            if _is_ppe_nonprovision_document(chunk)
         ]
 
         logger.info(
-            "RAG | ppe_nonprovision | "
-            "NPA_209_candidates=%s",
+            "RAG | ppe_nonprovision | NPA_209_candidates=%s",
             len(ppe_chunks),
         )
-
-        for chunk in ppe_chunks[:15]:
-
-            content = str(
-                chunk.get("content")
-                or ""
-            ).lower()
-
-            problem_markers = [
-                marker
-                for marker in (
-                    "не выдан",
-                    "невыдач",
-                    "поврежден",
-                    "поврежд",
-                    "неисправн",
-                    "не обеспечен",
-                    "отказ",
-                    "не приступ",
-                    "приостанов",
-                )
-                if marker in content
-            ]
-
-            logger.info(
-                "RAG | PPE | doc=%s | point=%s | problem_markers=%s",
-                _get_document_name(chunk),
-                _get_point_number(chunk),
-                problem_markers,
-            )
-
-    # ========================================================
-    # СПЕЦИАЛЬНАЯ ПРОВЕРКА НЕСЧАСТНЫХ СЛУЧАЕВ / Н-1
-    # ========================================================
 
     if topic == "accident_investigation":
 
@@ -2726,292 +2746,67 @@ async def retrieve_context(
         ]
 
         logger.info(
-            "RAG | accident_investigation | accident_candidates=%s",
+            "RAG | accident_investigation | candidates=%s",
             len(accident_chunks),
         )
-
-        for chunk in accident_chunks[:15]:
-            logger.info(
-                "RAG | ACCIDENT | doc=%s | point=%s | marker_score=%.3f",
-                _get_document_name(chunk),
-                _get_point_number(chunk),
-                _accident_marker_score(chunk),
-            )
-
-    # ========================================================
-    # СПЕЦИАЛЬНАЯ ПРОВЕРКА СТАЖИРОВКИ
-    # ========================================================
 
     if topic == "occupational_training":
 
         training_chunks = [
             chunk
             for chunk in candidate_chunks
-            if _is_occupational_training_document(
-                chunk
-            )
+            if _is_occupational_training_document(chunk)
         ]
 
         logger.info(
-            "RAG | occupational_training | training_candidates=%s",
+            "RAG | occupational_training | candidates=%s",
             len(training_chunks),
         )
 
-        for chunk in training_chunks[:15]:
-
-            content = str(
-                chunk.get("content")
-                or ""
-            ).lower()
-
-            markers = [
-                marker
-                for marker in (
-                    "стажиров",
-                    "не менее двух",
-                    "рабочих дней",
-                    "рабочих смен",
-                    "продолжительн",
-                    "повышенной опасност",
-                    "самостоятельной работе",
-                    "проверка знаний",
-                )
-                if marker in content
-            ]
-
-            logger.info(
-                "RAG | TRAINING | doc=%s | point=%s | markers=%s",
-                _get_document_name(chunk),
-                _get_point_number(chunk),
-                markers,
-            )
-
     # ========================================================
-    # РАНЖИРОВАНИЕ
+    # ЮРИДИЧЕСКОЕ РАНЖИРОВАНИЕ
     # ========================================================
 
-    ranked_chunks = _sort_chunks(
-        candidate_chunks,
-        query_terms,
-        topic,
-    )
+    for chunk in candidate_chunks:
 
-    # Для вопросов по Н-1 после общего ранжирования
-    # дополнительно учитываем точные юридические маркеры.
-    # Это не заменяет semantic search, а исправляет ситуацию,
-    # когда ТК/КоАП семантически похожи, но не содержат ответа.
-    if topic == "accident_investigation":
-
-        for chunk in ranked_chunks:
-            marker_score = _accident_marker_score(chunk)
-            chunk["_combined_score"] = (
-                _safe_float(chunk.get("_combined_score"))
-                + marker_score * 0.35
-            )
-
-        ranked_chunks = sorted(
-            ranked_chunks,
-            key=lambda chunk: chunk.get("_combined_score", 0.0),
-            reverse=True,
+        chunk["_combined_score"] = _legal_relevance_score(
+            chunk,
+            query_terms,
+            topic,
+            intents,
+            cross_reference,
         )
 
-    # ========================================================
-    # ДЛЯ СПЕЦИАЛИЗИРОВАННЫХ ТЕМ
-    # НЕ ДАЁМ ПРОФИЛЬНОМУ НПА ПОТЕРЯТЬСЯ
-    # ========================================================
-
-    # --------------------------------------------------------
-    # АТТЕСТАЦИЯ
-    # --------------------------------------------------------
-
-    if topic == "workplace_attestation":
-
-        attestation_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if _is_attestation_document(
-                chunk
-            )
-        ]
-
-        if attestation_ranked:
-
-            required = attestation_ranked[:2]
-
-            remaining = [
-                chunk
-                for chunk in ranked_chunks
-                if chunk not in required
-            ]
-
-            ranked_chunks = (
-                required
-                + remaining
-            )
-
-            logger.info(
-                "RAG | workplace_attestation | "
-                "forced NPA_253 chunks=%s",
-                len(required),
-            )
-
-    # --------------------------------------------------------
-    # МЕДИЦИНСКИЕ ОСМОТРЫ
-    # --------------------------------------------------------
-
-    if topic == "medical_examinations":
-
-        medical_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if _is_medical_exam_document(
-                chunk
-            )
-        ]
-
-        if medical_ranked:
-
-            # Для вопроса о медосмотрах минимум
-            # три фрагмента профильного НПА №74
-            # получают приоритет.
-            required = medical_ranked[:3]
-
-            remaining = [
-                chunk
-                for chunk in ranked_chunks
-                if chunk not in required
-            ]
-
-            ranked_chunks = (
-                required
-                + remaining
-            )
-
-            logger.info(
-                "RAG | medical_examinations | "
-                "forced medical chunks=%s",
-                len(required),
-            )
-
-    # --------------------------------------------------------
-    # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ
-    # --------------------------------------------------------
-
-    if topic == "ppe_nonprovision":
-
-        ppe_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if _is_ppe_nonprovision_document(
-                chunk
-            )
-        ]
-
-        if ppe_ranked:
-
-            # Минимум три фрагмента профильного
-            # документа по СИЗ получают приоритет.
-            #
-            # Это особенно важно для вопросов,
-            # где общий embedding поднимает пункты
-            # о выдаче СИЗ, но пропускает норму
-            # о действиях работника.
-            required = ppe_ranked[:3]
-
-            remaining = [
-                chunk
-                for chunk in ranked_chunks
-                if chunk not in required
-            ]
-
-            ranked_chunks = (
-                required
-                + remaining
-            )
-
-            logger.info(
-                "RAG | ppe_nonprovision | "
-                "forced NPA_209 chunks=%s",
-                len(required),
-            )
-
-    # --------------------------------------------------------
-    # НЕСЧАСТНЫЕ СЛУЧАИ / Н-1
-    # --------------------------------------------------------
-
-    if topic == "accident_investigation":
-
-        accident_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if _is_accident_investigation_document(chunk)
-        ]
-
-        if accident_ranked:
-
-            # Для точечного вопроса по акту Н-1 сначала даём
-            # профильные фрагменты, содержащие сам Н-1/нормы
-            # о расследовании и вручении акта.
-            required = accident_ranked[:3]
-
-            remaining = [
-                chunk
-                for chunk in ranked_chunks
-                if chunk not in required
-            ]
-
-            ranked_chunks = required + remaining
-
-            logger.info(
-                "RAG | accident_investigation | forced accident chunks=%s",
-                len(required),
-            )
-
-    # --------------------------------------------------------
-    # СТАЖИРОВКА / ИНСТРУКЦИЯ №175
-    # --------------------------------------------------------
-
-    if topic == "occupational_training":
-
-        training_ranked = [
-            chunk
-            for chunk in ranked_chunks
-            if _is_occupational_training_document(
-                chunk
-            )
-        ]
-
-        if training_ranked:
-
-            # Передаём модели несколько профильных пунктов:
-            # например, пункт о необходимости стажировки и
-            # отдельный пункт о минимальной продолжительности.
-            required = training_ranked[:3]
-
-            remaining = [
-                chunk
-                for chunk in ranked_chunks
-                if chunk not in required
-            ]
-
-            ranked_chunks = (
-                required
-                + remaining
-            )
-
-            logger.info(
-                "RAG | occupational_training | forced training chunks=%s",
-                len(required),
-            )
+    ranked_chunks = sorted(
+        candidate_chunks,
+        key=lambda chunk: chunk.get(
+            "_combined_score",
+            0.0,
+        ),
+        reverse=True,
+    )
 
     # ========================================================
-    # DIVERSIFICATION
+    # ФИНАЛЬНЫЙ КОНТЕКСТ
+    # ========================================================
+    #
+    # Для сложных вопросов увеличиваем окно с 5 до 7 фрагментов.
+    # Это даёт модели шанс увидеть и специальную норму, и общую
+    # норму о праве/обязанности/опасности.
     # ========================================================
 
-    final_chunks = _diversify_chunks(
+    final_limit = (
+        max(RAG_FINAL_COUNT, 7)
+        if cross_reference
+        else RAG_FINAL_COUNT
+    )
+
+    final_chunks = _select_legal_diverse_chunks(
         ranked_chunks,
-        RAG_FINAL_COUNT,
-        max_per_document=4,
+        final_limit,
+        topic,
+        intents,
+        cross_reference,
     )
 
     # ========================================================
@@ -3041,14 +2836,11 @@ async def retrieve_context(
         )
 
         if point:
-
             reference = (
                 f"{document_name} — "
                 f"пункт/статья {point}"
             )
-
         else:
-
             reference = document_name
 
         source_references.append(
@@ -3059,17 +2851,27 @@ async def retrieve_context(
         )
 
         logger.info(
-            "RAG | TOP %s | "
-            "domain=%s | "
-            "topic=%s | "
-            "source=%s | "
-            "semantic=%.4f | "
-            "combined=%.4f",
+            "RAG | TOP %s | role=%s | "
+            "domain=%s | topic=%s | source=%s | "
+            "semantic=%.4f | best_similarity=%.4f | "
+            "hits=%s | combined=%.4f",
             index,
+            _legal_chunk_role(
+                chunk,
+                topic,
+                intents,
+            ),
             chunk.get("legal_domain"),
             chunk.get("topic"),
             source_id,
             _semantic_score(chunk),
+            _safe_float(
+                chunk.get(
+                    "_best_similarity",
+                    _semantic_score(chunk),
+                )
+            ),
+            chunk.get("_search_hits", 1),
             chunk.get(
                 "_combined_score",
                 0.0,
@@ -3100,9 +2902,12 @@ async def retrieve_context(
         "source_references": source_references,
         "legal_domain": legal_domain,
         "topic": topic,
+        "intents": intents,
+        "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
     }
+
 
 
 # ============================================================
