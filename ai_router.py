@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import time
 from typing import Optional
@@ -20,6 +21,13 @@ GEMINI_COOLDOWN_SECONDS = 1800
 OPENROUTER_RETRY_COOLDOWN_SECONDS = 60
 AI_MAX_OUTPUT_TOKENS = 3000
 
+# Третий OpenRouter fallback.
+# Можно переопределить через переменную окружения.
+OPENROUTER_SECOND_FALLBACK_MODEL = os.getenv(
+    "OPENROUTER_SECOND_FALLBACK_MODEL",
+    "google/gemma-4-26b-a4b-it:free",
+).strip()
+
 _gemini_disabled_until = 0.0
 _openrouter_disabled_until = 0.0
 
@@ -29,7 +37,10 @@ if GEMINI_API_KEY:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         logger.info("AI | Gemini client initialized")
     except Exception as e:
-        logger.exception("AI | Failed to initialize Gemini: %s", e)
+        logger.exception(
+            "AI | Failed to initialize Gemini: %s",
+            e,
+        )
 
 openrouter_client = None
 if OPENROUTER_API_KEY:
@@ -44,7 +55,10 @@ if OPENROUTER_API_KEY:
         )
         logger.info("AI | OpenRouter client initialized")
     except Exception as e:
-        logger.exception("AI | Failed to initialize OpenRouter: %s", e)
+        logger.exception(
+            "AI | Failed to initialize OpenRouter: %s",
+            e,
+        )
 
 
 # ============================================================
@@ -104,7 +118,7 @@ LEGAL_SYSTEM_PROMPT = """
 - законодательство Российской Федерации;
 - законодательство ЕАЭС;
 - международные нормы;
-- локальные нормативные акты;
+- локальные нормативные правовые акты;
 - общие рекомендации.
 
 Если документ относится к другой юрисдикции, не используй его как основание
@@ -806,33 +820,67 @@ def generate_with_openrouter(prompt: str) -> str:
             f"for {remaining}s"
         )
 
+    # --------------------------------------------------------
+    # OPENROUTER MODEL CHAIN
+    # --------------------------------------------------------
+    #
+    # 1. OPENROUTER_MODEL
+    # 2. OPENROUTER_FALLBACK_MODEL
+    # 3. OPENROUTER_SECOND_FALLBACK_MODEL
+    #
+    # Например:
+    #
+    # Nemotron 3 Ultra
+    #      ↓
+    # Gemma 4 31B
+    #      ↓
+    # Gemma 4 26B A4B
+    #
+    # Если переменная третьей модели не задана,
+    # автоматически используется Gemma 4 26B A4B Free.
+    # --------------------------------------------------------
+
     models = []
 
-    if OPENROUTER_MODEL:
-        models.append(OPENROUTER_MODEL)
-
-    if (
-        OPENROUTER_FALLBACK_MODEL
-        and OPENROUTER_FALLBACK_MODEL
-        not in models
+    for model in (
+        OPENROUTER_MODEL,
+        OPENROUTER_FALLBACK_MODEL,
+        OPENROUTER_SECOND_FALLBACK_MODEL,
     ):
-        models.append(
-            OPENROUTER_FALLBACK_MODEL
-        )
+        if model and model not in models:
+            models.append(model)
 
     if not models:
         raise RuntimeError(
             "No OpenRouter models configured"
         )
 
+    logger.info(
+        "AI | OpenRouter model chain=%s",
+        models,
+    )
+
     last_error = None
 
     for model in models:
         try:
-            return _openrouter_request(
+            logger.info(
+                "AI | OpenRouter trying model=%s",
+                model,
+            )
+
+            result = _openrouter_request(
                 prompt,
                 model,
             )
+
+            logger.info(
+                "AI | OpenRouter success | model=%s | chars=%s",
+                model,
+                len(result),
+            )
+
+            return result
 
         except Exception as e:
             last_error = e
@@ -846,6 +894,12 @@ def generate_with_openrouter(prompt: str) -> str:
     _openrouter_disabled_until = (
         time.time()
         + OPENROUTER_RETRY_COOLDOWN_SECONDS
+    )
+
+    logger.warning(
+        "AI | All OpenRouter models failed | "
+        "cooldown=%ss",
+        OPENROUTER_RETRY_COOLDOWN_SECONDS,
     )
 
     raise RuntimeError(
