@@ -168,16 +168,67 @@ def detect_topic(user_query: str) -> str:
     """
     Определяет специализированную тему запроса.
 
-    Важно:
-    medical_examinations используется как внутренняя тема RAG.
-    Она не требует наличия такого значения в поле topic БД,
-    поскольку для неё topic_filter отключён.
+    Внутренние темы RAG:
+
+    medical_examinations
+    workplace_attestation
+    accident_investigation
+    ppe_nonprovision
+
+    Для medical_examinations и ppe_nonprovision
+    topic_filter БД отключён, поскольку эти темы могут
+    отсутствовать в существующем поле topic.
     """
 
     query = str(user_query or "").strip().lower()
 
     if not query:
         return "general"
+
+    # --------------------------------------------------------
+    # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ ОТ РАБОТЫ
+    # --------------------------------------------------------
+
+    ppe_nonprovision_patterns = [
+        r"\bсиз\b.*\bне\s+выдан\w*",
+        r"\bне\s+выдан\w*.*\bсиз\b",
+
+        r"\bсиз\b.*\bповрежден\w*",
+        r"\bповрежден\w*.*\bсиз\b",
+
+        r"\bсиз\b.*\bнеисправн\w*",
+        r"\bнеисправн\w*.*\bсиз\b",
+
+        r"\bне\s+обеспечен\w*.*\bсиз\b",
+        r"\bсиз\b.*\bне\s+обеспечен\w*",
+
+        r"\bбез\s+сиз\b",
+        r"\bбез\s+средств\w*\s+индивидуальн\w*\s+защит\w*",
+
+        r"\bотказ\w*.*\bработ\w*.*\bсиз\b",
+        r"\bотказ\w*.*\bвыполнен\w*.*\bработ\w*",
+        r"\bотказ\w*.*\bвыполнен\w*.*\bзадан\w*",
+
+        r"\bработник\w*.*\bотказ\w*.*\bработ\w*",
+        r"\bработник\w*.*\bне\s+может\s+приступ\w*",
+        r"\bне\s+приступ\w*.*\bработ\w*",
+        r"\bприостанов\w*.*\bработ\w*",
+
+        r"\bправ\w*.*\bотказ\w*.*\bработ\w*",
+        r"\bимеет\s+ли\s+прав\w*.*\bотказ\w*",
+
+        r"\bперв\w*\s+шаг\w*.*\bработник\w*",
+        r"\bдейств\w*.*\bработник\w*.*\bсиз\b",
+
+        r"\bповрежд\w*\s+средств\w*\s+индивидуальн\w*\s+защит\w*",
+        r"\bневыдач\w*.*\bсиз\b",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in ppe_nonprovision_patterns
+    ):
+        return "ppe_nonprovision"
 
     # --------------------------------------------------------
     # МЕДИЦИНСКИЕ ОСМОТРЫ
@@ -251,9 +302,9 @@ def _get_topic_filter(topic: str) -> Optional[str]:
     """
     Для general фильтр по topic отключаем.
 
-    Для medical_examinations также отключаем фильтр,
-    потому что существующие записи БД могут ещё иметь
-    topic=None/general/другое значение.
+    Для medical_examinations и ppe_nonprovision также
+    отключаем фильтр, поскольку существующие записи БД
+    могут ещё иметь topic=None/general/другое значение.
 
     Для остальных специализированных тем используем фильтр.
     """
@@ -261,6 +312,7 @@ def _get_topic_filter(topic: str) -> Optional[str]:
     if not topic or topic in (
         "general",
         "medical_examinations",
+        "ppe_nonprovision",
     ):
         return None
 
@@ -283,6 +335,42 @@ def _extract_query_terms(user_query: str) -> List[str]:
     keyword_patterns = [
 
         # ----------------------------------------------------
+        # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ
+        # ----------------------------------------------------
+
+        r"\bсиз\b",
+        r"\bсредств\w*\s+индивидуальн\w*\s+защит\w*",
+        r"\bспецодежд\w*",
+        r"\bспецобув\w*",
+        r"\bкостюм\w*",
+        r"\bперчат\w*",
+
+        r"\bне\s+выдан\w*",
+        r"\bневыдач\w*",
+        r"\bповрежден\w*",
+        r"\bповрежд\w*",
+        r"\bнеисправн\w*",
+        r"\bне\s+обеспечен\w*",
+        r"\bбез\s+сиз\b",
+        r"\bбез\s+средств\w*\s+индивидуальн\w*\s+защит\w*",
+
+        r"\bотказ\w*",
+        r"\bотказ\w*.*\bработ\w*",
+        r"\bотказ\w*.*\bвыполнен\w*",
+
+        r"\bне\s+приступ\w*",
+        r"\bприостанов\w*",
+        r"\bработник\w*",
+        r"\bдейств\w*",
+        r"\bперв\w*\s+шаг\w*",
+        r"\bправ\w*",
+
+        r"\bобеспечен\w*",
+        r"\bвыдач\w*",
+        r"\bисправн\w*",
+        r"\bзащитн\w+\s+свойств\w*",
+
+        # ----------------------------------------------------
         # МЕДИЦИНСКИЕ ОСМОТРЫ
         # ----------------------------------------------------
 
@@ -298,6 +386,7 @@ def _extract_query_terms(user_query: str) -> List[str]:
 
         # Финансирование / оплата.
         r"\bза\s+чей\s+счет\b",
+        r"\bза\s+чей\s+сч[её]т\b",
         r"\bза\s+сч[её]т\b",
         r"\bсчет\b",
         r"\bоплат\w*",
@@ -307,23 +396,14 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bсредств\w*",
 
         # ----------------------------------------------------
-        # СИЗ
+        # СИЗ — ОБЩИЕ ВОПРОСЫ
         # ----------------------------------------------------
 
-        r"\bсиз\b",
-        r"\bсредств\w*\s+индивидуальн\w*\s+защит\w*",
-        r"\bспецодежд\w*",
-        r"\bспецобув\w*",
-        r"\bкостюм\w*",
-        r"\bперчат\w*",
-        r"\bвыдач\w*",
         r"\bиспользован\w*",
         r"\bиспользовани\w*",
         r"\bбывш\w*\s+в\s+употреблен\w*",
         r"\bпериод\w*\s+использован\w*",
         r"\bсрок\w*\s+носк\w*",
-        r"\bзащитн\w+\s+свойств\w*",
-        r"\bисправн\w*",
 
         # ----------------------------------------------------
         # АТТЕСТАЦИЯ
@@ -461,10 +541,82 @@ def _topic_relevance_score(
     score = 0.0
 
     # --------------------------------------------------------
+    # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ
+    # --------------------------------------------------------
+
+    if topic == "ppe_nonprovision":
+
+        if db_topic == "ppe_nonprovision":
+            score += 1.0
+
+        # Основной профильный документ:
+        # Правила по обеспечению СИЗ №209.
+        is_npa_209 = bool(
+            re.search(
+                r"№\s*209\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"\b209\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        if is_npa_209:
+            score += 1.20
+
+        # Если название документа явно связано с СИЗ.
+        if (
+            "сиз" in document_name
+            or "средств" in document_name
+            and "индивидуальн" in document_name
+            and "защит" in document_name
+        ):
+            score += 0.70
+
+        # Общая тематическая релевантность содержимого.
+        if "сиз" in content:
+            score += 0.35
+
+        if (
+            "средств" in content
+            and "индивидуальн" in content
+            and "защит" in content
+        ):
+            score += 0.35
+
+        # Ключевые признаки именно проблемной ситуации.
+        problem_markers = [
+            "не выдан",
+            "невыдач",
+            "поврежден",
+            "поврежд",
+            "неисправн",
+            "не обеспечен",
+            "отказ",
+            "не приступ",
+            "приостанов",
+        ]
+
+        problem_matches = sum(
+            1
+            for marker in problem_markers
+            if marker in content
+        )
+
+        if problem_matches:
+            score += min(
+                problem_matches * 0.25,
+                0.75,
+            )
+
+    # --------------------------------------------------------
     # МЕДИЦИНСКИЕ ОСМОТРЫ
     # --------------------------------------------------------
 
-    if topic == "medical_examinations":
+    elif topic == "medical_examinations":
 
         if db_topic == "medical_examinations":
             score += 1.0
@@ -1097,6 +1249,96 @@ def _targeted_medical_exam_search(
 
 
 # ============================================================
+# TARGETED SEARCH — СИЗ / НЕВЫДАЧА / ОТКАЗ
+# ============================================================
+
+def _targeted_ppe_nonprovision_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный поиск по ситуациям, когда:
+
+    - СИЗ не выданы;
+    - СИЗ повреждены;
+    - СИЗ неисправны;
+    - работник не обеспечен СИЗ;
+    - работник отказывается от выполнения работы;
+    - работник не приступает к работе;
+    - работа приостанавливается.
+
+    Главная цель — подтянуть нужные пункты
+    Правил по обеспечению СИЗ №209 даже тогда,
+    когда обычный embedding ставит общие пункты
+    №209 выше релевантной нормы.
+    """
+
+    results: List[Dict[str, Any]] = []
+
+    queries = [
+        # Профильный НПА.
+        "doc_name.ilike.%209%",
+
+        # Общие упоминания СИЗ.
+        "doc_name.ilike.%СИЗ%",
+        "doc_name.ilike.%средств%индивидуальн%защит%",
+
+        # Конкретная проблемная ситуация.
+        "content.ilike.%не выдан%",
+        "content.ilike.%невыдач%",
+        "content.ilike.%поврежден%",
+        "content.ilike.%поврежд%",
+        "content.ilike.%неисправн%",
+        "content.ilike.%не обеспечен%",
+
+        # Действия / право работника.
+        "content.ilike.%отказ%",
+        "content.ilike.%не приступ%",
+        "content.ilike.%приостанов%",
+        "content.ilike.%работник%",
+    ]
+
+    for query in queries:
+
+        try:
+
+            response = (
+                supabase
+                .table("npa_chunks")
+                .select(
+                    "doc_name,"
+                    "doc_type,"
+                    "point_num,"
+                    "content,"
+                    "legal_domain,"
+                    "topic,"
+                    "source_url"
+                )
+                .eq(
+                    "legal_domain",
+                    "occupational_safety",
+                )
+                .or_(query)
+                .limit(
+                    TARGETED_SEARCH_LIMIT
+                )
+                .execute()
+            )
+
+            data = response.data or []
+
+            results.extend(data)
+
+        except Exception as exc:
+
+            logger.warning(
+                "RAG | targeted PPE nonprovision search failed: %s",
+                exc,
+            )
+
+    return _deduplicate_chunks(results)
+
+
+# ============================================================
 # TARGETED SEARCH — НЕСЧАСТНЫЕ СЛУЧАИ
 # ============================================================
 
@@ -1195,6 +1437,13 @@ async def _get_targeted_chunks(
     topic: str,
 ) -> List[Dict[str, Any]]:
 
+    if topic == "ppe_nonprovision":
+
+        return await asyncio.to_thread(
+            _targeted_ppe_nonprovision_search,
+            supabase,
+        )
+
     if topic == "medical_examinations":
 
         return await asyncio.to_thread(
@@ -1282,9 +1531,7 @@ def _combined_score(
     # keyword  = 15%
     # topic    = 15%
     #
-    # Для медицинских осмотров дополнительный
-    # topic boost позволяет профильному НПА №74
-    # обойти просто семантически похожий документ.
+    # Архитектура не меняется.
     # --------------------------------------------------------
 
     score = (
@@ -1356,8 +1603,6 @@ def _combined_score(
         if is_medical_document:
             score += 0.20
 
-        # Дополнительный бонус, если конкретный
-        # фрагмент содержит слова финансирования.
         financing_markers = [
             "за счет",
             "за счёт",
@@ -1373,6 +1618,77 @@ def _combined_score(
             for marker in financing_markers
         ):
             score += 0.15
+
+    # --------------------------------------------------------
+    # СИЛЬНЫЙ BOOST ДЛЯ НПА №209
+    # --------------------------------------------------------
+
+    if topic == "ppe_nonprovision":
+
+        document_name = _get_document_name(
+            chunk
+        ).lower()
+
+        content = str(
+            chunk.get("content")
+            or ""
+        ).lower()
+
+        is_npa_209 = bool(
+            re.search(
+                r"№\s*209\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"\b209\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        is_ppe_document = (
+            "сиз" in document_name
+            or (
+                "средств" in document_name
+                and "индивидуальн" in document_name
+                and "защит" in document_name
+            )
+        )
+
+        if is_npa_209:
+            score += 0.35
+
+        if is_ppe_document:
+            score += 0.20
+
+        # Самый важный бонус:
+        # конкретные слова проблемной ситуации
+        # должны поднимать фрагмент выше общих
+        # положений о выдаче СИЗ.
+        problem_markers = [
+            "не выдан",
+            "невыдач",
+            "поврежден",
+            "поврежд",
+            "неисправн",
+            "не обеспечен",
+            "отказ",
+            "не приступ",
+            "приостанов",
+        ]
+
+        problem_matches = sum(
+            1
+            for marker in problem_markers
+            if marker in content
+        )
+
+        if problem_matches:
+            score += min(
+                problem_matches * 0.10,
+                0.30,
+            )
 
     return score
 
@@ -1533,6 +1849,73 @@ def _is_medical_exam_document(
     return (
         is_npa_74
         or is_medical_document
+    )
+
+
+def _is_ppe_nonprovision_document(
+    chunk: Dict[str, Any],
+) -> bool:
+    """
+    Определяет, относится ли фрагмент
+    к профильному документу по обеспечению СИЗ.
+
+    Основной критерий — НПА №209.
+    """
+
+    document_name = _get_document_name(
+        chunk
+    ).lower()
+
+    content = str(
+        chunk.get("content")
+        or ""
+    ).lower()
+
+    is_npa_209 = bool(
+        re.search(
+            r"№\s*209\b",
+            document_name,
+            flags=re.IGNORECASE,
+        )
+        or re.search(
+            r"\b209\b",
+            document_name,
+            flags=re.IGNORECASE,
+        )
+    )
+
+    is_ppe_document = (
+        "сиз" in document_name
+        or (
+            "средств" in document_name
+            and "индивидуальн" in document_name
+            and "защит" in document_name
+        )
+    )
+
+    # Для фрагментов с явными признаками ситуации
+    # также допускаем профильный документ по СИЗ.
+    has_problem_context = any(
+        marker in content
+        for marker in (
+            "не выдан",
+            "невыдач",
+            "поврежден",
+            "поврежд",
+            "неисправн",
+            "не обеспечен",
+            "отказ",
+            "не приступ",
+            "приостанов",
+        )
+    )
+
+    return (
+        is_npa_209
+        or (
+            is_ppe_document
+            and has_problem_context
+        )
     )
 
 
@@ -1791,6 +2174,56 @@ async def retrieve_context(
             )
 
     # ========================================================
+    # СПЕЦИАЛЬНАЯ ПРОВЕРКА СИЗ
+    # ========================================================
+
+    if topic == "ppe_nonprovision":
+
+        ppe_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_ppe_nonprovision_document(
+                chunk
+            )
+        ]
+
+        logger.info(
+            "RAG | ppe_nonprovision | "
+            "NPA_209_candidates=%s",
+            len(ppe_chunks),
+        )
+
+        for chunk in ppe_chunks[:15]:
+
+            content = str(
+                chunk.get("content")
+                or ""
+            ).lower()
+
+            problem_markers = [
+                marker
+                for marker in (
+                    "не выдан",
+                    "невыдач",
+                    "поврежден",
+                    "поврежд",
+                    "неисправн",
+                    "не обеспечен",
+                    "отказ",
+                    "не приступ",
+                    "приостанов",
+                )
+                if marker in content
+            ]
+
+            logger.info(
+                "RAG | PPE | doc=%s | point=%s | problem_markers=%s",
+                _get_document_name(chunk),
+                _get_point_number(chunk),
+                problem_markers,
+            )
+
+    # ========================================================
     # РАНЖИРОВАНИЕ
     # ========================================================
 
@@ -1857,9 +2290,8 @@ async def retrieve_context(
         if medical_ranked:
 
             # Для вопроса о медосмотрах минимум
-            # два фрагмента профильного НПА №74
-            # должны иметь возможность попасть
-            # в итоговый контекст.
+            # три фрагмента профильного НПА №74
+            # получают приоритет.
             required = medical_ranked[:3]
 
             remaining = [
@@ -1876,6 +2308,48 @@ async def retrieve_context(
             logger.info(
                 "RAG | medical_examinations | "
                 "forced medical chunks=%s",
+                len(required),
+            )
+
+    # --------------------------------------------------------
+    # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ
+    # --------------------------------------------------------
+
+    if topic == "ppe_nonprovision":
+
+        ppe_ranked = [
+            chunk
+            for chunk in ranked_chunks
+            if _is_ppe_nonprovision_document(
+                chunk
+            )
+        ]
+
+        if ppe_ranked:
+
+            # Минимум три фрагмента профильного
+            # документа по СИЗ получают приоритет.
+            #
+            # Это особенно важно для вопросов,
+            # где общий embedding поднимает пункты
+            # о выдаче СИЗ, но пропускает норму
+            # о действиях работника.
+            required = ppe_ranked[:3]
+
+            remaining = [
+                chunk
+                for chunk in ranked_chunks
+                if chunk not in required
+            ]
+
+            ranked_chunks = (
+                required
+                + remaining
+            )
+
+            logger.info(
+                "RAG | ppe_nonprovision | "
+                "forced NPA_209 chunks=%s",
                 len(required),
             )
 
