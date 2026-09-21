@@ -167,12 +167,40 @@ def detect_legal_domain(user_query: str) -> str:
 def detect_topic(user_query: str) -> str:
     """
     Определяет специализированную тему запроса.
+
+    Важно:
+    medical_examinations используется как внутренняя тема RAG.
+    Она не требует наличия такого значения в поле topic БД,
+    поскольку для неё topic_filter отключён.
     """
 
     query = str(user_query or "").strip().lower()
 
     if not query:
         return "general"
+
+    # --------------------------------------------------------
+    # МЕДИЦИНСКИЕ ОСМОТРЫ
+    # --------------------------------------------------------
+
+    medical_exam_patterns = [
+        r"\bмедицинск\w*\s+осмотр\w*",
+        r"\bмедицинск\w*\s+освидетельствован\w*",
+        r"\bмедосмотр\w*",
+        r"\bпредварительн\w*\s+медицинск\w*",
+        r"\bпериодическ\w*\s+медицинск\w*",
+        r"\bвнеочередн\w*\s+медицинск\w*",
+        r"\bобязательн\w*\s+медицинск\w*",
+        r"\bосмотр\w*\s+при\s+поступлен\w*\s+на\s+работ\w*",
+        r"\bмедицинск\w*\s+осмотр\w*\s+работник\w*",
+        r"\bмедицинск\w*\s+осмотр\w*\s+работающ\w*",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in medical_exam_patterns
+    ):
+        return "medical_examinations"
 
     # --------------------------------------------------------
     # АТТЕСТАЦИЯ РАБОЧИХ МЕСТ
@@ -223,10 +251,17 @@ def _get_topic_filter(topic: str) -> Optional[str]:
     """
     Для general фильтр по topic отключаем.
 
-    Для специализированной темы используем фильтр.
+    Для medical_examinations также отключаем фильтр,
+    потому что существующие записи БД могут ещё иметь
+    topic=None/general/другое значение.
+
+    Для остальных специализированных тем используем фильтр.
     """
 
-    if not topic or topic == "general":
+    if not topic or topic in (
+        "general",
+        "medical_examinations",
+    ):
         return None
 
     return topic
@@ -247,7 +282,34 @@ def _extract_query_terms(user_query: str) -> List[str]:
 
     keyword_patterns = [
 
+        # ----------------------------------------------------
+        # МЕДИЦИНСКИЕ ОСМОТРЫ
+        # ----------------------------------------------------
+
+        r"\bмедицинск\w*\s+осмотр\w*",
+        r"\bмедицинск\w*",
+        r"\bмедосмотр\w*",
+        r"\bпредварительн\w*",
+        r"\bпериодическ\w*",
+        r"\bвнеочередн\w*",
+        r"\bобязательн\w*",
+        r"\bработник\w*",
+        r"\bработающ\w*",
+
+        # Финансирование / оплата.
+        r"\bза\s+чей\s+счет\b",
+        r"\bза\s+сч[её]т\b",
+        r"\bсчет\b",
+        r"\bоплат\w*",
+        r"\bфинанс\w*",
+        r"\bрасход\w*",
+        r"\bзатрат\w*",
+        r"\bсредств\w*",
+
+        # ----------------------------------------------------
         # СИЗ
+        # ----------------------------------------------------
+
         r"\bсиз\b",
         r"\bсредств\w*\s+индивидуальн\w*\s+защит\w*",
         r"\bспецодежд\w*",
@@ -260,10 +322,13 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bбывш\w*\s+в\s+употреблен\w*",
         r"\bпериод\w*\s+использован\w*",
         r"\bсрок\w*\s+носк\w*",
-        r"\bзащитн\w*\s+свойств\w*",
+        r"\bзащитн\w+\s+свойств\w*",
         r"\bисправн\w*",
 
+        # ----------------------------------------------------
         # АТТЕСТАЦИЯ
+        # ----------------------------------------------------
+
         r"\bаттестаци\w*",
         r"\bрабоч\w*\s+мест\w*",
         r"\bуслов\w*\s+труд\w*",
@@ -275,7 +340,10 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bвредн\w*",
         r"\bопасн\w*",
 
+        # ----------------------------------------------------
         # ПРОМЫШЛЕННАЯ БЕЗОПАСНОСТЬ
+        # ----------------------------------------------------
+
         r"\bпромышленн\w*\s+безопасност\w*",
         r"\bопасн\w*\s+производственн\w*\s+объект\w*",
         r"\bопо\b",
@@ -285,7 +353,10 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bавари\w*",
         r"\bинцидент\w*",
 
+        # ----------------------------------------------------
         # ПОЖАРНАЯ БЕЗОПАСНОСТЬ
+        # ----------------------------------------------------
+
         r"\bпожарн\w*\s+безопасност\w*",
         r"\bпожар\w*",
         r"\bогнетушител\w*",
@@ -362,9 +433,9 @@ def _topic_relevance_score(
     """
     Дополнительный score.
 
-    Особенно важен для юридических запросов,
-    где семантически похожий ТК может вытеснить
-    профильное постановление.
+    Для специализированных юридических вопросов
+    профильный нормативный документ получает преимущество
+    перед просто семантически похожим документом.
     """
 
     if not topic or topic == "general":
@@ -390,10 +461,67 @@ def _topic_relevance_score(
     score = 0.0
 
     # --------------------------------------------------------
+    # МЕДИЦИНСКИЕ ОСМОТРЫ
+    # --------------------------------------------------------
+
+    if topic == "medical_examinations":
+
+        if db_topic == "medical_examinations":
+            score += 1.0
+
+        # Основной профильный документ:
+        # Постановление №74
+        if (
+            re.search(
+                r"№\s*74\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"\b74\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        ):
+            score += 1.20
+
+        # Название документа прямо говорит
+        # об обязательных и внеочередных медосмотрах.
+        if (
+            "медицинск" in document_name
+            and "осмотр" in document_name
+        ):
+            score += 0.80
+
+        if "медицинск" in content:
+            score += 0.30
+
+        if "осмотр" in content:
+            score += 0.30
+
+        # Особый дополнительный вес для вопросов
+        # о финансировании/оплате.
+        financing_markers = [
+            "за счет",
+            "за счёт",
+            "оплата",
+            "расход",
+            "средств",
+            "финанс",
+            "затрат",
+        ]
+
+        if any(
+            marker in content
+            for marker in financing_markers
+        ):
+            score += 0.60
+
+    # --------------------------------------------------------
     # АТТЕСТАЦИЯ
     # --------------------------------------------------------
 
-    if topic == "workplace_attestation":
+    elif topic == "workplace_attestation":
 
         if db_topic == "workplace_attestation":
             score += 1.0
@@ -408,10 +536,6 @@ def _topic_relevance_score(
             score += 0.15
 
         # Постановление №253 — специальный boost.
-        #
-        # Это не означает, что любой документ №253
-        # автоматически правильный. Он только получает
-        # преимущество при теме аттестации.
         if (
             "253" in document_name
             and (
@@ -440,7 +564,7 @@ def _topic_relevance_score(
         if "несчаст" in content:
             score += 0.25
 
-    return min(score, 2.0)
+    return min(score, 2.5)
 
 
 # ============================================================
@@ -462,11 +586,6 @@ def _safe_float(
 def _normalize_identifier(
     value: Any,
 ) -> str:
-    """
-    Универсальная нормализация идентификатора.
-
-    Используется для названий документов и уже готовых SOURCE_ID.
-    """
 
     if value is None:
         return ""
@@ -497,49 +616,24 @@ def _normalize_identifier(
 def _normalize_point_identifier(
     value: Any,
 ) -> str:
-    """
-    Нормализация номера пункта/статьи для SOURCE_ID.
-
-    В БД пункт может храниться как:
-        1.
-        3.
-        5.7
-        12.1
-
-    Для SOURCE_ID необходимо получать:
-        1
-        3
-        5.7
-        12.1
-
-    Главное исправление:
-        NPA_253_P1. -> NPA_253_P1
-    """
 
     if value is None:
         return ""
 
     text = str(value).strip()
 
-    # Убираем точки/пунктуацию только в конце.
-    # Внутренние точки сохраняем:
-    # 5.7 -> 5.7
     text = re.sub(
         r"[.,;:]+$",
         "",
         text,
     )
 
-    # Пробелы внутри номера заменяем на "_".
     text = re.sub(
         r"\s+",
         "_",
         text,
     )
 
-    # Для номера пункта оставляем цифры,
-    # латиницу/кириллицу, "_" и "-".
-    # Внутреннюю "." сохраняем.
     text = re.sub(
         r"[^A-Za-zА-Яа-яЁё0-9_.-]+",
         "",
@@ -552,7 +646,6 @@ def _normalize_point_identifier(
         text,
     )
 
-    # Ещё раз гарантированно убираем точку/пунктуацию в конце.
     text = re.sub(
         r"[.,;:]+$",
         "",
@@ -565,23 +658,12 @@ def _normalize_point_identifier(
 def _normalize_source_id(
     value: Any,
 ) -> str:
-    """
-    Нормализует SOURCE_ID.
-
-    Нужна для совместимости:
-        NPA_253_P1.
-        NPA_253_P1
-        NPA_253_P1;
-        NPA_253_P1:
-    будут считаться одним SOURCE_ID.
-    """
 
     if value is None:
         return ""
 
     text = str(value).strip()
 
-    # Удаляем пунктуацию в конце.
     text = re.sub(
         r"[.,;:]+$",
         "",
@@ -731,20 +813,6 @@ def build_source_id(
 
     if point:
 
-        # ====================================================
-        # ИСПРАВЛЕНИЕ SOURCE_ID
-        # ====================================================
-        #
-        # Было:
-        #     _normalize_identifier(point)
-        #
-        # Для point="1." получалось:
-        #     "1."
-        #
-        # Теперь:
-        #     "1." -> "1"
-        #     "5.7" -> "5.7"
-        #
         normalized_point = _normalize_point_identifier(
             point
         )
@@ -905,20 +973,12 @@ def _search_chunks(
 
 
 # ============================================================
-# TARGETED SEARCH
+# TARGETED SEARCH — АТТЕСТАЦИЯ
 # ============================================================
 
 def _targeted_attestation_search(
     supabase,
 ) -> List[Dict[str, Any]]:
-    """
-    Точечный поиск нормативных фрагментов по аттестации.
-
-    Это страховка от ситуации, когда embedding-поиск
-    не поднял Постановление №253 в TOP-50.
-
-    Ищем непосредственно по содержимому/названию НПА.
-    """
 
     results: List[Dict[str, Any]] = []
 
@@ -968,6 +1028,77 @@ def _targeted_attestation_search(
 
     return _deduplicate_chunks(results)
 
+
+# ============================================================
+# TARGETED SEARCH — МЕДИЦИНСКИЕ ОСМОТРЫ
+# ============================================================
+
+def _targeted_medical_exam_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный поиск нормативных фрагментов
+    по обязательным медицинским осмотрам.
+
+    Главная цель — гарантированно подтянуть
+    Постановление №74, даже если embedding
+    поставил другой документ выше.
+    """
+
+    results: List[Dict[str, Any]] = []
+
+    queries = [
+        "doc_name.ilike.%74%",
+        "doc_name.ilike.%медицинск%",
+        "doc_name.ilike.%осмотр%",
+        "content.ilike.%медицинск%",
+        "content.ilike.%медосмотр%",
+    ]
+
+    for query in queries:
+
+        try:
+
+            response = (
+                supabase
+                .table("npa_chunks")
+                .select(
+                    "doc_name,"
+                    "doc_type,"
+                    "point_num,"
+                    "content,"
+                    "legal_domain,"
+                    "topic,"
+                    "source_url"
+                )
+                .eq(
+                    "legal_domain",
+                    "occupational_safety",
+                )
+                .or_(query)
+                .limit(
+                    TARGETED_SEARCH_LIMIT
+                )
+                .execute()
+            )
+
+            data = response.data or []
+
+            results.extend(data)
+
+        except Exception as exc:
+
+            logger.warning(
+                "RAG | targeted medical exam search failed: %s",
+                exc,
+            )
+
+    return _deduplicate_chunks(results)
+
+
+# ============================================================
+# TARGETED SEARCH — НЕСЧАСТНЫЕ СЛУЧАИ
+# ============================================================
 
 def _targeted_accident_search(
     supabase,
@@ -1064,6 +1195,13 @@ async def _get_targeted_chunks(
     topic: str,
 ) -> List[Dict[str, Any]]:
 
+    if topic == "medical_examinations":
+
+        return await asyncio.to_thread(
+            _targeted_medical_exam_search,
+            supabase,
+        )
+
     if topic == "workplace_attestation":
 
         return await asyncio.to_thread(
@@ -1144,9 +1282,9 @@ def _combined_score(
     # keyword  = 15%
     # topic    = 15%
     #
-    # Для специализированных юридических вопросов
-    # профильный документ получает дополнительное
-    # преимущество.
+    # Для медицинских осмотров дополнительный
+    # topic boost позволяет профильному НПА №74
+    # обойти просто семантически похожий документ.
     # --------------------------------------------------------
 
     score = (
@@ -1178,6 +1316,63 @@ def _combined_score(
             )
         ):
             score += 0.20
+
+    # --------------------------------------------------------
+    # СИЛЬНЫЙ BOOST ДЛЯ НПА №74
+    # --------------------------------------------------------
+
+    if topic == "medical_examinations":
+
+        document_name = _get_document_name(
+            chunk
+        ).lower()
+
+        content = str(
+            chunk.get("content")
+            or ""
+        ).lower()
+
+        is_npa_74 = bool(
+            re.search(
+                r"№\s*74\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"\b74\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        is_medical_document = (
+            "медицинск" in document_name
+            and "осмотр" in document_name
+        )
+
+        if is_npa_74:
+            score += 0.35
+
+        if is_medical_document:
+            score += 0.20
+
+        # Дополнительный бонус, если конкретный
+        # фрагмент содержит слова финансирования.
+        financing_markers = [
+            "за счет",
+            "за счёт",
+            "оплата",
+            "расход",
+            "средств",
+            "финанс",
+            "затрат",
+        ]
+
+        if any(
+            marker in content
+            for marker in financing_markers
+        ):
+            score += 0.15
 
     return score
 
@@ -1297,6 +1492,47 @@ def _is_attestation_document(
             "аттестаци" in document_name
             or "аттестаци" in content
         )
+    )
+
+
+def _is_medical_exam_document(
+    chunk: Dict[str, Any],
+) -> bool:
+    """
+    Определяет, относится ли фрагмент
+    к основному НПА по медицинским осмотрам.
+    """
+
+    document_name = _get_document_name(
+        chunk
+    ).lower()
+
+    content = str(
+        chunk.get("content")
+        or ""
+    ).lower()
+
+    is_npa_74 = bool(
+        re.search(
+            r"№\s*74\b",
+            document_name,
+            flags=re.IGNORECASE,
+        )
+        or re.search(
+            r"\b74\b",
+            document_name,
+            flags=re.IGNORECASE,
+        )
+    )
+
+    is_medical_document = (
+        "медицинск" in document_name
+        and "осмотр" in document_name
+    )
+
+    return (
+        is_npa_74
+        or is_medical_document
     )
 
 
@@ -1527,6 +1763,34 @@ async def retrieve_context(
             )
 
     # ========================================================
+    # СПЕЦИАЛЬНАЯ ПРОВЕРКА МЕДИЦИНСКИХ ОСМОТРОВ
+    # ========================================================
+
+    if topic == "medical_examinations":
+
+        medical_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_medical_exam_document(
+                chunk
+            )
+        ]
+
+        logger.info(
+            "RAG | medical_examinations | "
+            "medical_candidates=%s",
+            len(medical_chunks),
+        )
+
+        for chunk in medical_chunks[:10]:
+
+            logger.info(
+                "RAG | MEDICAL | doc=%s | point=%s",
+                _get_document_name(chunk),
+                _get_point_number(chunk),
+            )
+
+    # ========================================================
     # РАНЖИРОВАНИЕ
     # ========================================================
 
@@ -1541,6 +1805,10 @@ async def retrieve_context(
     # НЕ ДАЁМ ПРОФИЛЬНОМУ НПА ПОТЕРЯТЬСЯ
     # ========================================================
 
+    # --------------------------------------------------------
+    # АТТЕСТАЦИЯ
+    # --------------------------------------------------------
+
     if topic == "workplace_attestation":
 
         attestation_ranked = [
@@ -1551,9 +1819,6 @@ async def retrieve_context(
             )
         ]
 
-        # Если профильный НПА найден,
-        # минимум один его фрагмент должен попасть
-        # в итоговый контекст.
         if attestation_ranked:
 
             required = attestation_ranked[:2]
@@ -1572,6 +1837,45 @@ async def retrieve_context(
             logger.info(
                 "RAG | workplace_attestation | "
                 "forced NPA_253 chunks=%s",
+                len(required),
+            )
+
+    # --------------------------------------------------------
+    # МЕДИЦИНСКИЕ ОСМОТРЫ
+    # --------------------------------------------------------
+
+    if topic == "medical_examinations":
+
+        medical_ranked = [
+            chunk
+            for chunk in ranked_chunks
+            if _is_medical_exam_document(
+                chunk
+            )
+        ]
+
+        if medical_ranked:
+
+            # Для вопроса о медосмотрах минимум
+            # два фрагмента профильного НПА №74
+            # должны иметь возможность попасть
+            # в итоговый контекст.
+            required = medical_ranked[:3]
+
+            remaining = [
+                chunk
+                for chunk in ranked_chunks
+                if chunk not in required
+            ]
+
+            ranked_chunks = (
+                required
+                + remaining
+            )
+
+            logger.info(
+                "RAG | medical_examinations | "
+                "forced medical chunks=%s",
                 len(required),
             )
 
