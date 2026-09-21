@@ -110,6 +110,22 @@ def detect_legal_domain(user_query: str) -> str:
         return "electrical_safety"
 
     occupational_patterns = [
+        # Несчастные случаи / расследование / акт Н-1.
+        # Эти маркеры нужны, даже если пользователь не произносит
+        # фразу «несчастный случай» напрямую.
+        r"\bакт\w*\s+н[-–—]?\s*1\b",
+        r"\bформа\w*\s+н[-–—]?\s*1\b",
+        r"\bн[-–—]?\s*1\b",
+        r"\bпострадавш\w*",
+        r"\bпотерпевш\w*",
+        r"\bродственник\w*",
+        r"\bвруч\w*\s+акт\w*",
+        r"\bутвержденн?\w*\s+акт\w*",
+        r"\bокончан\w*\s+расследован\w*",
+        r"\bпосле\s+окончан\w*\s+расследован\w*",
+        r"\bрасследован\w*\s+на\s+производств\w*",
+        r"\bучет\w*\s+несчастн\w*",
+
         r"\bохран\w*\s+труд\w*",
         r"\bохране\s+труда\b",
         r"\bинструктаж\w*",
@@ -280,6 +296,7 @@ def detect_topic(user_query: str) -> str:
     # --------------------------------------------------------
 
     accident_patterns = [
+        # Прямые признаки несчастного случая.
         r"\bнесчастн\w*\s+случа\w*",
         r"\bрасследован\w*\s+несчастн\w*",
         r"\bучет\w*\s+несчастн\w*",
@@ -287,6 +304,18 @@ def detect_topic(user_query: str) -> str:
         r"\bтравм\w*\s+на\s+производств\w*",
         r"\bтравм\w*\s+работник\w*",
         r"\bпроисшеств\w*\s+на\s+производств\w*",
+
+        # Сильные юридические маркеры, по которым тему
+        # можно определить без фразы «несчастный случай».
+        r"\bакт\w*\s+н[-–—]?\s*1\b",
+        r"\bформа\w*\s+н[-–—]?\s*1\b",
+        r"\bн[-–—]?\s*1\b",
+        r"\bпострадавш\w*",
+        r"\bродственник\w*",
+        r"\bвруч\w*\s+акт\w*",
+        r"\bутвержденн?\w*\s+акт\w*",
+        r"\bокончан\w*\s+расследован\w*",
+        r"\bпосле\s+окончан\w*\s+расследован\w*",
     ]
 
     if any(
@@ -313,6 +342,9 @@ def _get_topic_filter(topic: str) -> Optional[str]:
         "general",
         "medical_examinations",
         "ppe_nonprovision",
+        # Не ограничиваем RPC topic-фильтром для несчастных
+        # случаев: старые записи базы могут иметь topic=None/general.
+        "accident_investigation",
     ):
         return None
 
@@ -419,6 +451,25 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bкомисс\w*",
         r"\bвредн\w*",
         r"\bопасн\w*",
+
+        # ----------------------------------------------------
+        # НЕСЧАСТНЫЕ СЛУЧАИ / АКТ Н-1 / РАССЛЕДОВАНИЕ
+        # ----------------------------------------------------
+
+        r"\bнесчастн\w*\s+случа\w*",
+        r"\bрасследован\w*",
+        r"\bучет\w*",
+        r"\bакт\w*\s+н[-–—]?\s*1\b",
+        r"\bформа\w*\s+н[-–—]?\s*1\b",
+        r"\bн[-–—]?\s*1\b",
+        r"\bпострадавш\w*",
+        r"\bпотерпевш\w*",
+        r"\bродственник\w*",
+        r"\bвруч\w*",
+        r"\bутвержденн?\w*",
+        r"\bокончан\w*\s+расследован\w*",
+        r"\bрабоч\w*\s+дн\w*",
+        r"\bсрок\w*",
 
         # ----------------------------------------------------
         # ПРОМЫШЛЕННАЯ БЕЗОПАСНОСТЬ
@@ -710,11 +761,50 @@ def _topic_relevance_score(
         if "несчаст" in document_name:
             score += 0.80
 
+        if "расследован" in document_name:
+            score += 0.45
+
         if "расследован" in content:
             score += 0.35
 
         if "несчаст" in content:
             score += 0.25
+
+        # Профильные признаки формы Н-1 имеют больший вес,
+        # чем общая семантическая близость к ТК/КоАП.
+        if re.search(r"\bн[-–—]?\s*1\b", content, re.IGNORECASE):
+            score += 0.90
+
+        if "акт" in content and re.search(
+            r"\bн[-–—]?\s*1\b",
+            content,
+            re.IGNORECASE,
+        ):
+            score += 0.55
+
+        accident_markers = [
+            "пострадавш",
+            "потерпевш",
+            "родственник",
+            "вруч",
+            "утвержден",
+            "утверждён",
+            "рабочих дней",
+            "рабочие дни",
+            "окончани",
+        ]
+
+        marker_matches = sum(
+            1
+            for marker in accident_markers
+            if marker in content
+        )
+
+        if marker_matches:
+            score += min(
+                marker_matches * 0.15,
+                0.75,
+            )
 
     return min(score, 2.5)
 
@@ -1349,8 +1439,27 @@ def _targeted_accident_search(
     results: List[Dict[str, Any]] = []
 
     queries = [
+        # Название профильного НПА.
         "doc_name.ilike.%несчаст%",
         "doc_name.ilike.%расслед%",
+
+        # Форма и акт Н-1 — самые сильные маркеры.
+        "content.ilike.%Н-1%",
+        "content.ilike.%н-1%",
+        "content.ilike.%форма Н-1%",
+        "content.ilike.%форма н-1%",
+        "content.ilike.%акт Н-1%",
+        "content.ilike.%акт н-1%",
+
+        # Участники и действие, о котором спрашивают.
+        "content.ilike.%пострадавш%",
+        "content.ilike.%потерпевш%",
+        "content.ilike.%родственник%",
+        "content.ilike.%вруч%",
+        "content.ilike.%утвержден%",
+        "content.ilike.%утверждён%",
+        "content.ilike.%рабочих дней%",
+        "content.ilike.%окончани%расследован%",
         "content.ilike.%расследован%несчаст%",
     ]
 
@@ -1789,6 +1898,96 @@ def _diversify_chunks(
 # ПРОВЕРКА НУЖНОГО НПА
 # ============================================================
 
+def _is_accident_investigation_document(
+    chunk: Dict[str, Any],
+) -> bool:
+    """
+    Определяет, относится ли фрагмент к расследованию
+    и учету несчастных случаев / оформлению акта Н-1.
+
+    Намеренно не привязываемся к одному номеру НПА:
+    база может содержать действующую редакцию под другим
+    названием, а нужная норма может находиться в профильном
+    постановлении или в его отдельных пунктах.
+    """
+
+    document_name = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or "").lower()
+
+    has_n1 = bool(
+        re.search(
+            r"\bн[-–—]?\s*1\b",
+            document_name + " " + content,
+            re.IGNORECASE,
+        )
+    )
+
+    has_accident = (
+        "несчаст" in document_name
+        or "несчаст" in content
+    )
+
+    has_investigation = (
+        "расследован" in document_name
+        or "расследован" in content
+    )
+
+    has_victim = (
+        "пострадавш" in content
+        or "потерпевш" in content
+        or "родственник" in content
+    )
+
+    return (
+        has_n1
+        or (has_accident and has_investigation)
+        or (has_accident and has_victim)
+    )
+
+
+def _accident_marker_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """
+    Сильный lexical boost для точечных вопросов по Н-1.
+    """
+
+    document_name = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or "").lower()
+    text = f"{document_name} {content}"
+
+    score = 0.0
+
+    if re.search(r"\bн[-–—]?\s*1\b", text, re.IGNORECASE):
+        score += 0.80
+
+    if "акт" in text and re.search(
+        r"\bн[-–—]?\s*1\b",
+        text,
+        re.IGNORECASE,
+    ):
+        score += 0.40
+
+    markers = [
+        "пострадавш",
+        "потерпевш",
+        "родственник",
+        "вруч",
+        "утвержден",
+        "утверждён",
+        "рабочих дней",
+        "рабочие дни",
+        "окончани",
+        "расследован",
+    ]
+
+    matches = sum(1 for marker in markers if marker in text)
+
+    score += min(matches * 0.12, 0.72)
+
+    return min(score, 1.80)
+
+
 def _is_attestation_document(
     chunk: Dict[str, Any],
 ) -> bool:
@@ -2224,6 +2423,31 @@ async def retrieve_context(
             )
 
     # ========================================================
+    # СПЕЦИАЛЬНАЯ ПРОВЕРКА НЕСЧАСТНЫХ СЛУЧАЕВ / Н-1
+    # ========================================================
+
+    if topic == "accident_investigation":
+
+        accident_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_accident_investigation_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | accident_investigation | accident_candidates=%s",
+            len(accident_chunks),
+        )
+
+        for chunk in accident_chunks[:15]:
+            logger.info(
+                "RAG | ACCIDENT | doc=%s | point=%s | marker_score=%.3f",
+                _get_document_name(chunk),
+                _get_point_number(chunk),
+                _accident_marker_score(chunk),
+            )
+
+    # ========================================================
     # РАНЖИРОВАНИЕ
     # ========================================================
 
@@ -2232,6 +2456,25 @@ async def retrieve_context(
         query_terms,
         topic,
     )
+
+    # Для вопросов по Н-1 после общего ранжирования
+    # дополнительно учитываем точные юридические маркеры.
+    # Это не заменяет semantic search, а исправляет ситуацию,
+    # когда ТК/КоАП семантически похожи, но не содержат ответа.
+    if topic == "accident_investigation":
+
+        for chunk in ranked_chunks:
+            marker_score = _accident_marker_score(chunk)
+            chunk["_combined_score"] = (
+                _safe_float(chunk.get("_combined_score"))
+                + marker_score * 0.35
+            )
+
+        ranked_chunks = sorted(
+            ranked_chunks,
+            key=lambda chunk: chunk.get("_combined_score", 0.0),
+            reverse=True,
+        )
 
     # ========================================================
     # ДЛЯ СПЕЦИАЛИЗИРОВАННЫХ ТЕМ
@@ -2350,6 +2593,38 @@ async def retrieve_context(
             logger.info(
                 "RAG | ppe_nonprovision | "
                 "forced NPA_209 chunks=%s",
+                len(required),
+            )
+
+    # --------------------------------------------------------
+    # НЕСЧАСТНЫЕ СЛУЧАИ / Н-1
+    # --------------------------------------------------------
+
+    if topic == "accident_investigation":
+
+        accident_ranked = [
+            chunk
+            for chunk in ranked_chunks
+            if _is_accident_investigation_document(chunk)
+        ]
+
+        if accident_ranked:
+
+            # Для точечного вопроса по акту Н-1 сначала даём
+            # профильные фрагменты, содержащие сам Н-1/нормы
+            # о расследовании и вручении акта.
+            required = accident_ranked[:3]
+
+            remaining = [
+                chunk
+                for chunk in ranked_chunks
+                if chunk not in required
+            ]
+
+            ranked_chunks = required + remaining
+
+            logger.info(
+                "RAG | accident_investigation | forced accident chunks=%s",
                 len(required),
             )
 
