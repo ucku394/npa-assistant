@@ -189,6 +189,7 @@ def detect_topic(user_query: str) -> str:
     medical_examinations
     workplace_attestation
     accident_investigation
+    occupational_training
     ppe_nonprovision
 
     Для medical_examinations и ppe_nonprovision
@@ -292,6 +293,38 @@ def detect_topic(user_query: str) -> str:
         return "workplace_attestation"
 
     # --------------------------------------------------------
+    # СТАЖИРОВКА / ДОПУСК К САМОСТОЯТЕЛЬНОЙ РАБОТЕ
+    # --------------------------------------------------------
+    # Требования к стажировке могут быть разделены между
+    # несколькими пунктами одного НПА: отдельный пункт
+    # устанавливает необходимость стажировки, а другой —
+    # её продолжительность. Поэтому выделяем запросы
+    # о стажировке в отдельную тему и запускаем
+    # специальный текстовый поиск.
+
+    occupational_training_patterns = [
+        r"\bстажиров\w*",
+        r"\bпродолжительност\w*\s+стажиров\w*",
+        r"\bсрок\w*\s+стажиров\w*",
+        r"\bминимальн\w*.*\bстажиров\w*",
+        r"\bне\s+менее\s+двух\b.*\bрабоч\w*",
+        r"\bрабоч\w*\s+дн\w*.*\bстажиров\w*",
+        r"\bрабоч\w*\s+смен\w*.*\bстажиров\w*",
+        r"\bповышенн\w*\s+опасност\w*.*\bстажиров\w*",
+        r"\bстажиров\w*.*\bповышенн\w*\s+опасност\w*",
+        r"\bдопуск\w*\s+к\s+самостоятельн\w*\s+работ\w*.*\bстажиров\w*",
+        r"\bстажиров\w*.*\bсамостоятельн\w*\s+работ\w*",
+        r"\b№\s*175\b",
+        r"\bинструкци\w*\s*№?\s*175\b",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in occupational_training_patterns
+    ):
+        return "occupational_training"
+
+    # --------------------------------------------------------
     # НЕСЧАСТНЫЕ СЛУЧАИ
     # --------------------------------------------------------
 
@@ -342,6 +375,9 @@ def _get_topic_filter(topic: str) -> Optional[str]:
         "general",
         "medical_examinations",
         "ppe_nonprovision",
+        # Для стажировки связанные пункты одного НПА могут
+        # иметь разные/пустые значения topic.
+        "occupational_training",
         # Не ограничиваем RPC topic-фильтром для несчастных
         # случаев: старые записи базы могут иметь topic=None/general.
         "accident_investigation",
@@ -470,6 +506,22 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bокончан\w*\s+расследован\w*",
         r"\bрабоч\w*\s+дн\w*",
         r"\bсрок\w*",
+
+        # ----------------------------------------------------
+        # СТАЖИРОВКА / ДОПУСК / МИНИМАЛЬНАЯ ПРОДОЛЖИТЕЛЬНОСТЬ
+        # ----------------------------------------------------
+
+        r"\bстажиров\w*",
+        r"\bпродолжительност\w*\s+стажиров\w*",
+        r"\bсрок\w*\s+стажиров\w*",
+        r"\bне\s+менее\s+двух\b",
+        r"\bрабоч\w*\s+дн\w*",
+        r"\bрабоч\w*\s+смен\w*",
+        r"\bповышенн\w*\s+опасност\w*",
+        r"\bсамостоятельн\w*\s+работ\w*",
+        r"\bдопуск\w*",
+        r"\bпровер\w*\s+знан\w*",
+        r"\b№\s*175\b",
 
         # ----------------------------------------------------
         # ПРОМЫШЛЕННАЯ БЕЗОПАСНОСТЬ
@@ -1432,6 +1484,84 @@ def _targeted_ppe_nonprovision_search(
 # TARGETED SEARCH — НЕСЧАСТНЫЕ СЛУЧАИ
 # ============================================================
 
+def _targeted_occupational_training_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный поиск по стажировке.
+
+    Вопрос о минимальной продолжительности стажировки
+    требует связать положения одного НПА, которые могут
+    находиться в разных пунктах. Поэтому ищем одновременно
+    номер Инструкции №175, стажировку, количественную норму
+    и условия допуска к самостоятельной работе.
+    """
+
+    results: List[Dict[str, Any]] = []
+
+    queries = [
+        # Профильный НПА.
+        "doc_name.ilike.%175%",
+        "doc_name.ilike.%Инструкци%",
+
+        # Стажировка и продолжительность.
+        "content.ilike.%стажиров%",
+        "content.ilike.%продолжительн%стажиров%",
+        "content.ilike.%срок%стажиров%",
+
+        # Количественная норма.
+        "content.ilike.%не менее двух%",
+        "content.ilike.%рабочих дней%",
+        "content.ilike.%рабочих смен%",
+
+        # Связь с повышенной опасностью и допуском.
+        "content.ilike.%повышенной опасностью%",
+        "content.ilike.%допуск к самостоятельной работе%",
+        "content.ilike.%самостоятельной работе%",
+        "content.ilike.%проверка знаний%",
+    ]
+
+    for query in queries:
+
+        try:
+
+            response = (
+                supabase
+                .table("npa_chunks")
+                .select(
+                    "doc_name,"
+                    "doc_type,"
+                    "point_num,"
+                    "content,"
+                    "legal_domain,"
+                    "topic,"
+                    "source_url"
+                )
+                .eq(
+                    "legal_domain",
+                    "occupational_safety",
+                )
+                .or_(query)
+                .limit(
+                    TARGETED_SEARCH_LIMIT
+                )
+                .execute()
+            )
+
+            results.extend(
+                response.data or []
+            )
+
+        except Exception as exc:
+
+            logger.warning(
+                "RAG | targeted occupational training search failed: %s",
+                exc,
+            )
+
+    return _deduplicate_chunks(results)
+
+
 def _targeted_accident_search(
     supabase,
 ) -> List[Dict[str, Any]]:
@@ -1571,6 +1701,13 @@ async def _get_targeted_chunks(
 
         return await asyncio.to_thread(
             _targeted_accident_search,
+            supabase,
+        )
+
+    if topic == "occupational_training":
+
+        return await asyncio.to_thread(
+            _targeted_occupational_training_search,
             supabase,
         )
 
@@ -1799,6 +1936,100 @@ def _combined_score(
                 0.30,
             )
 
+    # --------------------------------------------------------
+    # СИЛЬНЫЙ BOOST ДЛЯ СТАЖИРОВКИ / ИНСТРУКЦИИ №175
+    # --------------------------------------------------------
+
+    if topic == "occupational_training":
+
+        document_name = _get_document_name(
+            chunk
+        ).lower()
+
+        content = str(
+            chunk.get("content")
+            or ""
+        ).lower()
+
+        is_npa_175 = bool(
+            re.search(
+                r"№\s*175\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"\b175\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        )
+
+        has_internship = (
+            "стажиров" in content
+        )
+
+        has_minimum_two = (
+            "не менее двух" in content
+        )
+
+        has_working_days = (
+            "рабочих дней" in content
+            or "рабочих смен" in content
+        )
+
+        has_duration = (
+            "продолжительн" in content
+            or "срок" in content
+        )
+
+        has_hazardous_work = (
+            "повышенной опасност" in content
+            or "повышенную опасност" in content
+        )
+
+        has_independent_admission = (
+            "самостоятельной работе" in content
+            or "допуск к самостоятельной" in content
+        )
+
+        has_knowledge_test = (
+            "проверка знаний" in content
+            or "проверку знаний" in content
+        )
+
+        if is_npa_175:
+            score += 0.40
+
+        if has_internship:
+            score += 0.20
+
+        if has_minimum_two:
+            score += 0.35
+
+        if has_working_days:
+            score += 0.25
+
+        if has_duration:
+            score += 0.20
+
+        if has_hazardous_work:
+            score += 0.15
+
+        if has_independent_admission:
+            score += 0.15
+
+        if has_knowledge_test:
+            score += 0.10
+
+        # Точная количественная норма имеет максимальный
+        # приоритет для вопроса о минимальной продолжительности.
+        if (
+            has_internship
+            and has_minimum_two
+            and has_working_days
+        ):
+            score += 0.25
+
     return score
 
 
@@ -1897,6 +2128,66 @@ def _diversify_chunks(
 # ============================================================
 # ПРОВЕРКА НУЖНОГО НПА
 # ============================================================
+
+def _is_occupational_training_document(
+    chunk: Dict[str, Any],
+) -> bool:
+    """
+    Определяет профильные фрагменты по стажировке.
+
+    Не требует topic metadata: в базе связанные пункты
+    одного НПА могут иметь разные значения topic.
+    """
+
+    document_name = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or "").lower()
+
+    is_npa_175 = bool(
+        re.search(
+            r"№\s*175\b",
+            document_name,
+            flags=re.IGNORECASE,
+        )
+        or (
+            "инструкци" in document_name
+            and re.search(
+                r"\b175\b",
+                document_name,
+                flags=re.IGNORECASE,
+            )
+        )
+    )
+
+    has_internship = (
+        "стажиров" in content
+    )
+
+    has_duration = (
+        "продолжительн" in content
+        or "срок" in content
+    )
+
+    has_minimum_two = (
+        "не менее двух" in content
+    )
+
+    has_working_period = (
+        "рабочих дней" in content
+        or "рабочих смен" in content
+    )
+
+    return (
+        is_npa_175
+        or (
+            has_internship
+            and (
+                has_minimum_two
+                or has_working_period
+                or has_duration
+            )
+        )
+    )
+
 
 def _is_accident_investigation_document(
     chunk: Dict[str, Any],
@@ -2448,6 +2739,54 @@ async def retrieve_context(
             )
 
     # ========================================================
+    # СПЕЦИАЛЬНАЯ ПРОВЕРКА СТАЖИРОВКИ
+    # ========================================================
+
+    if topic == "occupational_training":
+
+        training_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_occupational_training_document(
+                chunk
+            )
+        ]
+
+        logger.info(
+            "RAG | occupational_training | training_candidates=%s",
+            len(training_chunks),
+        )
+
+        for chunk in training_chunks[:15]:
+
+            content = str(
+                chunk.get("content")
+                or ""
+            ).lower()
+
+            markers = [
+                marker
+                for marker in (
+                    "стажиров",
+                    "не менее двух",
+                    "рабочих дней",
+                    "рабочих смен",
+                    "продолжительн",
+                    "повышенной опасност",
+                    "самостоятельной работе",
+                    "проверка знаний",
+                )
+                if marker in content
+            ]
+
+            logger.info(
+                "RAG | TRAINING | doc=%s | point=%s | markers=%s",
+                _get_document_name(chunk),
+                _get_point_number(chunk),
+                markers,
+            )
+
+    # ========================================================
     # РАНЖИРОВАНИЕ
     # ========================================================
 
@@ -2625,6 +2964,43 @@ async def retrieve_context(
 
             logger.info(
                 "RAG | accident_investigation | forced accident chunks=%s",
+                len(required),
+            )
+
+    # --------------------------------------------------------
+    # СТАЖИРОВКА / ИНСТРУКЦИЯ №175
+    # --------------------------------------------------------
+
+    if topic == "occupational_training":
+
+        training_ranked = [
+            chunk
+            for chunk in ranked_chunks
+            if _is_occupational_training_document(
+                chunk
+            )
+        ]
+
+        if training_ranked:
+
+            # Передаём модели несколько профильных пунктов:
+            # например, пункт о необходимости стажировки и
+            # отдельный пункт о минимальной продолжительности.
+            required = training_ranked[:3]
+
+            remaining = [
+                chunk
+                for chunk in ranked_chunks
+                if chunk not in required
+            ]
+
+            ranked_chunks = (
+                required
+                + remaining
+            )
+
+            logger.info(
+                "RAG | occupational_training | forced training chunks=%s",
                 len(required),
             )
 
