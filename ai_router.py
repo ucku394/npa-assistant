@@ -367,28 +367,60 @@ def _normalize_source_id(
     return value
 
 
-def _extract_source_ids(
-    prompt: str,
-) -> list[str]:
+def _is_valid_source_id(value: str) -> bool:
     """
-    Извлекает SOURCE_ID из переданного RAG-контекста.
+    Проверяет, что значение действительно является SOURCE_ID.
 
-    Поддерживает варианты:
+    Наш формат:
+        NPA_<идентификатор документа>_P<пункт>
 
-    SOURCE_ID: NPA_253_P1
-    SOURCE_ID=NPA_253_P1
-    SOURCE_ID NPA_253_P1
+    Примеры:
+        NPA_175_P36
+        NPA_253_P3
+        NPA_Трудовой_кодекс_Республики_Беларусь_2026_PСтатья_28
+    """
 
-    Также допускает SOURCE_ID с кириллицей,
-    цифрами, точками, дефисами и подчёркиваниями.
+    if not value:
+        return False
+
+    value = value.strip()
+
+    # Все наши SOURCE_ID должны начинаться с NPA_
+    if not value.startswith("NPA_"):
+        return False
+
+    # В SOURCE_ID обязательно должен присутствовать
+    # разделитель перед номером пункта.
+    if "_P" not in value:
+        return False
+
+    # Защита от случайных слишком коротких значений.
+    if len(value) < 7:
+        return False
+
+    return True
+
+
+def _extract_source_ids(prompt: str) -> list[str]:
+    """
+    Извлекает только реальные SOURCE_ID из RAG-контекста.
+
+    Поддерживаемые форматы:
+
+        [SOURCE_ID:NPA_175_P36]
+        [SOURCE:NPA_175_P36]
+        SOURCE_ID:NPA_175_P36
+
+    Обычные слова из prompt SOURCE_ID не считаются.
     """
 
     if not prompt:
         return []
 
     patterns = [
-        r"SOURCE_ID\s*[:=]\s*([A-Za-zА-Яа-яЁё0-9_.-]+)",
-        r"SOURCE_ID\s+([A-Za-zА-Яа-яЁё0-9_.-]+)",
+        r"\[SOURCE_ID\s*:\s*([A-Za-zА-Яа-яЁё0-9_.-]+)\]",
+        r"\[SOURCE\s*:\s*([A-Za-zА-Яа-яЁё0-9_.-]+)\]",
+        r"\bSOURCE_ID\s*:\s*([A-Za-zА-Яа-яЁё0-9_.-]+)",
     ]
 
     result: list[str] = []
@@ -407,7 +439,7 @@ def _extract_source_ids(
                 value
             )
 
-            if not value:
+            if not _is_valid_source_id(value):
                 continue
 
             if value not in result:
