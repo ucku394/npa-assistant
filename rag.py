@@ -1292,26 +1292,77 @@ def _build_retrieved_text(
 def _search_chunks(
     supabase,
     query_vector: List[float],
+    search_query: str,
     legal_domain: Optional[str],
     topic_filter: Optional[str],
 ) -> List[Dict[str, Any]]:
+    """
+    Hybrid retrieval:
+    semantic HNSW + lexical PGroonga + RRF.
 
-    response = (
-        supabase
-        .rpc(
-            "match_npa_chunks_v3",
-            {
-                "match_count": RAG_CANDIDATE_COUNT,
-                "match_threshold": 0.0,
-                "query_embedding": query_vector,
-                "legal_domain_filter": legal_domain,
-                "topic_filter": topic_filter,
-            },
+    Старые match_npa_chunks_v3 RPC остаются в БД и используются
+    как fallback, поэтому обновление поиска не ломает старую систему.
+    """
+
+    try:
+        response = (
+            supabase
+            .rpc(
+                "hybrid_search_npa_chunks",
+                {
+                    "query_embedding": query_vector,
+                    "search_query": search_query,
+                    "match_count": RAG_CANDIDATE_COUNT,
+                    "domain_filter": legal_domain,
+                    "topic_filter": topic_filter,
+                    "semantic_limit": max(RAG_CANDIDATE_COUNT, 40),
+                    "lexical_limit": max(RAG_CANDIDATE_COUNT, 40),
+                    "rrf_k": 60,
+                },
+            )
+            .execute()
         )
-        .execute()
-    )
 
-    return response.data or []
+        data = response.data or []
+
+        # Сохраняем привычное поле similarity для всего
+        # существующего legal rerank-кода.
+        for chunk in data:
+            chunk["similarity"] = _safe_float(
+                chunk.get("semantic_score"),
+                _safe_float(chunk.get("similarity")),
+            )
+            chunk["_hybrid_rrf_score"] = _safe_float(
+                chunk.get("rrf_score")
+            )
+            chunk["_hybrid_final_score"] = _safe_float(
+                chunk.get("final_score")
+            )
+
+        return data
+
+    except Exception as exc:
+        logger.warning(
+            "RAG | hybrid search failed; fallback to match_npa_chunks_v3 | error=%s",
+            exc,
+        )
+
+        response = (
+            supabase
+            .rpc(
+                "match_npa_chunks_v3",
+                {
+                    "match_count": RAG_CANDIDATE_COUNT,
+                    "match_threshold": 0.0,
+                    "query_embedding": query_vector,
+                    "legal_domain_filter": legal_domain,
+                    "topic_filter": topic_filter,
+                },
+            )
+            .execute()
+        )
+
+        return response.data or []
 
 
 # ============================================================
@@ -3326,6 +3377,7 @@ async def retrieve_context(
             _search_chunks,
             supabase,
             vector,
+            search_query,
             None if remove_domain_filter else legal_domain,
             None,
         )
