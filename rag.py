@@ -2418,18 +2418,104 @@ def _is_ppe_nonprovision_document(
 
 def detect_query_intents(user_query: str) -> List[str]:
     query = str(user_query or "").strip().lower()
+
     patterns = {
-        "refusal": [r"\bотказ\w*", r"\bне\s+приступ\w*", r"\bприостанов\w*", r"\bне\s+выполнять\b"],
-        "danger": [r"\bопасн\w*", r"\bугроз\w*", r"\bриск\w*", r"\bаварийн\w*"],
-        "employee_right": [r"\bимеет\s+ли\s+прав\w*", r"\bправ\w*.*\bработник\w*", r"\bвправ\w*", r"\bможет\s+ли\s+работник\w*"],
-        "employer_duty": [r"\bобязан\w*.*\bработодател\w*", r"\bобязанност\w*.*\bработодател\w*", r"\bнанимател\w*.*\bобязан\w*", r"\bобеспеч\w*.*\bработник\w*"],
-        "procedure": [r"\bперв\w*\s+шаг\w*", r"\bчто\s+делать\b", r"\bпорядок\w*", r"\bдейств\w*.*\bработник\w*", r"\bсначала\b"],
-        "liability": [r"\bответственност\w*", r"\bштраф\w*", r"\bнаказан\w*", r"\bвзыскан\w*"],
+        "refusal": [
+            r"\bотказ\w*",
+            r"\bне\s+приступ\w*",
+            r"\bприостанов\w*",
+            r"\bне\s+выполнять\b",
+        ],
+        "danger": [
+            r"\bопасн\w*",
+            r"\bугроз\w*",
+            r"\bриск\w*",
+            r"\bаварийн\w*",
+        ],
+        "employee_right": [
+            r"\bимеет\s+ли\s+прав\w*",
+            r"\bправ\w*.*\bработник\w*",
+            r"\bвправ\w*",
+            r"\bможет\s+ли\s+работник\w*",
+        ],
+        "employer_duty": [
+            r"\bобязанност\w*\s+нанимател\w*",
+            r"\bобязанност\w*.*\bнанимател\w*",
+            r"\bобязан\w*.*\bнанимател\w*",
+            r"\bнанимател\w*.*\bобязан\w*",
+            r"\bнанимател\w*.*\bобеспеч\w*",
+            r"\bобеспеч\w*.*\bнанимател\w*",
+            r"\bобязанност\w*\s+работодател\w*",
+            r"\bобязан\w*.*\bработодател\w*",
+            r"\bобеспеч\w*.*\bработник\w*",
+        ],
+        "procedure": [
+            r"\bперв\w*\s+шаг\w*",
+            r"\bчто\s+делать\b",
+            r"\bпорядок\w*",
+            r"\bдейств\w*.*\bработник\w*",
+            r"\bсначала\b",
+        ],
+        "liability": [
+            r"\bответственност\w*",
+            r"\bштраф\w*",
+            r"\bнаказан\w*",
+            r"\bвзыскан\w*",
+        ],
     }
+
     return [
-        intent for intent, pats in patterns.items()
-        if any(re.search(p, query, flags=re.IGNORECASE) for p in pats)
+        intent
+        for intent, pats in patterns.items()
+        if any(
+            re.search(p, query, flags=re.IGNORECASE)
+            for p in pats
+        )
     ]
+
+
+def detect_primary_intent(
+    intents: List[str],
+    user_query: str = "",
+) -> Optional[str]:
+    """
+    Выделяет основной юридический интент.
+
+    Для точечных вопросов основной интент получает
+    повышенный вес при rerank и определяет приоритет
+    финальной юридической диверсификации.
+    """
+    priority = [
+        "employer_duty",
+        "employee_right",
+        "refusal",
+        "danger",
+        "procedure",
+        "liability",
+    ]
+
+    for intent in priority:
+        if intent in intents:
+            return intent
+
+    return None
+
+
+def _is_labor_code_query(user_query: str) -> bool:
+    query = str(user_query or "").strip().lower()
+
+    return bool(
+        re.search(
+            r"\bтрудов\w*\s+кодекс\w*",
+            query,
+            flags=re.IGNORECASE,
+        )
+        or re.search(
+            r"\bтк\s*рб\b",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def is_cross_reference_query(intents: List[str]) -> bool:
@@ -2482,14 +2568,39 @@ def build_search_queries(
 
     queries.extend(topic_queries.get(topic, []))
 
-    if "employee_right" in intents:
-        queries.append(f"право работника охрана труда безопасные условия труда {original}")
+    primary_intent = detect_primary_intent(
+        intents,
+        original,
+    )
+
     if "employer_duty" in intents:
-        queries.append(f"обязанность нанимателя обеспечить безопасные условия труда {original}")
+        queries.extend([
+            "Трудовой кодекс Республики Беларусь обязанности нанимателя охрана труда",
+            "Трудовой кодекс Республики Беларусь обязанности нанимателя безопасные условия труда",
+            "обязанности нанимателя по охране труда Трудовой кодекс Республики Беларусь",
+            "наниматель обязан обеспечить безопасные условия труда Трудовой кодекс Республики Беларусь",
+        ])
+
+    if "employee_right" in intents:
+        queries.append(
+            f"право работника охрана труда безопасные условия труда {original}"
+        )
+
     if "danger" in intents:
-        queries.append(f"угроза жизни и здоровью работника опасность труд {original}")
+        queries.append(
+            f"угроза жизни и здоровью работника опасность труд {original}"
+        )
+
     if "procedure" in intents:
-        queries.append(f"порядок действий работника при нарушении требований охраны труда {original}")
+        queries.append(
+            f"порядок действий работника при нарушении требований охраны труда {original}"
+        )
+
+    if _is_labor_code_query(original):
+        queries.extend([
+            "Трудовой кодекс Республики Беларусь охрана труда работник наниматель",
+            "Трудовой кодекс Республики Беларусь безопасные условия труда",
+        ])
 
     result, seen = [], set()
     for q in queries:
@@ -2576,12 +2687,39 @@ def _intent_relevance_score(
     return min(score, 1.0)
 
 
+def _primary_intent_relevance_score(
+    chunk: Dict[str, Any],
+    primary_intent: Optional[str],
+    topic: str,
+) -> float:
+    """
+    Насколько фрагмент соответствует основному юридическому
+    интенту запроса.
+    """
+    if not primary_intent:
+        return 0.0
+
+    role = _legal_chunk_role(
+        chunk,
+        topic,
+        [primary_intent],
+        primary_intent=primary_intent,
+    )
+
+    if role == primary_intent:
+        return 1.0
+
+    return 0.0
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
     topic: str,
     intents: List[str],
     cross_reference: bool,
+    primary_intent: Optional[str] = None,
+    labor_code_query: bool = False,
 ) -> float:
 
     semantic = _safe_float(
@@ -2590,17 +2728,34 @@ def _legal_relevance_score(
     keyword = _keyword_score(chunk, query_terms)
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
     intent_score = _intent_relevance_score(chunk, intents)
+    primary_score = _primary_intent_relevance_score(
+        chunk,
+        primary_intent,
+        topic,
+    )
     hits = int(chunk.get("_search_hits", 1))
     repeated_bonus = min(max(hits - 1, 0) * 0.025, 0.10)
 
-    topic_weight = 0.08 if cross_reference else 0.15
-    keyword_weight = 0.17 if cross_reference else 0.15
+    topic_weight = 0.06 if cross_reference else 0.08
+    keyword_weight = 0.12 if cross_reference else 0.10
+
+    labor_code_bonus = 0.0
+    if labor_code_query:
+        document_name = _get_document_name(chunk).lower()
+        if (
+            "трудовой кодекс" in document_name
+            or "трудовои кодекс" in document_name
+            or "трудовой_кодекс" in document_name
+        ):
+            labor_code_bonus = 0.10
 
     return (
-        semantic * 0.62
+        semantic * 0.50
         + keyword * keyword_weight
         + topic_score * topic_weight
-        + intent_score * 0.18
+        + intent_score * 0.12
+        + primary_score * 0.20
+        + labor_code_bonus
         + repeated_bonus
     )
 
@@ -2609,10 +2764,21 @@ def _legal_chunk_role(
     chunk: Dict[str, Any],
     topic: str,
     intents: List[str],
+    primary_intent: Optional[str] = None,
 ) -> str:
 
-    document = str(chunk.get("doc_name") or chunk.get("document") or "").lower()
-    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    document = str(
+        chunk.get("doc_name")
+        or chunk.get("document")
+        or ""
+    ).lower()
+
+    content = str(
+        chunk.get("content")
+        or chunk.get("text")
+        or ""
+    ).lower()
+
     text = f"{document} {content}"
 
     if topic == "ppe_nonprovision" and (
@@ -2621,20 +2787,97 @@ def _legal_chunk_role(
         or "сиз" in document
     ) and any(
         marker in content
-        for marker in ("не выдан", "невыдач", "поврежден", "неисправн", "отказ")
+        for marker in (
+            "не выдан",
+            "невыдач",
+            "поврежден",
+            "неисправн",
+            "отказ",
+        )
     ):
         return "ppe_specific"
 
-    if any(x in text for x in ("имеет право", "право работника", "работник вправе", "вправе")):
-        return "employee_right"
-    if any(x in text for x in ("обязанность нанимателя", "наниматель обязан", "работодатель обязан", "обязан обеспечить")):
-        return "employer_duty"
-    if any(x in text for x in ("действия работника", "немедленно сообщ", "уведом", "порядок действий", "не приступать", "приостановить работу")):
-        return "procedure"
-    if any(x in text for x in ("угроз", "опасност", "жизни и здоров", "жизни или здоров")):
-        return "danger"
-    if any(x in text for x in ("ответственност", "штраф", "взыскан", "дисциплинарн")):
-        return "liability"
+    employer_markers = (
+        "обязанность нанимателя",
+        "обязанности нанимателя",
+        "наниматель обязан",
+        "наниматель обеспечивает",
+        "наниматель должен",
+        "работодатель обязан",
+        "обязан обеспечить",
+    )
+
+    employee_right_markers = (
+        "имеет право",
+        "право работника",
+        "работник вправе",
+        "вправе",
+    )
+
+    procedure_markers = (
+        "действия работника",
+        "немедленно сообщ",
+        "уведом",
+        "порядок действий",
+        "не приступать",
+        "приостановить работу",
+    )
+
+    danger_markers = (
+        "угроз",
+        "опасност",
+        "жизни и здоров",
+        "жизни или здоров",
+    )
+
+    liability_markers = (
+        "ответственност",
+        "штраф",
+        "взыскан",
+        "дисциплинарн",
+    )
+
+    # Для целевого интента проверяем соответствующую роль первой.
+    # Это не даёт статье о правах работника быть ошибочно
+    # классифицированной как ответ на вопрос об обязанностях нанимателя.
+    ordered_checks = []
+
+    if primary_intent == "employer_duty":
+        ordered_checks = [
+            ("employer_duty", employer_markers),
+            ("employee_right", employee_right_markers),
+            ("procedure", procedure_markers),
+            ("danger", danger_markers),
+            ("liability", liability_markers),
+        ]
+    elif primary_intent == "employee_right":
+        ordered_checks = [
+            ("employee_right", employee_right_markers),
+            ("employer_duty", employer_markers),
+            ("procedure", procedure_markers),
+            ("danger", danger_markers),
+            ("liability", liability_markers),
+        ]
+    elif primary_intent in ("refusal", "danger", "procedure"):
+        ordered_checks = [
+            ("procedure", procedure_markers),
+            ("danger", danger_markers),
+            ("employee_right", employee_right_markers),
+            ("employer_duty", employer_markers),
+            ("liability", liability_markers),
+        ]
+    else:
+        ordered_checks = [
+            ("employee_right", employee_right_markers),
+            ("employer_duty", employer_markers),
+            ("procedure", procedure_markers),
+            ("danger", danger_markers),
+            ("liability", liability_markers),
+        ]
+
+    for role, markers in ordered_checks:
+        if any(marker in text for marker in markers):
+            return role
 
     return "general"
 
@@ -2645,6 +2888,8 @@ def _select_legal_diverse_chunks(
     topic: str,
     intents: List[str],
     cross_reference: bool,
+    primary_intent: Optional[str] = None,
+    labor_code_query: bool = False,
 ) -> List[Dict[str, Any]]:
 
     if not ranked_chunks or limit <= 0:
@@ -2655,63 +2900,125 @@ def _select_legal_diverse_chunks(
     roles_seen = set()
     documents_seen: Dict[str, int] = {}
 
-    if cross_reference:
+    def _key(chunk: Dict[str, Any]):
+        return (
+            _get_document_key(chunk),
+            _get_point_number(chunk).lower(),
+            str(chunk.get("content") or "")[:200].lower(),
+        )
+
+    def _add(chunk: Dict[str, Any], max_per_document: int = 4) -> bool:
+        key = _key(chunk)
+        document_key = _get_document_key(chunk)
+
+        if key in selected_keys:
+            return False
+
+        if documents_seen.get(document_key, 0) >= max_per_document:
+            return False
+
+        selected.append(chunk)
+        selected_keys.add(key)
+        documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+        return True
+
+    # Для точечного вопроса сначала берём именно тот тип нормы,
+    # который пользователь запросил.
+    if primary_intent:
         for chunk in ranked_chunks:
-            role = _legal_chunk_role(chunk, topic, intents)
-            document_key = _get_document_key(chunk)
-            point_key = _get_point_number(chunk).lower()
-            key = (
-                document_key,
-                point_key,
-                str(chunk.get("content") or "")[:200].lower(),
+            role = _legal_chunk_role(
+                chunk,
+                topic,
+                intents,
+                primary_intent=primary_intent,
             )
 
-            if key in selected_keys or role in roles_seen:
+            if role != primary_intent:
                 continue
 
-            selected.append(chunk)
-            selected_keys.add(key)
-            roles_seen.add(role)
-            documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+            if labor_code_query and primary_intent == "employer_duty":
+                # Вопрос прямо про ТК РБ: приоритет отдаём
+                # обязанностям нанимателя из ТК.
+                document_name = _get_document_name(chunk).lower()
+                is_labor_code = (
+                    "трудовой кодекс" in document_name
+                    or "трудовои кодекс" in document_name
+                    or "трудовой_кодекс" in document_name
+                )
+                if not is_labor_code:
+                    continue
+
+            _add(
+                chunk,
+                max_per_document=3,
+            )
+
+            if len(selected) >= min(2, limit):
+                break
+
+    # Для ТК-запроса добавляем ещё один релевантный фрагмент ТК,
+    # даже если его роль secondary/general.
+    if labor_code_query and len(selected) < limit:
+        for chunk in ranked_chunks:
+            document_name = _get_document_name(chunk).lower()
+            is_labor_code = (
+                "трудовой кодекс" in document_name
+                or "трудовои кодекс" in document_name
+                or "трудовой_кодекс" in document_name
+            )
+
+            if not is_labor_code:
+                continue
+
+            if _add(chunk, max_per_document=3):
+                if len(selected) >= min(limit, 3):
+                    break
+
+    if cross_reference:
+        max_per_document = 2
+
+        # Для сложных вопросов сохраняем юридическое разнообразие,
+        # но не вытесняем основной интент.
+        for chunk in ranked_chunks:
+            role = _legal_chunk_role(
+                chunk,
+                topic,
+                intents,
+                primary_intent=primary_intent,
+            )
+            document_key = _get_document_key(chunk)
+
+            if role in roles_seen:
+                continue
+
+            if _add(chunk, max_per_document=max_per_document):
+                roles_seen.add(role)
 
             if len(selected) >= limit:
                 return selected
 
-    max_per_document = 2 if cross_reference else 4
+    max_per_document = 3 if primary_intent else (2 if cross_reference else 4)
 
     for chunk in ranked_chunks:
-        document_key = _get_document_key(chunk)
-        if documents_seen.get(document_key, 0) >= max_per_document:
-            continue
-
-        point_key = _get_point_number(chunk).lower()
-        key = (
-            document_key,
-            point_key,
-            str(chunk.get("content") or "")[:200].lower(),
+        _add(
+            chunk,
+            max_per_document=max_per_document,
         )
 
+        if len(selected) >= limit:
+            return selected
+
+    # Финальный fallback без ограничений по документу.
+    for chunk in ranked_chunks:
+        key = _key(chunk)
         if key in selected_keys:
             continue
 
         selected.append(chunk)
         selected_keys.add(key)
-        documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
 
         if len(selected) >= limit:
-            return selected
-
-    for chunk in ranked_chunks:
-        key = (
-            _get_document_key(chunk),
-            _get_point_number(chunk).lower(),
-            str(chunk.get("content") or "")[:200].lower(),
-        )
-        if key not in selected_keys:
-            selected.append(chunk)
-            selected_keys.add(key)
-            if len(selected) >= limit:
-                break
+            break
 
     return selected
 
@@ -2744,6 +3051,15 @@ async def retrieve_context(
 
     cross_reference = is_cross_reference_query(
         intents
+    )
+
+    primary_intent = detect_primary_intent(
+        intents,
+        user_query,
+    )
+
+    labor_code_query = _is_labor_code_query(
+        user_query
     )
 
     search_queries = build_search_queries(
@@ -3080,6 +3396,8 @@ async def retrieve_context(
             topic,
             intents,
             cross_reference,
+            primary_intent=primary_intent,
+            labor_code_query=labor_code_query,
         )
 
     ranked_chunks = sorted(
@@ -3112,6 +3430,8 @@ async def retrieve_context(
         topic,
         intents,
         cross_reference,
+        primary_intent=primary_intent,
+        labor_code_query=labor_code_query,
     )
 
     # ========================================================
@@ -3165,6 +3485,7 @@ async def retrieve_context(
                 chunk,
                 topic,
                 intents,
+                primary_intent=primary_intent,
             ),
             chunk.get("legal_domain"),
             chunk.get("topic"),
