@@ -1300,8 +1300,8 @@ def _search_chunks(
     Hybrid retrieval:
     semantic HNSW + lexical PGroonga + RRF.
 
-    Старые match_npa_chunks_v3 RPC остаются в БД и используются
-    как fallback, поэтому обновление поиска не ломает старую систему.
+    Fallback использует актуальный semantic_search_npa_chunks RPC.
+    Старый match_npa_chunks_v3 намеренно не используется.
     """
 
     try:
@@ -1343,26 +1343,37 @@ def _search_chunks(
 
     except Exception as exc:
         logger.warning(
-            "RAG | hybrid search failed; fallback to match_npa_chunks_v3 | error=%s",
+            "RAG | hybrid search failed; fallback to semantic_search_npa_chunks | error=%s",
             exc,
         )
 
+        # Fallback использует актуальный RPC. Старый v3 RPC
+        # намеренно не вызываем: он не является частью текущего
+        # hybrid-search контура и может давать 404 из-за API cache.
         response = (
             supabase
             .rpc(
-                "match_npa_chunks_v3",
+                "semantic_search_npa_chunks",
                 {
-                    "match_count": RAG_CANDIDATE_COUNT,
-                    "match_threshold": 0.0,
                     "query_embedding": query_vector,
-                    "legal_domain_filter": legal_domain,
+                    "match_count": RAG_CANDIDATE_COUNT,
+                    "domain_filter": legal_domain,
                     "topic_filter": topic_filter,
                 },
             )
             .execute()
         )
 
-        return response.data or []
+        data = response.data or []
+
+        for chunk in data:
+            chunk["similarity"] = _safe_float(
+                chunk.get("similarity")
+            )
+            chunk["_hybrid_rrf_score"] = 0.0
+            chunk["_hybrid_final_score"] = 0.0
+
+        return data
 
 
 # ============================================================
