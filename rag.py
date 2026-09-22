@@ -3754,3 +3754,124 @@ async def retrieve_context(
             "RAG | TOP %s | role=%s | "
             "domain=%s | topic=%s | source=%s | "
             "semantic=%.4f | best_similarity=%.4f | "
+            "hits=%s | combined=%.4f",
+            index,
+            _legal_chunk_role(
+                chunk,
+                topic,
+                intents,
+                primary_intent=primary_intent,
+            ),
+            chunk.get("legal_domain"),
+            chunk.get("topic"),
+            source_id,
+            _semantic_score(chunk),
+            _safe_float(
+                chunk.get(
+                    "_best_similarity",
+                    _semantic_score(chunk),
+                )
+            ),
+            chunk.get("_search_hits", 1),
+            chunk.get(
+                "_combined_score",
+                0.0,
+            ),
+        )
+
+        logger.info(
+            "RAG | TOP %s | doc=%s | point=%s",
+            index,
+            document_name,
+            point,
+        )
+
+    # ========================================================
+    # CONTEXT
+    # ========================================================
+
+    retrieved_text = _build_retrieved_text(
+        final_chunks
+    )
+
+    return {
+        "chunks": final_chunks,
+        "retrieved_text": retrieved_text,
+        "found": bool(final_chunks),
+        "candidate_count": candidate_count,
+        "final_count": len(final_chunks),
+        "source_references": source_references,
+        "legal_domain": legal_domain,
+        "topic": topic,
+        "intents": intents,
+        "cross_reference": cross_reference,
+        "domain_specific_count": domain_specific_count,
+        "topic_specific_count": topic_specific_count,
+    }
+
+
+# ============================================================
+# ИСТОЧНИКИ
+# ============================================================
+
+def get_source_references(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+
+    references = []
+    seen = set()
+
+    for chunk in chunks:
+
+        document_name = _get_document_name(
+            chunk
+        )
+
+        point = _get_point_number(
+            chunk
+        )
+
+        if point:
+
+            reference = (
+                f"{document_name} — "
+                f"пункт/статья {point}"
+            )
+
+        else:
+
+            reference = document_name
+
+        if reference not in seen:
+
+            seen.add(reference)
+
+            references.append(
+                reference
+            )
+
+    return references
+
+
+def get_source_names(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+
+    names = []
+    seen = set()
+
+    for chunk in chunks:
+
+        document_name = _get_document_name(
+            chunk
+        )
+
+        if document_name not in seen:
+
+            seen.add(document_name)
+
+            names.append(
+                document_name
+            )
+
+    return names
