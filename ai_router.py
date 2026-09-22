@@ -6,7 +6,7 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from config import (
     GEMINI_API_KEY,
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_COOLDOWN_SECONDS = 1800
 OPENROUTER_RETRY_COOLDOWN_SECONDS = 60
+OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS = 180
 AI_MAX_OUTPUT_TOKENS = 3000
 
 # Третий OpenRouter fallback.
@@ -48,6 +49,10 @@ if OPENROUTER_API_KEY:
         openrouter_client = OpenAI(
             api_key=OPENROUTER_API_KEY,
             base_url="https://openrouter.ai/api/v1",
+            # OpenAI SDK по умолчанию повторяет 429 несколько раз.
+            # Для OpenRouter это неэффективно: при rate-limit нужно
+            # сразу переходить к следующей модели цепочки.
+            max_retries=0,
             default_headers={
                 "HTTP-Referer": "https://openrouter.ai/",
                 "X-Title": "Belarus OHS Safety Assistant",
@@ -861,6 +866,7 @@ def generate_with_openrouter(prompt: str) -> str:
     )
 
     last_error = None
+    all_rate_limited = True
 
     for model in models:
         try:
@@ -882,8 +888,25 @@ def generate_with_openrouter(prompt: str) -> str:
 
             return result
 
+        except RateLimitError as e:
+            last_error = e
+
+            logger.warning(
+                "AI | OpenRouter rate limited | model=%s | "
+                "switching to next model immediately",
+                model,
+            )
+
+            # Не считаем 429 окончательной ошибкой модели:
+            # OpenRouter может вернуть rate-limit от конкретного
+            # upstream-провайдера (например, Google AI Studio).
+            # Благодаря max_retries=0 следующий model пробуется
+            # без дополнительных скрытых запросов.
+            continue
+
         except Exception as e:
             last_error = e
+            all_rate_limited = False
 
             logger.exception(
                 "AI | OpenRouter failed | model=%s | error=%s",
@@ -891,15 +914,22 @@ def generate_with_openrouter(prompt: str) -> str:
                 e,
             )
 
+    cooldown = (
+        OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS
+        if all_rate_limited
+        else OPENROUTER_RETRY_COOLDOWN_SECONDS
+    )
+
     _openrouter_disabled_until = (
         time.time()
-        + OPENROUTER_RETRY_COOLDOWN_SECONDS
+        + cooldown
     )
 
     logger.warning(
         "AI | All OpenRouter models failed | "
-        "cooldown=%ss",
-        OPENROUTER_RETRY_COOLDOWN_SECONDS,
+        "cooldown=%ss | all_rate_limited=%s",
+        cooldown,
+        all_rate_limited,
     )
 
     raise RuntimeError(
