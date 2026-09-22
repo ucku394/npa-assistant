@@ -46,7 +46,7 @@ EMBEDDING_DIM = 384
 DEVICE = "cpu"
 
 # Keep batches deliberately small for Railway RAM limits.
-BATCH_SIZE = 1
+BATCH_SIZE = 8
 
 
 # ============================================================
@@ -501,6 +501,26 @@ def get_query_embedding(
             f"query: {text}"
         ]
     )[0]
+
+
+# ============================================================
+# BATCH QUERY EMBEDDINGS
+# ============================================================
+
+def get_query_embeddings(
+    texts: Iterable[str],
+) -> List[List[float]]:
+    """Create multiple E5 query embeddings in one model.encode() call."""
+    texts = [
+        str(text).strip()
+        for text in texts
+        if str(text).strip()
+    ]
+    if not texts:
+        return []
+    return _encode(
+        [f"query: {text}" for text in texts]
+    )
 
 
 # ============================================================
