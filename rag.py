@@ -2996,6 +2996,8 @@ def _legal_relevance_score(
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
     keyword = _keyword_score(chunk, query_terms)
     exact_score = _exact_match_score(chunk, user_query, topic)
+    # Сохраняем компонент для диагностики TOP-N и последующего тюнинга.
+    chunk["_exact_score"] = exact_score
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
     intent_score = _intent_relevance_score(chunk, intents)
     primary_score = _primary_intent_relevance_score(chunk, primary_intent, topic)
@@ -3764,8 +3766,8 @@ async def retrieve_context(
         logger.info(
             "RAG | TOP %s | role=%s | "
             "domain=%s | topic=%s | source=%s | "
-            "semantic=%.4f | best_similarity=%.4f | "
-            "hits=%s | combined=%.4f",
+            "semantic=%.4f | hybrid=%.4f | exact=%.4f | "
+            "best_similarity=%.4f | hits=%s | combined=%.4f",
             index,
             _legal_chunk_role(
                 chunk,
@@ -3777,6 +3779,18 @@ async def retrieve_context(
             chunk.get("topic"),
             source_id,
             _semantic_score(chunk),
+            _safe_float(
+                chunk.get(
+                    "_hybrid_final_score",
+                    0.0,
+                )
+            ),
+            _safe_float(
+                chunk.get(
+                    "_exact_score",
+                    0.0,
+                )
+            ),
             _safe_float(
                 chunk.get(
                     "_best_similarity",
