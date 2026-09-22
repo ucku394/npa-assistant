@@ -2918,6 +2918,12 @@ def _legal_relevance_score(
     semantic = _safe_float(
         chunk.get("_best_similarity", _semantic_score(chunk))
     )
+    hybrid_score = _safe_float(
+        chunk.get("_hybrid_final_score")
+    )
+    # Hybrid score может быть равен 0 для legacy/targeted
+    # кандидатов, поэтому он является дополнительным сигналом,
+    # а не обязательным условием.
     keyword = _keyword_score(chunk, query_terms)
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
     intent_score = _intent_relevance_score(chunk, intents)
@@ -2943,7 +2949,8 @@ def _legal_relevance_score(
             labor_code_bonus = 0.10
 
     return (
-        semantic * 0.50
+        semantic * 0.42
+        + hybrid_score * 0.20
         + keyword * keyword_weight
         + topic_score * topic_weight
         + intent_score * 0.12
