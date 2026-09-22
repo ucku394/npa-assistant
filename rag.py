@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
-from embedding import get_query_embedding
+from embedding import get_query_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -2905,6 +2905,72 @@ def _primary_intent_relevance_score(
     return 0.0
 
 
+def _exact_match_score(
+    chunk: Dict[str, Any],
+    user_query: str,
+    topic: str,
+) -> float:
+    """Strong lexical/exact-match signal for legal RAG."""
+    document_name = str(chunk.get("doc_name") or chunk.get("document") or "").lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = re.sub(r"\s+", " ", f"{document_name} {content}").strip()
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if not text or not query:
+        return 0.0
+    score = 0.90 if len(query) >= 18 and query in text else 0.0
+    phrase_weights = {
+        "occupational_briefing": (
+            ("вводный инструктаж", 0.45),
+            ("специалист по охране труда", 0.45),
+            ("уполномоченное должностное лицо нанимателя", 0.45),
+            ("на которое возложены обязанности специалиста по охране труда", 0.40),
+            ("руководителем организации", 0.18),
+            ("территориальной удаленности", 0.18),
+            ("территориальной удаленностью", 0.18),
+        ),
+        "ppe_nonprovision": (
+            ("средства индивидуальной защиты", 0.40),
+            ("не выданы", 0.40),
+            ("не обеспечен средствами индивидуальной защиты", 0.40),
+            ("не приступать к работе", 0.35),
+            ("приостановить работу", 0.35),
+            ("отказаться от выполнения работы", 0.30),
+        ),
+        "medical_examinations": (
+            ("медицинский осмотр", 0.45),
+            ("обязательный медицинский осмотр", 0.40),
+            ("предварительный медицинский осмотр", 0.35),
+            ("периодический медицинский осмотр", 0.35),
+        ),
+        "workplace_attestation": (
+            ("аттестация рабочих мест", 0.50),
+            ("условия труда", 0.30),
+            ("вредные условия труда", 0.35),
+            ("полный рабочий день", 0.25),
+        ),
+        "accident_investigation": (
+            ("акт формы н-1", 0.45),
+            ("форма н-1", 0.45),
+            ("несчастный случай на производстве", 0.45),
+            ("окончания расследования", 0.30),
+            ("пострадавшему", 0.25),
+        ),
+        "occupational_training": (
+            ("стажировка", 0.40),
+            ("самостоятельной работе", 0.35),
+            ("не менее двух рабочих дней", 0.45),
+            ("повышенной опасностью", 0.30),
+            ("проверки знаний", 0.25),
+        ),
+    }
+    for phrase, weight in phrase_weights.get(topic, ()):
+        if phrase in text:
+            score += weight
+    if topic in ("occupational_briefing", "occupational_training") and "175" in document_name:
+        score += 0.08
+    return min(score, 1.80)
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -2913,31 +2979,19 @@ def _legal_relevance_score(
     cross_reference: bool,
     primary_intent: Optional[str] = None,
     labor_code_query: bool = False,
+    user_query: str = "",
 ) -> float:
-
-    semantic = _safe_float(
-        chunk.get("_best_similarity", _semantic_score(chunk))
-    )
-    hybrid_score = _safe_float(
-        chunk.get("_hybrid_final_score")
-    )
-    # Hybrid score может быть равен 0 для legacy/targeted
-    # кандидатов, поэтому он является дополнительным сигналом,
-    # а не обязательным условием.
+    semantic = _safe_float(chunk.get("_best_similarity", _semantic_score(chunk)))
+    hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
     keyword = _keyword_score(chunk, query_terms)
+    exact_score = _exact_match_score(chunk, user_query, topic)
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
     intent_score = _intent_relevance_score(chunk, intents)
-    primary_score = _primary_intent_relevance_score(
-        chunk,
-        primary_intent,
-        topic,
-    )
+    primary_score = _primary_intent_relevance_score(chunk, primary_intent, topic)
     hits = int(chunk.get("_search_hits", 1))
     repeated_bonus = min(max(hits - 1, 0) * 0.025, 0.10)
-
     topic_weight = 0.06 if cross_reference else 0.08
-    keyword_weight = 0.12 if cross_reference else 0.10
-
+    keyword_weight = 0.10 if cross_reference else 0.12
     labor_code_bonus = 0.0
     if labor_code_query:
         document_name = _get_document_name(chunk).lower()
@@ -2947,18 +3001,17 @@ def _legal_relevance_score(
             or "трудовой_кодекс" in document_name
         ):
             labor_code_bonus = 0.10
-
     return (
-        semantic * 0.42
-        + hybrid_score * 0.20
+        semantic * 0.30
+        + hybrid_score * 0.12
+        + exact_score * 0.28
         + keyword * keyword_weight
         + topic_score * topic_weight
-        + intent_score * 0.12
+        + intent_score * 0.10
         + primary_score * 0.20
         + labor_code_bonus
         + repeated_bonus
     )
-
 
 def _legal_chunk_role(
     chunk: Dict[str, Any],
@@ -3309,31 +3362,33 @@ async def retrieve_context(
     # ниже выполняется параллельно.
     # ========================================================
 
-    query_vectors: List[List[float]] = []
-    valid_queries: List[str] = []
+    query_vectors = await asyncio.to_thread(
+        get_query_embeddings,
+        search_queries,
+    )
 
-    for search_query in search_queries:
+    valid_pairs = [
+        (search_query, vector)
+        for search_query, vector in zip(search_queries, query_vectors)
+        if vector
+    ]
 
-        vector = await asyncio.to_thread(
-            get_query_embedding,
-            search_query,
-        )
+    valid_queries = [
+        search_query
+        for search_query, _ in valid_pairs
+    ]
 
-        if not vector:
-            logger.warning(
-                "RAG | empty embedding | query=%s",
-                search_query,
-            )
-            continue
+    query_vectors = [
+        vector
+        for _, vector in valid_pairs
+    ]
 
+    for vector in query_vectors:
         if len(vector) != 384:
             raise ValueError(
                 "Unexpected embedding dimension: "
                 f"{len(vector)}. Expected 384."
             )
-
-        query_vectors.append(vector)
-        valid_queries.append(search_query)
 
     if not query_vectors:
 
@@ -3617,6 +3672,7 @@ async def retrieve_context(
             cross_reference,
             primary_intent=primary_intent,
             labor_code_query=labor_code_query,
+            user_query=user_query,
         )
 
     ranked_chunks = sorted(
@@ -3698,125 +3754,3 @@ async def retrieve_context(
             "RAG | TOP %s | role=%s | "
             "domain=%s | topic=%s | source=%s | "
             "semantic=%.4f | best_similarity=%.4f | "
-            "hits=%s | combined=%.4f",
-            index,
-            _legal_chunk_role(
-                chunk,
-                topic,
-                intents,
-                primary_intent=primary_intent,
-            ),
-            chunk.get("legal_domain"),
-            chunk.get("topic"),
-            source_id,
-            _semantic_score(chunk),
-            _safe_float(
-                chunk.get(
-                    "_best_similarity",
-                    _semantic_score(chunk),
-                )
-            ),
-            chunk.get("_search_hits", 1),
-            chunk.get(
-                "_combined_score",
-                0.0,
-            ),
-        )
-
-        logger.info(
-            "RAG | TOP %s | doc=%s | point=%s",
-            index,
-            document_name,
-            point,
-        )
-
-    # ========================================================
-    # CONTEXT
-    # ========================================================
-
-    retrieved_text = _build_retrieved_text(
-        final_chunks
-    )
-
-    return {
-        "chunks": final_chunks,
-        "retrieved_text": retrieved_text,
-        "found": bool(final_chunks),
-        "candidate_count": candidate_count,
-        "final_count": len(final_chunks),
-        "source_references": source_references,
-        "legal_domain": legal_domain,
-        "topic": topic,
-        "intents": intents,
-        "cross_reference": cross_reference,
-        "domain_specific_count": domain_specific_count,
-        "topic_specific_count": topic_specific_count,
-    }
-
-
-
-# ============================================================
-# ИСТОЧНИКИ
-# ============================================================
-
-def get_source_references(
-    chunks: List[Dict[str, Any]],
-) -> List[str]:
-
-    references = []
-    seen = set()
-
-    for chunk in chunks:
-
-        document_name = _get_document_name(
-            chunk
-        )
-
-        point = _get_point_number(
-            chunk
-        )
-
-        if point:
-
-            reference = (
-                f"{document_name} — "
-                f"пункт/статья {point}"
-            )
-
-        else:
-
-            reference = document_name
-
-        if reference not in seen:
-
-            seen.add(reference)
-
-            references.append(
-                reference
-            )
-
-    return references
-
-
-def get_source_names(
-    chunks: List[Dict[str, Any]],
-) -> List[str]:
-
-    names = []
-    seen = set()
-
-    for chunk in chunks:
-
-        document_name = _get_document_name(
-            chunk
-        )
-
-        if document_name not in seen:
-
-            seen.add(document_name)
-
-            names.append(
-                document_name
-            )
-
-    return names
