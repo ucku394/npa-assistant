@@ -293,6 +293,25 @@ def detect_topic(user_query: str) -> str:
         return "workplace_attestation"
 
     # --------------------------------------------------------
+    # ВВОДНЫЙ ИНСТРУКТАЖ / ЛИЦО, ПРОВОДЯЩЕЕ ИНСТРУКТАЖ
+    # --------------------------------------------------------
+
+    occupational_briefing_patterns = [
+        r"\bвводн\w*\s+инструктаж\w*",
+        r"\bкто\s+провод\w*.*\bинструктаж\w*",
+        r"\bпровод\w*.*\bвводн\w*\s+инструктаж\w*",
+        r"\bлиц\w*.*\bпровод\w*.*\bвводн\w*\s+инструктаж\w*",
+        r"\bответственн\w*.*\bвводн\w*\s+инструктаж\w*",
+        r"\bспециалист\w*\s+по\s+охран\w*\s+труд\w*.*\bинструктаж\w*",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in occupational_briefing_patterns
+    ):
+        return "occupational_briefing"
+
+    # --------------------------------------------------------
     # СТАЖИРОВКА / ДОПУСК К САМОСТОЯТЕЛЬНОЙ РАБОТЕ
     # --------------------------------------------------------
     # Требования к стажировке могут быть разделены между
@@ -642,6 +661,35 @@ def _topic_relevance_score(
     ).lower()
 
     score = 0.0
+
+    # --------------------------------------------------------
+    # ВВОДНЫЙ ИНСТРУКТАЖ
+    # --------------------------------------------------------
+
+    if topic == "occupational_briefing":
+        if db_topic == "occupational_briefing":
+            score += 1.0
+
+        briefing_markers = [
+            "вводный инструктаж",
+            "проводит инструктаж",
+            "специалист по охране труда",
+            "уполномоченное должностное лицо",
+            "руководитель организации",
+            "руководитель структурного подразделения",
+        ]
+
+        matches = sum(
+            1
+            for marker in briefing_markers
+            if marker in content or marker in document_name
+        )
+
+        if matches:
+            score += min(matches * 0.30, 1.20)
+
+        if "175" in document_name:
+            score += 0.80
 
     # --------------------------------------------------------
     # СИЗ — НЕВЫДАЧА / ПОВРЕЖДЕНИЕ / ОТКАЗ
@@ -1562,6 +1610,62 @@ def _targeted_occupational_training_search(
     return _deduplicate_chunks(results)
 
 
+def _targeted_occupational_briefing_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный поиск по вводному инструктажу.
+    """
+
+    results: List[Dict[str, Any]] = []
+
+    queries = [
+        "doc_name.ilike.%175%",
+        "doc_name.ilike.%Инструкци%",
+        "content.ilike.%вводный инструктаж%",
+        "content.ilike.%проводит специалист по охране труда%",
+        "content.ilike.%специалист по охране труда%",
+        "content.ilike.%уполномоченное должностное лицо%",
+        "content.ilike.%руководитель организации%",
+        "content.ilike.%руководитель структурного подразделения%",
+    ]
+
+    for query in queries:
+        try:
+            response = (
+                supabase
+                .table("npa_chunks")
+                .select(
+                    "doc_name,"
+                    "doc_type,"
+                    "point_num,"
+                    "content,"
+                    "legal_domain,"
+                    "topic,"
+                    "source_url"
+                )
+                .eq(
+                    "legal_domain",
+                    "occupational_safety",
+                )
+                .or_(query)
+                .limit(
+                    TARGETED_SEARCH_LIMIT
+                )
+                .execute()
+            )
+
+            results.extend(response.data or [])
+
+        except Exception as exc:
+            logger.warning(
+                "RAG | targeted occupational briefing search failed: %s",
+                exc,
+            )
+
+    return _deduplicate_chunks(results)
+
+
 def _targeted_accident_search(
     supabase,
 ) -> List[Dict[str, Any]]:
@@ -1694,6 +1798,13 @@ async def _get_targeted_chunks(
 
         return await asyncio.to_thread(
             _targeted_attestation_search,
+            supabase,
+        )
+
+    if topic == "occupational_briefing":
+
+        return await asyncio.to_thread(
+            _targeted_occupational_briefing_search,
             supabase,
         )
 
@@ -2438,6 +2549,15 @@ def detect_query_intents(user_query: str) -> List[str]:
             r"\bвправ\w*",
             r"\bможет\s+ли\s+работник\w*",
         ],
+        "responsible_person": [
+            r"\bкто\s+провод\w*",
+            r"\bкто\s+долж\w*\s+провод\w*",
+            r"\bкто\s+ответствен\w*",
+            r"\bкто\s+назнач\w*",
+            r"\bкакое\s+лицо\s+провод\w*",
+            r"\bкакой\s+специалист\w*\s+провод\w*",
+            r"\bлиц\w*.*\bпровод\w*.*\bинструктаж\w*",
+        ],
         "employer_duty": [
             r"\bобязанност\w*\s+нанимател\w*",
             r"\bобязанност\w*.*\bнанимател\w*",
@@ -2486,6 +2606,7 @@ def detect_primary_intent(
     финальной юридической диверсификации.
     """
     priority = [
+        "responsible_person",
         "employer_duty",
         "employee_right",
         "refusal",
@@ -2543,6 +2664,12 @@ def build_search_queries(
             "обязанности нанимателя по обеспечению безопасных условий труда и средствами индивидуальной защиты",
             "неприступление к работе или отказ от выполнения опасной работы трудовое законодательство",
         ],
+        "occupational_briefing": [
+            f"вводный инструктаж по охране труда кто проводит {original}",
+            "кто проводит вводный инструктаж по охране труда специалист по охране труда уполномоченное должностное лицо нанимателя",
+            "вводный инструктаж проводит специалист по охране труда уполномоченное должностное лицо нанимателя",
+            "территориально удаленное структурное подразделение вводный инструктаж руководитель подразделения",
+        ],
         "accident_investigation": [
             f"несчастный случай расследование {original}",
             "порядок расследования несчастного случая на производстве права потерпевшего",
@@ -2572,6 +2699,14 @@ def build_search_queries(
         intents,
         original,
     )
+
+    if "responsible_person" in intents:
+        queries.extend([
+            "вводный инструктаж по охране труда кто проводит",
+            "вводный инструктаж проводит специалист по охране труда",
+            "вводный инструктаж проводит уполномоченное должностное лицо нанимателя",
+            "вводный инструктаж руководитель организации специалист по охране труда",
+        ])
 
     if "employer_duty" in intents:
         queries.extend([
@@ -2676,6 +2811,13 @@ def _intent_relevance_score(
         "employee_right": ["имеет право", "право работника", "вправе"],
         "employer_duty": ["обязан", "обязанность нанимателя", "наниматель обязан", "работодатель обязан"],
         "procedure": ["порядок", "действия работника", "немедленно сообщ", "уведом"],
+        "responsible_person": [
+            "проводит вводный инструктаж",
+            "проводит инструктаж",
+            "специалист по охране труда",
+            "уполномоченное должностное лицо",
+            "руководитель организации",
+        ],
         "liability": ["ответственност", "штраф", "взыскан", "наказан"],
     }
 
@@ -2837,12 +2979,30 @@ def _legal_chunk_role(
         "дисциплинарн",
     )
 
+    responsible_person_markers = (
+        "проводит вводный инструктаж",
+        "проводит инструктаж",
+        "специалист по охране труда",
+        "уполномоченное должностное лицо",
+        "руководитель организации",
+        "руководитель структурного подразделения",
+    )
+
     # Для целевого интента проверяем соответствующую роль первой.
     # Это не даёт статье о правах работника быть ошибочно
     # классифицированной как ответ на вопрос об обязанностях нанимателя.
     ordered_checks = []
 
-    if primary_intent == "employer_duty":
+    if primary_intent == "responsible_person":
+        ordered_checks = [
+            ("responsible_person", responsible_person_markers),
+            ("employer_duty", employer_markers),
+            ("procedure", procedure_markers),
+            ("employee_right", employee_right_markers),
+            ("danger", danger_markers),
+            ("liability", liability_markers),
+        ]
+    elif primary_intent == "employer_duty":
         ordered_checks = [
             ("employer_duty", employer_markers),
             ("employee_right", employee_right_markers),
