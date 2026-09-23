@@ -1704,31 +1704,72 @@ def _targeted_occupational_training_search(
 
 def _targeted_occupational_briefing_search(
     supabase,
+    user_query: str = "",
 ) -> List[Dict[str, Any]]:
     """
-    Точечный поиск по вводному инструктажу.
+    Точечный поиск по инструктажам.
+
+    КРИТИЧЕСКОЕ ПРАВИЛО:
+    «какой/какому инструктаж» и «кто проводит инструктаж» —
+    разные поисковые задачи. Никогда не смешиваем их в одном
+    targeted search.
+
+    TARGET:
+        ищем вид инструктажа, разовые работы, прямые обязанности,
+        наряд-допуск и п. 29 Инструкции №175.
+
+    RESPONSIBLE:
+        ищем только лицо, проводящее инструктаж.
     """
 
     results: List[Dict[str, Any]] = []
 
-    queries = [
-        "doc_name.ilike.%175%",
-        "doc_name.ilike.%Инструкци%",
-        "content.ilike.%вводный инструктаж%",
-        "content.ilike.%проводит специалист по охране труда%",
-        "content.ilike.%специалист по охране труда%",
-        "content.ilike.%уполномоченное должностное лицо%",
-        "content.ilike.%руководитель организации%",
-        "content.ilike.%руководитель структурного подразделения%",
+    target_mode = _is_target_briefing_query(user_query)
+    responsible_mode = (
+        not target_mode
+        and _is_responsible_briefing_query(user_query)
+    )
 
-        # Целевой инструктаж перед разовыми работами.
-        "content.ilike.%целевой инструктаж%",
-        "content.ilike.%разовых работ%",
-        "content.ilike.%прямыми обязанностями%",
-        "content.ilike.%наряд-допуск%",
-        "content.ilike.%наряду-допуску%",
-        "content.ilike.%наряд допуск%",
-    ]
+    if target_mode:
+        queries = [
+            "doc_name.ilike.%175%",
+            "doc_name.ilike.%Инструкци%",
+            "content.ilike.%целевой инструктаж%",
+            "content.ilike.%разовых работ%",
+            "content.ilike.%не связанных с прямыми обязанностями%",
+            "content.ilike.%прямыми обязанностями%",
+            "content.ilike.%наряд-допуск%",
+            "content.ilike.%наряду-допуску%",
+            "content.ilike.%наряд допуск%",
+        ]
+        mode = "target"
+    elif responsible_mode:
+        queries = [
+            "doc_name.ilike.%175%",
+            "doc_name.ilike.%Инструкци%",
+            "content.ilike.%вводный инструктаж%",
+            "content.ilike.%проводит специалист по охране труда%",
+            "content.ilike.%специалист по охране труда%",
+            "content.ilike.%уполномоченное должностное лицо%",
+            "content.ilike.%руководитель организации%",
+            "content.ilike.%руководитель структурного подразделения%",
+        ]
+        mode = "responsible"
+    else:
+        # Для неоднозначного запроса не подмешиваем ни вводный,
+        # ни целевой инструктаж принудительно.
+        queries = [
+            "doc_name.ilike.%175%",
+            "doc_name.ilike.%Инструкци%",
+            "content.ilike.%инструктаж%",
+        ]
+        mode = "generic"
+
+    logger.info(
+        "RAG | targeted briefing search | mode=%s | query=%s",
+        mode,
+        user_query,
+    )
 
     for query in queries:
         try:
@@ -1759,7 +1800,8 @@ def _targeted_occupational_briefing_search(
 
         except Exception as exc:
             logger.warning(
-                "RAG | targeted occupational briefing search failed: %s",
+                "RAG | targeted occupational briefing search failed | mode=%s | error=%s",
+                mode,
                 exc,
             )
 
@@ -1878,6 +1920,7 @@ def _deduplicate_chunks(
 async def _get_targeted_chunks(
     supabase,
     topic: str,
+    user_query: str = "",
 ) -> List[Dict[str, Any]]:
 
     if topic == "ppe_nonprovision":
@@ -1906,6 +1949,7 @@ async def _get_targeted_chunks(
         return await asyncio.to_thread(
             _targeted_occupational_briefing_search,
             supabase,
+            user_query,
         )
 
     if topic == "accident_investigation":
@@ -3727,6 +3771,7 @@ async def retrieve_context(
     targeted_chunks = await _get_targeted_chunks(
         supabase,
         topic,
+        user_query,
     )
 
     if targeted_chunks:
