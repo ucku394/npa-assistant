@@ -2746,6 +2746,88 @@ def is_cross_reference_query(intents: List[str]) -> bool:
     }) >= 2
 
 
+def _is_target_briefing_query(user_query: str) -> bool:
+    """
+    True для вопросов, где пользователь спрашивает, КАКОЙ вид
+    инструктажа требуется/проводится.
+
+    Критически важно: такие вопросы нельзя превращать в запросы
+    вида «кто проводит вводный инструктаж».
+    """
+    query = re.sub(
+        r"\s+",
+        " ",
+        str(user_query or "").strip().lower(),
+    )
+
+    if not query:
+        return False
+
+    # Прямые формулировки: «какой инструктаж», «какой вид инструктажа»,
+    # «какой инструктаж проводится» и т.п.
+    target_patterns = [
+        r"\bкакой\s+(?:вид\s+)?инструктаж\w*\b",
+        r"\bкакой\s+(?:вид\s+)?инструктаж\w*\s+(?:нужен|необходим|провод\w*|требу\w*)",
+        r"\bкакому\s+инструктаж\w*\b",
+        r"\bк\s+какому\s+инструктаж\w*\b",
+        r"\bвид\s+инструктаж\w*\b.*\bнужен\b",
+        r"\bотнос\w*\s+к\s+(?:какому|какой)\s+инструктаж\w*",
+    ]
+
+    if any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in target_patterns
+    ):
+        return True
+
+    # Юридические признаки целевого инструктажа. Даже если пользователь
+    # не написал «какой инструктаж», наличие этой связки означает,
+    # что нам нужен поиск нормы о ВИДЕ инструктажа.
+    target_context_patterns = [
+        r"\bразов\w*\s+работ\w*.*\bне\s+связан\w*.*\bпрям\w*\s+обязанност\w*",
+        r"\bне\s+связан\w*\s+с\s+прям\w*\s+обязанност\w*",
+        r"\bпрям\w*\s+обязанност\w*.*\bразов\w*\s+работ\w*",
+        r"\bнаряд\w*[-–—]?\s*допуск\w*",
+        r"\bнаряд\w*\s+допуск\w*",
+        r"\bцелев\w*\s+инструктаж\w*",
+    ]
+
+    return any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in target_context_patterns
+    )
+
+
+def _is_responsible_briefing_query(user_query: str) -> bool:
+    """
+    True только для вопросов о лице/должностном лице,
+    которое проводит инструктаж.
+
+    Не срабатывает на «какой инструктаж».
+    """
+    query = re.sub(
+        r"\s+",
+        " ",
+        str(user_query or "").strip().lower(),
+    )
+
+    responsible_patterns = [
+        r"\bкто\s+провод\w*.*\bинструктаж\w*",
+        r"\bкем\s+провод\w*.*\bинструктаж\w*",
+        r"\bкто\s+должен\s+провод\w*.*\bинструктаж\w*",
+        r"\bкто\s+имеет\s+право\s+провод\w*.*\bинструктаж\w*",
+        r"\bлиц\w*\s+(?:котор\w*|кто)\s+провод\w*.*\bинструктаж\w*",
+        r"\bкто\s+ответствен\w*.*\bинструктаж\w*",
+        r"\bответствен\w*\s+за\s+проведен\w*\s+инструктаж\w*",
+        r"\bпровод\w*\s+инструктаж\w*.*\bкто\b",
+    ]
+
+    return any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in responsible_patterns
+    )
+
+
 def build_search_queries(
     user_query: str,
     topic: str,
@@ -2754,7 +2836,39 @@ def build_search_queries(
 ) -> List[str]:
 
     original = str(user_query or "").strip()
-    queries = [original]
+    queries: List[str] = [original]
+
+    # --------------------------------------------------------
+    # КРИТИЧЕСКОЕ РАЗДЕЛЕНИЕ «КАКОЙ ИНСТРУКТАЖ» / «КТО ПРОВОДИТ»
+    # --------------------------------------------------------
+    #
+    # Эти два типа вопросов относятся к одной теме, но требуют
+    # принципиально разных поисковых запросов.
+    #
+    # Раньше topic=occupational_briefing автоматически добавлял:
+    #   «кто проводит вводный инструктаж...»
+    # даже если пользователь спрашивал:
+    #   «какой инструктаж...»
+    #
+    # Теперь:
+    #   target  -> ищем вид/основание инструктажа;
+    #   person  -> ищем лицо, проводящее инструктаж;
+    #   ambiguous -> нейтральные запросы без навязывания ответа.
+    # --------------------------------------------------------
+
+    target_briefing_query = (
+        topic == "occupational_briefing"
+        and _is_target_briefing_query(original)
+    )
+
+    responsible_briefing_query = (
+        topic == "occupational_briefing"
+        and not target_briefing_query
+        and (
+            _is_responsible_briefing_query(original)
+            or "responsible_person" in intents
+        )
+    )
 
     topic_queries = {
         "ppe_nonprovision": [
@@ -2764,12 +2878,11 @@ def build_search_queries(
             "обязанности нанимателя по обеспечению безопасных условий труда и средствами индивидуальной защиты",
             "неприступление к работе или отказ от выполнения опасной работы трудовое законодательство",
         ],
-        "occupational_briefing": [
-            f"вводный инструктаж по охране труда кто проводит {original}",
-            "кто проводит вводный инструктаж по охране труда специалист по охране труда уполномоченное должностное лицо нанимателя",
-            "вводный инструктаж проводит специалист по охране труда уполномоченное должностное лицо нанимателя",
-            "территориально удаленное структурное подразделение вводный инструктаж руководитель подразделения",
-        ],
+
+        # Для occupational_briefing формируем запросы НИЖЕ отдельно.
+        # Здесь специально НЕТ запроса «кто проводит».
+        "occupational_briefing": [],
+
         "accident_investigation": [
             f"несчастный случай расследование {original}",
             "порядок расследования несчастного случая на производстве права потерпевшего",
@@ -2793,14 +2906,53 @@ def build_search_queries(
         ],
     }
 
-    queries.extend(topic_queries.get(topic, []))
+    if topic == "occupational_briefing":
+        if target_briefing_query:
+            # ТОЛЬКО поиск нормы о виде инструктажа.
+            queries.extend([
+                f"целевой инструктаж разовые работы не связанные с прямыми обязанностями {original}",
+                "целевой инструктаж разовые работы не связанные с прямыми обязанностями",
+                "разовые работы не связанные с прямыми обязанностями какой инструктаж",
+                "целевой инструктаж наряд-допуск работы с повышенной опасностью",
+                "Инструкция №175 пункт 29 целевой инструктаж разовые работы",
+            ])
+        elif responsible_briefing_query:
+            # ТОЛЬКО поиск лица, проводящего инструктаж.
+            queries.extend([
+                f"вводный инструктаж по охране труда кто проводит {original}",
+                "кто проводит вводный инструктаж по охране труда специалист по охране труда уполномоченное должностное лицо нанимателя",
+                "вводный инструктаж проводит специалист по охране труда уполномоченное должностное лицо нанимателя",
+                "вводный инструктаж руководитель организации специалист по охране труда",
+            ])
+        else:
+            # Неопределённый запрос: не подставляем ни «кто»,
+            # ни «какой». Это предотвращает ложное направление поиска.
+            queries.extend([
+                f"инструктаж по охране труда {original}",
+                "виды инструктажей по охране труда порядок проведения",
+                "Инструкция №175 инструктаж по охране труда",
+            ])
+    else:
+        queries.extend(topic_queries.get(topic, []))
 
     primary_intent = detect_primary_intent(
         intents,
         original,
     )
 
-    if "responsible_person" in intents:
+    # Для occupational_briefing intent responsible_person имеет право
+    # добавлять person-запросы ТОЛЬКО если это действительно вопрос
+    # о лице, проводящем инструктаж.
+    if (
+        "responsible_person" in intents
+        and not target_briefing_query
+        and responsible_briefing_query
+    ):
+        # Уже добавлены профильные person-запросы выше.
+        # Ничего дополнительно не добавляем, чтобы не плодить дубли.
+        pass
+
+    elif "responsible_person" in intents and topic != "occupational_briefing":
         queries.extend([
             "вводный инструктаж по охране труда кто проводит",
             "вводный инструктаж проводит специалист по охране труда",
@@ -2837,15 +2989,21 @@ def build_search_queries(
             "Трудовой кодекс Республики Беларусь безопасные условия труда",
         ])
 
-    result, seen = [], set()
+    result: List[str] = []
+    seen = set()
+
     for q in queries:
-        qn = re.sub(r"\s+", " ", q).strip().lower()
+        qn = re.sub(
+            r"\s+",
+            " ",
+            q,
+        ).strip().lower()
+
         if qn and qn not in seen:
             seen.add(qn)
             result.append(q.strip())
 
     return result[:8]
-
 
 def _merge_search_results(
     groups: List[List[Dict[str, Any]]],
