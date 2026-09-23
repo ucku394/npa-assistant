@@ -737,10 +737,14 @@ def _openrouter_request(
         max_tokens=AI_MAX_OUTPUT_TOKENS,
     )
 
-    if not response.choices:
-        raise RuntimeError(
-            "OpenRouter returned no choices"
+    if not getattr(response, "choices", None):
+        error = RuntimeError(
+            f"OpenRouter returned HTTP 200 but no choices "
+            f"(model={model})"
         )
+        setattr(error, "openrouter_category", "empty_choices")
+        setattr(error, "openrouter_model", model)
+        raise error
 
     message = response.choices[0].message
 
@@ -805,6 +809,191 @@ def _openrouter_request(
 # OPENROUTER
 # ============================================================
 
+class _OpenRouterError(RuntimeError):
+    """Структурированная ошибка OpenRouter с категорией и моделью."""
+
+    def __init__(
+        self,
+        message: str,
+        category: str,
+        model: str,
+        status_code: Optional[int] = None,
+    ):
+        super().__init__(message)
+        self.openrouter_category = category
+        self.openrouter_model = model
+        self.openrouter_status_code = status_code
+
+
+def _get_openrouter_status_code(error: Exception) -> Optional[int]:
+    for attr in ("status_code", "http_status", "status"):
+        value = getattr(error, attr, None)
+
+        if isinstance(value, int):
+            return value
+
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+
+    response = getattr(error, "response", None)
+
+    if response is not None:
+        value = getattr(response, "status_code", None)
+
+        if isinstance(value, int):
+            return value
+
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+
+    return None
+
+
+def _classify_openrouter_error(
+    error: Exception,
+    model: str,
+) -> tuple[str, Optional[int]]:
+    """
+    Классифицирует ошибку OpenRouter.
+
+    Категории:
+      - rate_limit: 429 / rate limit
+      - upstream: ошибка конкретного upstream/provider
+      - model_unavailable: модель недоступна/не существует
+      - empty_choices: HTTP 200 без choices
+      - timeout: timeout/network
+      - auth: ключ/авторизация
+      - bad_request: некорректный запрос
+      - server: ошибка самого OpenRouter
+      - unknown: неизвестная ошибка
+    """
+
+    status = _get_openrouter_status_code(error)
+    message = str(error).lower()
+
+    if getattr(error, "openrouter_category", None):
+        return (
+            str(error.openrouter_category),
+            getattr(error, "openrouter_status_code", status),
+        )
+
+    if status == 429 or any(
+        marker in message
+        for marker in (
+            "rate limit",
+            "rate_limit",
+            "too many requests",
+            "quota exceeded",
+        )
+    ):
+        return "rate_limit", status
+
+    if status in (401, 403) or any(
+        marker in message
+        for marker in (
+            "invalid api key",
+            "authentication",
+            "unauthorized",
+            "forbidden",
+        )
+    ):
+        return "auth", status
+
+    if status == 400 or any(
+        marker in message
+        for marker in (
+            "invalid request",
+            "bad request",
+            "context length",
+            "maximum context",
+            "prompt is too long",
+        )
+    ):
+        return "bad_request", status
+
+    if status == 404 or any(
+        marker in message
+        for marker in (
+            "model not found",
+            "model_not_found",
+            "unknown model",
+            "does not exist",
+            "no such model",
+        )
+    ):
+        return "model_unavailable", status
+
+    if any(
+        marker in message
+        for marker in (
+            "upstream",
+            "provider returned",
+            "provider error",
+            "upstream_error",
+            "no available providers",
+            "temporarily unavailable",
+        )
+    ):
+        return "upstream", status
+
+    if any(
+        marker in message
+        for marker in (
+            "timeout",
+            "timed out",
+            "connection error",
+            "connect error",
+            "read error",
+        )
+    ):
+        return "timeout", status
+
+    if status is not None and status >= 500:
+        return "server", status
+
+    return "unknown", status
+
+
+def _mark_openrouter_model_cooldown(
+    model: str,
+    seconds: int,
+    category: str,
+) -> None:
+    if not model:
+        return
+
+    until = time.time() + seconds
+    _openrouter_model_disabled_until[model] = until
+
+    logger.warning(
+        "AI | OpenRouter model cooldown | model=%s | category=%s | seconds=%s",
+        model,
+        category,
+        seconds,
+    )
+
+
+def _is_openrouter_model_on_cooldown(model: str) -> bool:
+    until = _openrouter_model_disabled_until.get(model, 0.0)
+
+    if until <= time.time():
+        if model in _openrouter_model_disabled_until:
+            _openrouter_model_disabled_until.pop(model, None)
+        return False
+
+    return True
+
+
+# ============================================================
+# OPENROUTER
+# ============================================================
+
 def generate_with_openrouter(prompt: str) -> str:
     global _openrouter_disabled_until
 
@@ -824,26 +1013,6 @@ def generate_with_openrouter(prompt: str) -> str:
             f"OpenRouter temporarily disabled "
             f"for {remaining}s"
         )
-
-    # --------------------------------------------------------
-    # OPENROUTER MODEL CHAIN
-    # --------------------------------------------------------
-    #
-    # 1. OPENROUTER_MODEL
-    # 2. OPENROUTER_FALLBACK_MODEL
-    # 3. OPENROUTER_SECOND_FALLBACK_MODEL
-    #
-    # Например:
-    #
-    # Nemotron 3 Ultra
-    #      ↓
-    # Gemma 4 31B
-    #      ↓
-    # Gemma 4 26B A4B
-    #
-    # Если переменная третьей модели не задана,
-    # автоматически используется Gemma 4 26B A4B Free.
-    # --------------------------------------------------------
 
     models = []
 
@@ -866,9 +1035,19 @@ def generate_with_openrouter(prompt: str) -> str:
     )
 
     last_error = None
-    all_rate_limited = True
+    attempted = 0
+    global_failures = 0
 
     for model in models:
+        if _is_openrouter_model_on_cooldown(model):
+            logger.info(
+                "AI | OpenRouter model skipped due to model cooldown | model=%s",
+                model,
+            )
+            continue
+
+        attempted += 1
+
         try:
             logger.info(
                 "AI | OpenRouter trying model=%s",
@@ -890,46 +1069,94 @@ def generate_with_openrouter(prompt: str) -> str:
 
         except RateLimitError as e:
             last_error = e
+            category = "rate_limit"
+
+            _mark_openrouter_model_cooldown(
+                model,
+                OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS,
+                category,
+            )
 
             logger.warning(
                 "AI | OpenRouter rate limited | model=%s | "
-                "switching to next model immediately",
+                "category=%s | switching to next model",
                 model,
+                category,
             )
-
-            # Не считаем 429 окончательной ошибкой модели:
-            # OpenRouter может вернуть rate-limit от конкретного
-            # upstream-провайдера (например, Google AI Studio).
-            # Благодаря max_retries=0 следующий model пробуется
-            # без дополнительных скрытых запросов.
-            continue
 
         except Exception as e:
             last_error = e
-            all_rate_limited = False
 
-            logger.exception(
-                "AI | OpenRouter failed | model=%s | error=%s",
+            category, status = _classify_openrouter_error(
+                e,
                 model,
+            )
+
+            logger.warning(
+                "AI | OpenRouter failed | model=%s | "
+                "category=%s | status=%s | error=%s",
+                model,
+                category,
+                status,
                 e,
             )
 
-    cooldown = (
-        OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS
-        if all_rate_limited
-        else OPENROUTER_RETRY_COOLDOWN_SECONDS
-    )
+            if category in (
+                "rate_limit",
+                "upstream",
+                "model_unavailable",
+                "empty_choices",
+                "timeout",
+                "server",
+            ):
+                cooldown = OPENROUTER_MODEL_COOLDOWN_SECONDS
 
-    _openrouter_disabled_until = (
-        time.time()
-        + cooldown
-    )
+                if category == "rate_limit":
+                    cooldown = OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS
+
+                _mark_openrouter_model_cooldown(
+                    model,
+                    cooldown,
+                    category,
+                )
+
+            elif category in ("auth", "bad_request"):
+                # Эти ошибки не относятся к одной модели.
+                # Но и не ставим весь OpenRouter на cooldown:
+                # это конфигурационная/запросная проблема,
+                # которую можно диагностировать по логам.
+                global_failures += 1
+
+    # Если были доступны модели, но каждая из них отдельно
+    # провалилась, не отключаем весь OpenRouter надолго.
+    #
+    # Глобальный cooldown используется только когда OpenRouter
+    # фактически не имеет ни одной модели, которую можно попробовать.
+    available_models = [
+        model
+        for model in models
+        if not _is_openrouter_model_on_cooldown(model)
+    ]
+
+    if attempted == 0 and not available_models:
+        _openrouter_disabled_until = (
+            time.time()
+            + OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS
+        )
+
+        logger.warning(
+            "AI | All configured OpenRouter models are on "
+            "model-level cooldown | global cooldown=%ss",
+            OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS,
+        )
 
     logger.warning(
-        "AI | All OpenRouter models failed | "
-        "cooldown=%ss | all_rate_limited=%s",
-        cooldown,
-        all_rate_limited,
+        "AI | OpenRouter chain exhausted | attempted=%s | "
+        "models=%s | global_failures=%s | last_error=%s",
+        attempted,
+        models,
+        global_failures,
+        last_error,
     )
 
     raise RuntimeError(
