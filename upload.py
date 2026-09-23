@@ -232,6 +232,11 @@ def resolve_explicit_doc_name(
     if not requested:
         return None
 
+    # Пользователь может передать имя DOCX с расширением.
+    # В БД каноническое имя хранится без .docx.
+    if requested.lower().endswith(".docx"):
+        requested = requested[:-5].rstrip()
+
     if requested in DOC_NAME_MAP.values():
         return requested
 
