@@ -93,8 +93,8 @@ DOC_NAME_MAP: Dict[str, str] = {
     "О бесплатном обеспечении работников молоком или равноценными пищевыми продуктами при работе с вредными веществами 27 февраля 2002 г. № 260":
         "О бесплатном обеспечении работников молоком или равноценными пищевыми продуктами при работе с вредными веществами 27 февраля 2002 г. № 260",
 
-    "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144":
-        "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81 144",
+    "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81":
+        "О документах, необходимых для расследования и учета несчастных случаев на производстве и профессиональных заболеваний Минтруда и Соцзащиты от 4 октября 2024 г. № 81",
 
     "О контроле состояния водителей от 9 июля 2013 г. № 25.28":
         "О контроле состояния водителей от 9 июля 2013 г. № 25.28",
@@ -138,14 +138,14 @@ DOC_NAME_MAP: Dict[str, str] = {
     "Об утверждении Правил по охране труда при выполнении работ на высоте от 6 февраля 2025 г. № 11":
         "Об утверждении Правил по охране труда при выполнении работ на высоте от 6 февраля 2025 г. № 11",
 
-    "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24 33":
-        "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24 33",
+    "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24":
+        "Об утверждении Правил по охране труда при выполнении строительных работ от 31 мая 2019 г. № 24",
 
     "Об утверждении Правил по охране труда при производстве пищевой продукции от 31 декабря 2024 г. № 122":
         "Об утверждении Правил по охране труда при производстве пищевой продукции от 31 декабря 2024 г. № 122",
 
-    "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104":
-        "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78 104",
+    "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78":
+        "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78",
 
     "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42":
         "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42",
@@ -1400,6 +1400,18 @@ def replace_document_safely(
         doc_name,
     )
 
+    if not document_id:
+        raise RuntimeError(
+            "REPLACE: получен пустой document_id "
+            f"для документа: {doc_name}"
+        )
+
+    logger.info(
+        "DOCUMENT ID | %s | %s",
+        doc_name,
+        document_id,
+    )
+
     staging_doc_name = (
         f"{STAGING_PREFIX}"
         f"{uuid4().hex}"
@@ -1420,6 +1432,12 @@ def replace_document_safely(
         staged_row[
             "document_id"
         ] = document_id
+
+        if not staged_row.get("document_id"):
+            raise RuntimeError(
+                "REPLACE: staging row сформирован "
+                "без document_id."
+            )
 
         staging_rows.append(
             staged_row
@@ -1942,9 +1960,7 @@ def parse_args() -> argparse.Namespace:
         )
     )
 
-    mode_group = (
-        parser.add_mutually_exclusive_group()
-    )
+    mode_group = parser.add_mutually_exclusive_group()
 
     mode_group.add_argument(
         "--replace",
@@ -1969,8 +1985,7 @@ def parse_args() -> argparse.Namespace:
         "--doc-name",
         help=(
             "Каноническое имя НПА в Supabase. "
-            "Используется, если имя нового DOCX "
-            "отличается от имени старого файла."
+            "Можно указывать имя DOCX с расширением .docx."
         ),
     )
 
@@ -1980,3 +1995,298 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Прочитать DOCX, сформировать chunks "
             "и embeddings, но не изменять Supabase."
+        ),
+    )
+
+    parser.add_argument(
+        "--reindex-all",
+        action="store_true",
+        help=(
+            "Безопасно переиндексировать все DOCX "
+            "из каталога npa_loader."
+        ),
+    )
+
+    parser.add_argument(
+        "--reindex-docs",
+        nargs="*",
+        default=None,
+        metavar="DOC_NAME",
+        help=(
+            "Безопасно переиндексировать только указанные "
+            "документы. Можно указывать канонические имена "
+            "или имена DOCX."
+        ),
+    )
+
+    return parser
+
+
+def run(
+    replace_file: Optional[str] = None,
+    add_file: Optional[str] = None,
+    doc_name: Optional[str] = None,
+    dry_run: bool = False,
+    reindex_all: bool = False,
+    reindex_docs: Optional[Sequence[str]] = None,
+) -> int:
+
+    started_at = time.time()
+
+    logger.info("=" * 60)
+    logger.info("START")
+    logger.info("=" * 60)
+    logger.info(
+        "Embedding model: %s",
+        EMBEDDING_MODEL,
+    )
+    logger.info(
+        "Embedding dimension: %s",
+        EMBEDDING_DIM,
+    )
+
+    if replace_file:
+        mode = "replace"
+    elif add_file:
+        mode = "add"
+    else:
+        mode = "auto"
+
+    logger.info("Mode: %s", mode)
+    logger.info("Dry-run: %s", dry_run)
+    logger.info("Reindex all: %s", reindex_all)
+
+    requested_reindex_docs = [
+        normalize_text(item)
+        for item in (reindex_docs or [])
+        if normalize_text(item)
+    ]
+
+    logger.info(
+        "Reindex docs: %s",
+        ", ".join(requested_reindex_docs)
+        if requested_reindex_docs
+        else "не задан",
+    )
+
+    # CLI overrides environment configuration.
+    global REINDEX_ALL
+    global REINDEX_DOCS
+
+    if reindex_all:
+        REINDEX_ALL = True
+
+    if requested_reindex_docs:
+        REINDEX_DOCS = set(REINDEX_DOCS)
+        for item in requested_reindex_docs:
+            canonical = resolve_explicit_doc_name(item)
+            if canonical:
+                REINDEX_DOCS.add(canonical)
+
+    # --------------------------------------------------------
+    # SELECT FILES
+    # --------------------------------------------------------
+
+    if replace_file:
+        selected_files = [Path(replace_file)]
+
+    elif add_file:
+        selected_files = [Path(add_file)]
+
+    else:
+        selected_files = find_source_files()
+
+        if requested_reindex_docs:
+            wanted = set(REINDEX_DOCS)
+
+            filtered_files = []
+
+            for file_path in selected_files:
+                resolved = resolve_doc_name(file_path)
+
+                if resolved in wanted:
+                    filtered_files.append(file_path)
+
+            selected_files = filtered_files
+
+    # Resolve relative paths from the loader directory.
+    normalized_files: List[Path] = []
+
+    for file_path in selected_files:
+        if not file_path.is_absolute():
+            file_path = SCRIPT_DIR / file_path
+
+        file_path = file_path.resolve()
+
+        if not file_path.is_file():
+            raise RuntimeError(
+                f"Файл не найден: {file_path}"
+            )
+
+        if file_path.suffix.lower() != ".docx":
+            raise RuntimeError(
+                f"Ожидался DOCX-файл: {file_path}"
+            )
+
+        normalized_files.append(file_path)
+
+    selected_files = normalized_files
+
+    if not selected_files:
+        raise RuntimeError(
+            "Не найдено ни одного DOCX-файла для обработки."
+        )
+
+    logger.info(
+        "Documents found: %s",
+        len(selected_files),
+    )
+
+    validate_source_files(
+        selected_files,
+        explicit_doc_name=doc_name
+        if mode in {"replace", "add"}
+        else None,
+    )
+
+    # --------------------------------------------------------
+    # CONNECT TO SUPABASE
+    # --------------------------------------------------------
+
+    supabase = get_supabase_client()
+
+    test_supabase_connection(
+        supabase
+    )
+
+    # --------------------------------------------------------
+    # EMBEDDING MODEL
+    # --------------------------------------------------------
+
+    validate_embedding_model()
+
+    # --------------------------------------------------------
+    # PROCESS
+    # --------------------------------------------------------
+
+    uploaded_total = 0
+    skipped_total = 0
+    failed_documents: List[
+        Tuple[str, str]
+    ] = []
+
+    for file_path in selected_files:
+
+        try:
+
+            uploaded, skipped = process_file(
+                supabase=supabase,
+                file_path=file_path,
+                mode=mode,
+                explicit_doc_name=doc_name,
+                dry_run=dry_run,
+            )
+
+            uploaded_total += uploaded
+            skipped_total += skipped
+
+        except Exception as exc:
+
+            failed_documents.append(
+                (
+                    file_path.name,
+                    str(exc),
+                )
+            )
+
+            logger.exception(
+                "FAILED | %s",
+                file_path.name,
+            )
+
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+
+    elapsed = time.time() - started_at
+
+    logger.info("")
+    logger.info("FINISHED")
+    logger.info("=" * 60)
+    logger.info(
+        "Embedding model: %s",
+        EMBEDDING_MODEL,
+    )
+    logger.info(
+        "Embedding dimension: %s",
+        EMBEDDING_DIM,
+    )
+    logger.info("Mode: %s", mode)
+    logger.info("Dry-run: %s", dry_run)
+    logger.info("Reindex all: %s", REINDEX_ALL)
+    logger.info(
+        "Reindex docs: %s",
+        ", ".join(requested_reindex_docs)
+        if requested_reindex_docs
+        else "не задан",
+    )
+    logger.info(
+        "Documents found: %s",
+        len(selected_files),
+    )
+    logger.info(
+        "uploaded=%s",
+        uploaded_total,
+    )
+    logger.info(
+        "skipped=%s",
+        skipped_total,
+    )
+    logger.info(
+        "failed=%s",
+        len(failed_documents),
+    )
+    logger.info(
+        "elapsed=%.1f sec",
+        elapsed,
+    )
+
+    if failed_documents:
+
+        logger.error("")
+        logger.error(
+            "FAILED DOCUMENTS:"
+        )
+
+        for name, error in failed_documents:
+            logger.error(
+                " - %s: %s",
+                name,
+                error,
+            )
+
+        return 1
+
+    return 0
+
+
+def main() -> None:
+
+    args = parse_args()
+
+    exit_code = run(
+        replace_file=args.replace,
+        add_file=args.add,
+        doc_name=args.doc_name,
+        dry_run=args.dry_run,
+        reindex_all=args.reindex_all,
+        reindex_docs=args.reindex_docs,
+    )
+
+    raise SystemExit(
+        exit_code
+    )
+
+
+if __name__ == "__main__":
+    main()
