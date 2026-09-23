@@ -3036,18 +3036,62 @@ def build_search_queries(
     result: List[str] = []
     seen = set()
 
+    target_forbidden = (
+        "кто проводит",
+        "кто должен проводить",
+        "кто имеет право проводить",
+        "какое лицо проводит",
+        "какой специалист проводит",
+        "специалист по охране труда",
+    )
+    responsible_forbidden = (
+        "какой инструктаж",
+        "какому инструктаж",
+        "целевой инструктаж разовые работы",
+        "разовые работы не связанные с прямыми обязанностями",
+        "наряд-допуск",
+    )
+
     for q in queries:
-        qn = re.sub(
-            r"\s+",
-            " ",
-            q,
-        ).strip().lower()
+        q_clean = re.sub(r"\s+", " ", str(q or "")).strip()
+        qn = q_clean.lower()
 
-        if qn and qn not in seen:
+        if not qn:
+            continue
+
+        if target_briefing_query and any(marker in qn for marker in target_forbidden):
+            logger.warning(
+                "RAG | search query blocked by target-briefing firewall | query=%s",
+                q_clean,
+            )
+            continue
+
+        if responsible_briefing_query and any(marker in qn for marker in responsible_forbidden):
+            logger.warning(
+                "RAG | search query blocked by responsible-briefing firewall | query=%s",
+                q_clean,
+            )
+            continue
+
+        if qn not in seen:
             seen.add(qn)
-            result.append(q.strip())
+            result.append(q_clean)
 
-    return result[:8]
+    final_queries = result[:8]
+
+    if target_briefing_query:
+        final_queries = [
+            q for q in final_queries
+            if not any(marker in q.lower() for marker in target_forbidden)
+        ]
+        if not final_queries:
+            final_queries = [
+                original,
+                "целевой инструктаж разовые работы не связанные с прямыми обязанностями",
+                "Инструкция №175 пункт 29 целевой инструктаж",
+            ]
+
+    return final_queries[:8]
 
 def _merge_search_results(
     groups: List[List[Dict[str, Any]]],
@@ -3223,12 +3267,63 @@ def _exact_match_score(
             ("наряд допуск", 0.45),
         ),
     }
-    for phrase, weight in phrase_weights.get(topic, ()):
-        if phrase in text:
-            score += weight
+    if topic == "occupational_briefing":
+        mode = (
+            "target"
+            if _is_target_briefing_query(user_query)
+            else (
+                "responsible"
+                if _is_responsible_briefing_query(user_query)
+                else "generic"
+            )
+        )
+
+        target_phrases = (
+            ("целевой инструктаж", 0.75),
+            ("разовых работ", 0.60),
+            ("не связанных с прямыми обязанностями", 0.90),
+            ("не связаны с прямыми обязанностями", 0.90),
+            ("наряд-допуск", 0.55),
+            ("наряду-допуску", 0.65),
+            ("наряд допуск", 0.55),
+        )
+        responsible_phrases = (
+            ("вводный инструктаж", 0.70),
+            ("проводит инструктаж", 0.60),
+            ("специалист по охране труда", 0.60),
+            ("уполномоченное должностное лицо", 0.60),
+            ("руководитель организации", 0.25),
+            ("руководитель структурного подразделения", 0.25),
+        )
+
+        if mode == "target":
+            for phrase, weight in target_phrases:
+                if phrase in text:
+                    score += weight
+            responsible_matches = sum(
+                1 for phrase, _ in responsible_phrases if phrase in text
+            )
+            score -= min(responsible_matches * 0.12, 0.36)
+        elif mode == "responsible":
+            for phrase, weight in responsible_phrases:
+                if phrase in text:
+                    score += weight
+            target_matches = sum(
+                1 for phrase, _ in target_phrases if phrase in text
+            )
+            score -= min(target_matches * 0.10, 0.30)
+        else:
+            for phrase, weight in target_phrases + responsible_phrases:
+                if phrase in text:
+                    score += weight * 0.55
+    else:
+        for phrase, weight in phrase_weights.get(topic, ()):
+            if phrase in text:
+                score += weight
+
     if topic in ("occupational_briefing", "occupational_training") and "175" in document_name:
         score += 0.08
-    return min(score, 1.80)
+    return max(0.0, min(score, 1.80))
 
 
 def _legal_relevance_score(
@@ -3245,8 +3340,52 @@ def _legal_relevance_score(
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
     keyword = _keyword_score(chunk, query_terms)
     exact_score = _exact_match_score(chunk, user_query, topic)
-    # Сохраняем компонент для диагностики TOP-N и последующего тюнинга.
-    chunk["_exact_score"] = exact_score
+
+    briefing_mode_bonus = 0.0
+    if topic == "occupational_briefing":
+        mode = (
+            "target"
+            if _is_target_briefing_query(user_query)
+            else (
+                "responsible"
+                if _is_responsible_briefing_query(user_query)
+                else "generic"
+            )
+        )
+        content_lower = str(chunk.get("content") or "").lower()
+        document_lower = _get_document_name(chunk).lower()
+
+        target_matches = sum(
+            marker in content_lower
+            for marker in (
+                "целевой инструктаж",
+                "разовых работ",
+                "не связанных с прямыми обязанностями",
+                "прямыми обязанностями",
+                "наряд-допуск",
+                "наряду-допуску",
+            )
+        )
+        responsible_matches = sum(
+            marker in content_lower
+            for marker in (
+                "вводный инструктаж",
+                "проводит инструктаж",
+                "специалист по охране труда",
+                "уполномоченное должностное лицо",
+            )
+        )
+
+        if mode == "target":
+            briefing_mode_bonus += min(target_matches * 0.16, 0.80)
+            briefing_mode_bonus -= min(responsible_matches * 0.08, 0.32)
+            if "175" in document_lower:
+                briefing_mode_bonus += 0.10
+        elif mode == "responsible":
+            briefing_mode_bonus += min(responsible_matches * 0.16, 0.80)
+            briefing_mode_bonus -= min(target_matches * 0.06, 0.24)
+
+    chunk["_briefing_mode_bonus"] = briefing_mode_bonus
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
     intent_score = _intent_relevance_score(chunk, intents)
     primary_score = _primary_intent_relevance_score(chunk, primary_intent, topic)
@@ -3271,6 +3410,7 @@ def _legal_relevance_score(
         + topic_score * topic_weight
         + intent_score * 0.10
         + primary_score * 0.20
+        + briefing_mode_bonus
         + labor_code_bonus
         + repeated_bonus
     )
@@ -4016,7 +4156,7 @@ async def retrieve_context(
             "RAG | TOP %s | role=%s | "
             "domain=%s | topic=%s | source=%s | "
             "semantic=%.4f | best_similarity=%.4f | "
-            "hits=%s | combined=%.4f",
+            "hits=%s | briefing_bonus=%.4f | combined=%.4f","hits=%s | combined=%.4f",
             index,
             _legal_chunk_role(
                 chunk,
@@ -4035,6 +4175,7 @@ async def retrieve_context(
                 )
             ),
             chunk.get("_search_hits", 1),
+            chunk.get("_briefing_mode_bonus", 0.0),
             chunk.get(
                 "_combined_score",
                 0.0,
