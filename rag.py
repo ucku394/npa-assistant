@@ -4156,7 +4156,7 @@ async def retrieve_context(
             "RAG | TOP %s | role=%s | "
             "domain=%s | topic=%s | source=%s | "
             "semantic=%.4f | best_similarity=%.4f | "
-            "hits=%s | briefing_bonus=%.4f | combined=%.4f","hits=%s | combined=%.4f",
+            "hits=%s | briefing_bonus=%.4f | combined=%.4f",
             index,
             _legal_chunk_role(
                 chunk,
