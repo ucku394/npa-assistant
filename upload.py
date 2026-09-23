@@ -738,6 +738,70 @@ def document_exists(
 
 
 # ============================================================
+# DOCUMENT ID
+# ============================================================
+
+def get_document_id(
+    supabase,
+    doc_name: str,
+) -> str:
+    """
+    Возвращает UUID записи из npa_documents.
+
+    npa_chunks.document_id является обязательным FK,
+    поэтому каждый chunk существующего НПА должен
+    ссылаться на соответствующую запись npa_documents.
+    """
+
+    def operation():
+
+        return (
+            supabase
+            .table("npa_documents")
+            .select("id")
+            .eq(
+                "doc_name",
+                doc_name,
+            )
+            .limit(1)
+            .execute()
+        )
+
+    response = supabase_execute(
+        operation,
+        f"DOCUMENT ID | {doc_name}",
+    )
+
+    data = getattr(
+        response,
+        "data",
+        None,
+    ) or []
+
+    if not data:
+        raise RuntimeError(
+            "В npa_documents не найдена запись "
+            f"для документа: {doc_name}"
+        )
+
+    document_id = data[0].get("id")
+
+    if not document_id:
+        raise RuntimeError(
+            "В npa_documents отсутствует id "
+            f"для документа: {doc_name}"
+        )
+
+    logger.info(
+        "DOCUMENT ID | %s | %s",
+        doc_name,
+        document_id,
+    )
+
+    return str(document_id)
+
+
+# ============================================================
 # DOCUMENT COUNT
 # ============================================================
 
@@ -1323,6 +1387,14 @@ def replace_document_safely(
             "не найден в Supabase."
         )
 
+    # npa_chunks.document_id — обязательный FK.
+    # Для replace используем тот же document_id, который
+    # уже принадлежит существующей записи npa_documents.
+    document_id = get_document_id(
+        supabase,
+        doc_name,
+    )
+
     staging_doc_name = (
         f"{STAGING_PREFIX}"
         f"{uuid4().hex}"
@@ -1340,13 +1412,18 @@ def replace_document_safely(
             "doc_name"
         ] = staging_doc_name
 
+        staged_row[
+            "document_id"
+        ] = document_id
+
         staging_rows.append(
             staged_row
         )
 
     logger.info(
-        "REPLACE | staging name=%s",
+        "REPLACE | staging name=%s | document_id=%s",
         staging_doc_name,
+        document_id,
     )
 
     try:
@@ -1898,547 +1975,3 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Прочитать DOCX, сформировать chunks "
             "и embeddings, но не изменять Supabase."
-        ),
-    )
-
-    return parser.parse_args()
-
-
-# ============================================================
-# SELECT FILES
-# ============================================================
-
-def select_files_for_run(
-    args: argparse.Namespace,
-) -> Tuple[
-    List[Path],
-    Optional[str],
-    str,
-]:
-
-    # --------------------------------------------------------
-    # REPLACE
-    # --------------------------------------------------------
-
-    if args.replace:
-
-        file_path = Path(
-            args.replace
-        )
-
-        if not file_path.is_absolute():
-
-            file_path = (
-                SCRIPT_DIR
-                / file_path
-            )
-
-        if not file_path.exists():
-
-            raise RuntimeError(
-                f"Файл не найден: "
-                f"{file_path}"
-            )
-
-        if (
-            file_path.suffix.lower()
-            != ".docx"
-        ):
-
-            raise RuntimeError(
-                "Для --replace требуется "
-                f"DOCX-файл: "
-                f"{file_path.name}"
-            )
-
-        return (
-            [file_path],
-            args.doc_name,
-            "replace",
-        )
-
-    # --------------------------------------------------------
-    # ADD
-    # --------------------------------------------------------
-
-    if args.add:
-
-        file_path = Path(
-            args.add
-        )
-
-        if not file_path.is_absolute():
-
-            file_path = (
-                SCRIPT_DIR
-                / file_path
-            )
-
-        if not file_path.exists():
-
-            raise RuntimeError(
-                f"Файл не найден: "
-                f"{file_path}"
-            )
-
-        if (
-            file_path.suffix.lower()
-            != ".docx"
-        ):
-
-            raise RuntimeError(
-                "Для --add требуется "
-                f"DOCX-файл: "
-                f"{file_path.name}"
-            )
-
-        return (
-            [file_path],
-            args.doc_name,
-            "add",
-        )
-
-    # --------------------------------------------------------
-    # AUTO / LEGACY MODE
-    # --------------------------------------------------------
-
-    files = find_source_files()
-
-    return (
-        files,
-        None,
-        "auto",
-    )
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-def main() -> int:
-
-    args = parse_args()
-
-    logger.info("")
-    logger.info("=" * 60)
-
-    logger.info(
-        "NPA LOADER START"
-    )
-
-    logger.info("=" * 60)
-
-    logger.info(
-        "SCRIPT DIR | %s",
-        SCRIPT_DIR,
-    )
-
-    logger.info(
-        "EMBEDDING MODEL | %s",
-        EMBEDDING_MODEL,
-    )
-
-    logger.info(
-        "EMBEDDING DIM | %s",
-        EMBEDDING_DIM,
-    )
-
-    logger.info(
-        "REINDEX_ALL | %s",
-        REINDEX_ALL,
-    )
-
-    logger.info(
-        "REINDEX_DOCS | %s",
-        (
-            sorted(REINDEX_DOCS)
-            if REINDEX_DOCS
-            else "не задан"
-        ),
-    )
-
-    logger.info(
-        "EMBEDDING_BATCH_SIZE | %s",
-        EMBEDDING_BATCH_SIZE,
-    )
-
-    logger.info(
-        "UPLOAD_BATCH_SIZE | %s",
-        UPLOAD_BATCH_SIZE,
-    )
-
-    mode = (
-        "replace"
-        if args.replace
-        else "add"
-        if args.add
-        else "auto"
-    )
-
-    logger.info(
-        "MODE | %s",
-        mode,
-    )
-
-    logger.info(
-        "DRY-RUN | %s",
-        args.dry_run,
-    )
-
-    # --------------------------------------------------------
-    # CONFIG
-    # --------------------------------------------------------
-
-    if not SUPABASE_URL:
-
-        logger.error(
-            "SUPABASE_URL не задан."
-        )
-
-        return 1
-
-    if not SUPABASE_SERVICE_ROLE_KEY:
-
-        logger.error(
-            "SUPABASE_SERVICE_ROLE_KEY "
-            "не задан."
-        )
-
-        return 1
-
-    # --------------------------------------------------------
-    # SELECT DOCX
-    # --------------------------------------------------------
-
-    try:
-
-        (
-            files,
-            explicit_doc_name,
-            mode,
-        ) = select_files_for_run(
-            args
-        )
-
-    except Exception as exc:
-
-        logger.error(
-            "FILE SELECTION ERROR | %s",
-            exc,
-        )
-
-        return 1
-
-    logger.info(
-        "Найдено документов для обработки: %s",
-        len(files),
-    )
-
-    for file_path in files:
-
-        logger.info(
-            " - %s",
-            file_path.name,
-        )
-
-    if not files:
-
-        logger.error(
-            "DOCX-файлы не найдены."
-        )
-
-        return 1
-
-    # --------------------------------------------------------
-    # VALIDATE FILE MAP
-    # --------------------------------------------------------
-
-    try:
-
-        validate_source_files(
-            files,
-            explicit_doc_name=(
-                resolve_explicit_doc_name(
-                    explicit_doc_name
-                )
-                if explicit_doc_name
-                else None
-            ),
-        )
-
-    except Exception as exc:
-
-        logger.error(
-            "VALIDATION ERROR | %s",
-            exc,
-        )
-
-        return 1
-
-    # --------------------------------------------------------
-    # EMBEDDING MODEL
-    # --------------------------------------------------------
-
-    try:
-
-        validate_embedding_model()
-
-    except Exception as exc:
-
-        logger.exception(
-            "EMBEDDING ERROR | %s",
-            exc,
-        )
-
-        return 1
-
-    # --------------------------------------------------------
-    # SUPABASE
-    # --------------------------------------------------------
-
-    try:
-
-        supabase = (
-            get_supabase_client()
-        )
-
-        test_supabase_connection(
-            supabase
-        )
-
-    except Exception as exc:
-
-        logger.exception(
-            "SUPABASE ERROR | %s",
-            exc,
-        )
-
-        return 1
-
-    # --------------------------------------------------------
-    # PROCESS
-    # --------------------------------------------------------
-
-    total_uploaded = 0
-
-    total_skipped = 0
-
-    failed_files = []
-
-    start_time = time.time()
-
-    for index, file_path in enumerate(
-        files,
-        start=1,
-    ):
-
-        logger.info("")
-
-        logger.info(
-            "DOCUMENT %s/%s",
-            index,
-            len(files),
-        )
-
-        try:
-
-            uploaded, skipped = (
-                process_file(
-                    supabase,
-                    file_path,
-                    mode=mode,
-                    explicit_doc_name=(
-                        explicit_doc_name
-                    ),
-                    dry_run=args.dry_run,
-                )
-            )
-
-            total_uploaded += (
-                uploaded
-            )
-
-            total_skipped += (
-                skipped
-            )
-
-        except Exception as exc:
-
-            failed_files.append(
-                (
-                    file_path.name,
-                    str(exc),
-                )
-            )
-
-            logger.exception(
-                "FAILED | %s | %s",
-                file_path.name,
-                exc,
-            )
-
-    elapsed = (
-        time.time()
-        - start_time
-    )
-
-    # --------------------------------------------------------
-    # FINAL REPORT
-    # --------------------------------------------------------
-
-    logger.info("")
-
-    logger.info("=" * 60)
-
-    logger.info(
-        "FINISHED"
-    )
-
-    logger.info("=" * 60)
-
-    logger.info(
-        "Embedding model: %s",
-        EMBEDDING_MODEL,
-    )
-
-    logger.info(
-        "Embedding dimension: %s",
-        EMBEDDING_DIM,
-    )
-
-    logger.info(
-        "Mode: %s",
-        mode,
-    )
-
-    logger.info(
-        "Dry-run: %s",
-        args.dry_run,
-    )
-
-    logger.info(
-        "Reindex all: %s",
-        REINDEX_ALL,
-    )
-
-    logger.info(
-        "Reindex docs: %s",
-        (
-            sorted(REINDEX_DOCS)
-            if REINDEX_DOCS
-            else "не задан"
-        ),
-    )
-
-    logger.info(
-        "Documents found: %s",
-        len(files),
-    )
-
-    logger.info(
-        "uploaded=%s",
-        total_uploaded,
-    )
-
-    logger.info(
-        "skipped=%s",
-        total_skipped,
-    )
-
-    logger.info(
-        "failed=%s",
-        len(failed_files),
-    )
-
-    logger.info(
-        "elapsed=%.1f sec",
-        elapsed,
-    )
-
-    if failed_files:
-
-        logger.error("")
-
-        logger.error(
-            "FAILED DOCUMENTS:"
-        )
-
-        for filename, error in (
-            failed_files
-        ):
-
-            logger.error(
-                " - %s: %s",
-                filename,
-                error,
-            )
-
-        return 1
-
-    logger.info("")
-
-    logger.info(
-        "ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО."
-    )
-
-    if args.dry_run:
-
-        logger.info(
-            "DRY-RUN: Supabase "
-            "не изменялся."
-        )
-
-    elif mode == "replace":
-
-        logger.info(
-            "REPLACE: новая редакция "
-            "успешно активирована."
-        )
-
-    elif mode == "add":
-
-        logger.info(
-            "ADD: новый документ "
-            "успешно добавлен."
-        )
-
-    else:
-
-        logger.info(
-            "AUTO: новые документы "
-            "добавлены, существующие "
-            "пропущены, REINDEX-документы "
-            "заменены безопасным способом."
-        )
-
-    return 0
-
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
-
-if __name__ == "__main__":
-
-    try:
-
-        sys.exit(
-            main()
-        )
-
-    except KeyboardInterrupt:
-
-        logger.warning(
-            "Остановлено пользователем."
-        )
-
-        sys.exit(130)
-
-    except Exception as exc:
-
-        logger.exception(
-            "FATAL ERROR | %s",
-            exc,
-        )
-
-        sys.exit(1)
