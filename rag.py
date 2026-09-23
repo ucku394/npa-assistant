@@ -3547,3 +3547,390 @@ async def retrieve_context(
             len(result or []),
             valid_queries[index],
         )
+    query_roles = [
+        "main" if index == 0 else "expanded"
+        for index in range(len(clean_groups))
+    ]
+
+    candidate_chunks = _merge_search_results(
+        clean_groups,
+        query_roles,
+    )
+
+    # ========================================================
+    # TARGETED LEGAL SEARCH
+    # ========================================================
+    #
+    # Сохраняем существующий точечный поиск для №209, №253,
+    # №74, №175 и Н-1, но теперь он лишь добавляет кандидатов,
+    # а не определяет весь ответ.
+    # ========================================================
+
+    targeted_chunks = await _get_targeted_chunks(
+        supabase,
+        topic,
+    )
+
+    if targeted_chunks:
+
+        logger.info(
+            "RAG | targeted search | topic=%s | found=%s",
+            topic,
+            len(targeted_chunks),
+        )
+
+        targeted_merged = _merge_search_results(
+            [targeted_chunks],
+            ["targeted"],
+        )
+
+        candidate_chunks = _merge_search_results(
+            [candidate_chunks, targeted_merged],
+            ["merged", "targeted"],
+        )
+
+    else:
+
+        logger.info(
+            "RAG | targeted search | topic=%s | found=0",
+            topic,
+        )
+
+    candidate_count = len(
+        candidate_chunks
+    )
+
+    logger.info(
+        "RAG | total candidates after multi-query merge=%s",
+        candidate_count,
+    )
+
+    if not candidate_chunks:
+
+        return {
+            "chunks": [],
+            "retrieved_text": "",
+            "found": False,
+            "candidate_count": 0,
+            "final_count": 0,
+            "source_references": [],
+            "legal_domain": legal_domain,
+            "topic": topic,
+            "intents": intents,
+            "cross_reference": cross_reference,
+            "domain_specific_count": 0,
+            "topic_specific_count": 0,
+        }
+
+    # ========================================================
+    # СТАТИСТИКА
+    # ========================================================
+
+    domain_specific_count = sum(
+        1
+        for chunk in candidate_chunks
+        if chunk.get("legal_domain")
+        == legal_domain
+    )
+
+    topic_specific_count = sum(
+        1
+        for chunk in candidate_chunks
+        if chunk.get("topic")
+        == topic
+    )
+
+    logger.info(
+        "RAG | domain=%s | domain_specific=%s | topic=%s | topic_specific=%s",
+        legal_domain,
+        domain_specific_count,
+        topic,
+        topic_specific_count,
+    )
+
+    # ========================================================
+    # ДИАГНОСТИКА СПЕЦИАЛИЗИРОВАННЫХ ТЕМ
+    # ========================================================
+
+    if topic == "workplace_attestation":
+
+        attestation_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_attestation_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | workplace_attestation | NPA_253_candidates=%s",
+            len(attestation_chunks),
+        )
+
+    if topic == "medical_examinations":
+
+        medical_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_medical_exam_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | medical_examinations | medical_candidates=%s",
+            len(medical_chunks),
+        )
+
+    if topic == "ppe_nonprovision":
+
+        ppe_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_ppe_nonprovision_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | ppe_nonprovision | NPA_209_candidates=%s",
+            len(ppe_chunks),
+        )
+
+    if topic == "accident_investigation":
+
+        accident_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_accident_investigation_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | accident_investigation | candidates=%s",
+            len(accident_chunks),
+        )
+
+    if topic == "occupational_training":
+
+        training_chunks = [
+            chunk
+            for chunk in candidate_chunks
+            if _is_occupational_training_document(chunk)
+        ]
+
+        logger.info(
+            "RAG | occupational_training | candidates=%s",
+            len(training_chunks),
+        )
+
+    # ========================================================
+    # ЮРИДИЧЕСКОЕ РАНЖИРОВАНИЕ
+    # ========================================================
+
+    for chunk in candidate_chunks:
+
+        chunk["_combined_score"] = _legal_relevance_score(
+            chunk,
+            query_terms,
+            topic,
+            intents,
+            cross_reference,
+            primary_intent=primary_intent,
+            labor_code_query=labor_code_query,
+            user_query=user_query,
+        )
+
+    ranked_chunks = sorted(
+        candidate_chunks,
+        key=lambda chunk: chunk.get(
+            "_combined_score",
+            0.0,
+        ),
+        reverse=True,
+    )
+
+    # ========================================================
+    # ФИНАЛЬНЫЙ КОНТЕКСТ
+    # ========================================================
+    #
+    # Для сложных вопросов увеличиваем окно с 5 до 7 фрагментов.
+    # Это даёт модели шанс увидеть и специальную норму, и общую
+    # норму о праве/обязанности/опасности.
+    # ========================================================
+
+    final_limit = (
+        max(RAG_FINAL_COUNT, 7)
+        if cross_reference
+        else RAG_FINAL_COUNT
+    )
+
+    final_chunks = _select_legal_diverse_chunks(
+        ranked_chunks,
+        final_limit,
+        topic,
+        intents,
+        cross_reference,
+        primary_intent=primary_intent,
+        labor_code_query=labor_code_query,
+    )
+
+    # ========================================================
+    # SOURCES
+    # ========================================================
+
+    source_references = []
+
+    for index, chunk in enumerate(
+        final_chunks,
+        start=1,
+    ):
+
+        source_id = build_source_id(
+            chunk,
+            index,
+        )
+
+        chunk["_source_id"] = source_id
+
+        document_name = _get_document_name(
+            chunk
+        )
+
+        point = _get_point_number(
+            chunk
+        )
+
+        if point:
+            reference = (
+                f"{document_name} — "
+                f"пункт/статья {point}"
+            )
+        else:
+            reference = document_name
+
+        source_references.append(
+            {
+                "source_id": source_id,
+                "reference": reference,
+            }
+        )
+
+        logger.info(
+            "RAG | TOP %s | role=%s | "
+            "domain=%s | topic=%s | source=%s | "
+            "semantic=%.4f | best_similarity=%.4f | "
+            "hits=%s | combined=%.4f",
+            index,
+            _legal_chunk_role(
+                chunk,
+                topic,
+                intents,
+                primary_intent=primary_intent,
+            ),
+            chunk.get("legal_domain"),
+            chunk.get("topic"),
+            source_id,
+            _semantic_score(chunk),
+            _safe_float(
+                chunk.get(
+                    "_best_similarity",
+                    _semantic_score(chunk),
+                )
+            ),
+            chunk.get("_search_hits", 1),
+            chunk.get(
+                "_combined_score",
+                0.0,
+            ),
+        )
+
+        logger.info(
+            "RAG | TOP %s | doc=%s | point=%s",
+            index,
+            document_name,
+            point,
+        )
+
+    # ========================================================
+    # CONTEXT
+    # ========================================================
+
+    retrieved_text = _build_retrieved_text(
+        final_chunks
+    )
+
+    return {
+        "chunks": final_chunks,
+        "retrieved_text": retrieved_text,
+        "found": bool(final_chunks),
+        "candidate_count": candidate_count,
+        "final_count": len(final_chunks),
+        "source_references": source_references,
+        "legal_domain": legal_domain,
+        "topic": topic,
+        "intents": intents,
+        "cross_reference": cross_reference,
+        "domain_specific_count": domain_specific_count,
+        "topic_specific_count": topic_specific_count,
+    }
+
+
+# ============================================================
+# ИСТОЧНИКИ
+# ============================================================
+
+def get_source_references(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+
+    references = []
+    seen = set()
+
+    for chunk in chunks:
+
+        document_name = _get_document_name(
+            chunk
+        )
+
+        point = _get_point_number(
+            chunk
+        )
+
+        if point:
+
+            reference = (
+                f"{document_name} — "
+                f"пункт/статья {point}"
+            )
+
+        else:
+
+            reference = document_name
+
+        if reference not in seen:
+
+            seen.add(reference)
+
+            references.append(
+                reference
+            )
+
+    return references
+
+
+def get_source_names(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+
+    names = []
+    seen = set()
+
+    for chunk in chunks:
+
+        document_name = _get_document_name(
+            chunk
+        )
+
+        if document_name not in seen:
+
+            seen.add(document_name)
+
+            names.append(
+                document_name
+            )
+
+    return names
