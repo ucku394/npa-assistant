@@ -20,17 +20,19 @@ logger = logging.getLogger(__name__)
 GEMINI_COOLDOWN_SECONDS = 1800
 OPENROUTER_RETRY_COOLDOWN_SECONDS = 60
 OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS = 180
+OPENROUTER_MODEL_COOLDOWN_SECONDS = 180
 AI_MAX_OUTPUT_TOKENS = 3000
 
-# Третий OpenRouter fallback.
-# Можно переопределить через переменную окружения.
+# Универсальный резерв OpenRouter.
+# Не привязываемся к конкретной free-модели.
 OPENROUTER_SECOND_FALLBACK_MODEL = os.getenv(
     "OPENROUTER_SECOND_FALLBACK_MODEL",
-    "google/gemma-4-26b-a4b-it:free",
+    "openrouter/free",
 ).strip()
 
 _gemini_disabled_until = 0.0
 _openrouter_disabled_until = 0.0
+_openrouter_model_disabled_until = {}
 
 gemini_client = None
 if GEMINI_API_KEY:
