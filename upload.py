@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import re
@@ -5,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
+from uuid import uuid4
 
 from docx import Document
 from dotenv import load_dotenv
@@ -33,30 +35,35 @@ REINDEX_ALL = (
     os.getenv("REINDEX_ALL", "false").lower() == "true"
 )
 
-# Если указать список документов через запятую, будут переиндексированы
-# только они. Например:
-# REINDEX_DOCS=Трудовой кодекс Республики Беларусь 2026,Правила по охране труда № 53
 REINDEX_DOCS = {
     item.strip()
     for item in os.getenv("REINDEX_DOCS", "").split(",")
     if item.strip()
 }
 
-EMBEDDING_BATCH_SIZE = int(
-    os.getenv("EMBEDDING_BATCH_SIZE", "8")
+EMBEDDING_BATCH_SIZE = max(
+    1,
+    int(os.getenv("EMBEDDING_BATCH_SIZE", "8")),
 )
 
-UPLOAD_BATCH_SIZE = int(
-    os.getenv("UPLOAD_BATCH_SIZE", "50")
+UPLOAD_BATCH_SIZE = max(
+    1,
+    int(os.getenv("UPLOAD_BATCH_SIZE", "50")),
 )
 
-SUPABASE_RETRIES = int(
-    os.getenv("SUPABASE_RETRIES", "3")
+SUPABASE_RETRIES = max(
+    1,
+    int(os.getenv("SUPABASE_RETRIES", "3")),
 )
 
-SUPABASE_RETRY_DELAY = float(
-    os.getenv("SUPABASE_RETRY_DELAY", "2")
+SUPABASE_RETRY_DELAY = max(
+    0.0,
+    float(os.getenv("SUPABASE_RETRY_DELAY", "2")),
 )
+
+# Временное имя для staging-загрузки.
+# Оно никогда не используется поиском ассистента.
+STAGING_PREFIX = "__NPA_STAGING__"
 
 
 # ============================================================
@@ -157,16 +164,16 @@ DOC_NAME_MAP: Dict[str, str] = {
 
     "Трудовой кодекс Республики Беларусь 2026":
         "Трудовой кодекс Республики Беларусь 2026",
-        
+
     "Об утверждении Инструкции по оценке условий труда при аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 35":
         "Об утверждении Инструкции по оценке условий труда при аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 35",
-        
+
     "Об аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 253":
         "Об аттестации рабочих мест по условиям труда от 22 февраля 2008 г. № 253",
-        
+
     "О подготовке и проверке знаний по вопросам промышленной безопасности от 6 июля 2016 г. № 31":
         "О подготовке и проверке знаний по вопросам промышленной безопасности от 6 июля 2016 г. № 31",
-        
+
     "Закон РБ О промышленной безопасности от 5 января 2016 г. № 354-З":
         "Закон РБ О промышленной безопасности от 5 января 2016 г. № 354-З",
 }
@@ -177,42 +184,15 @@ DOC_NAME_MAP: Dict[str, str] = {
 # ============================================================
 
 def normalize_text(text: str) -> str:
-    """
-    Нормализация пробелов для сопоставления имён файлов.
-    """
-
     text = str(text or "")
-
-    text = text.replace(
-        "\u00a0",
-        " ",
-    )
-
-    text = re.sub(
-        r"\s+",
-        " ",
-        text,
-    )
-
+    text = text.replace("\u00a0", " ")
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def normalize_filename_stem(
     file_path: Path,
 ) -> str:
-    """
-    Возвращает имя файла без расширения
-    и удаляет пробелы по краям.
-
-    Например:
-
-        'Правила № 11 .docx'
-
-    ->
-
-        'Правила № 11'
-    """
-
     return file_path.stem.strip()
 
 
@@ -223,35 +203,45 @@ def normalize_filename_stem(
 def resolve_doc_name(
     file_path: Path,
 ) -> Optional[str]:
-    """
-    Сопоставляет DOCX-файл с DOC_NAME_MAP.
-    """
-
-    stem = normalize_filename_stem(
-        file_path
-    )
-
-    # --------------------------------------------------------
-    # Exact match
-    # --------------------------------------------------------
+    stem = normalize_filename_stem(file_path)
 
     if stem in DOC_NAME_MAP:
         return DOC_NAME_MAP[stem]
 
-    # --------------------------------------------------------
-    # Normalized match
-    # --------------------------------------------------------
-
-    normalized_stem = normalize_text(
-        stem
-    )
+    normalized_stem = normalize_text(stem)
 
     for key, value in DOC_NAME_MAP.items():
-
         if normalize_text(key) == normalized_stem:
             return value
 
     return None
+
+
+def resolve_explicit_doc_name(
+    doc_name: str,
+) -> Optional[str]:
+    """
+    Разрешает явное указание канонического имени документа.
+
+    Это позволяет заменить редакцию, даже если новое имя DOCX
+    отличается от старого имени файла.
+    """
+
+    requested = normalize_text(doc_name)
+
+    if not requested:
+        return None
+
+    if requested in DOC_NAME_MAP.values():
+        return requested
+
+    for key, value in DOC_NAME_MAP.items():
+        if normalize_text(key) == requested:
+            return value
+
+    # Если имя явно передано пользователем,
+    # считаем его каноническим.
+    return requested
 
 
 # ============================================================
@@ -261,27 +251,8 @@ def resolve_doc_name(
 def get_document_classification(
     doc_name: str,
 ) -> Tuple[str, str]:
-    """
-    Определяет юридический домен и тему НПА.
 
-    Возвращает:
-
-        (
-            legal_domain,
-            topic
-        )
-
-    Например:
-
-        (
-            "occupational_safety",
-            "workplace_attestation"
-        )
-    """
-
-    name = normalize_text(
-        doc_name
-    ).lower()
+    name = normalize_text(doc_name).lower()
 
     # --------------------------------------------------------
     # АТТЕСТАЦИЯ РАБОЧИХ МЕСТ
@@ -301,7 +272,6 @@ def get_document_classification(
     # --------------------------------------------------------
 
     if "пожар" in name:
-
         return (
             "fire_safety",
             "fire_safety",
@@ -312,7 +282,6 @@ def get_document_classification(
     # --------------------------------------------------------
 
     if "санитар" in name:
-
         return (
             "sanitary",
             "sanitary_requirements",
@@ -335,15 +304,11 @@ def get_document_classification(
             "погрузочно-разгрузочных",
         ]
     ):
-
         return (
             "occupational_safety",
             "occupational_safety",
         )
-    
-  
-    
-    
+
     # --------------------------------------------------------
     # ПРОМЫШЛЕННАЯ БЕЗОПАСНОСТЬ
     # --------------------------------------------------------
@@ -366,7 +331,6 @@ def get_document_classification(
             "industrial_safety",
             "industrial_safety",
         )
-    
 
     # --------------------------------------------------------
     # ОБЩИЙ ДОМЕН
@@ -385,13 +349,6 @@ def get_document_classification(
 def read_docx(
     file_path: Path,
 ) -> str:
-    """
-    Читает текст из DOCX.
-
-    Обрабатываются:
-    - обычные paragraphs;
-    - таблицы.
-    """
 
     logger.info(
         "READ DOCX | %s",
@@ -450,7 +407,6 @@ def read_docx(
                     )
 
             if cells:
-
                 parts.append(
                     " | ".join(cells)
                 )
@@ -483,25 +439,6 @@ def read_docx(
 def split_text_into_chunks(
     text: str,
 ) -> List[Tuple[str, str]]:
-    """
-    Делит текст НПА на chunks.
-
-    Возвращает:
-
-        [
-            (
-                point_num,
-                content
-            ),
-            ...
-        ]
-
-    point_num:
-        - Статья 1
-        - Пункт 2
-        - 3.
-        - general
-    """
 
     text = str(
         text or ""
@@ -593,19 +530,6 @@ def split_text_into_chunks(
 # ============================================================
 
 def find_source_files() -> List[Path]:
-    """
-    Находит только DOCX-документы.
-
-    Игнорируются:
-
-        requirements.txt
-        .env
-        .gitignore
-        *.py
-        *.json
-        *.txt
-        временные Word-файлы ~$*.docx
-    """
 
     files: List[Path] = []
 
@@ -614,11 +538,9 @@ def find_source_files() -> List[Path]:
         if not path.is_file():
             continue
 
-        # Word temporary file
         if path.name.startswith("~$"):
             continue
 
-        # ONLY DOCX
         if path.suffix.lower() != ".docx":
             continue
 
@@ -636,26 +558,24 @@ def find_source_files() -> List[Path]:
 
 def validate_source_files(
     files: Sequence[Path],
+    explicit_doc_name: Optional[str] = None,
 ) -> None:
-    """
-    Проверяет сопоставление всех найденных DOCX
-    с DOC_NAME_MAP.
-    """
 
     errors: List[str] = []
 
     for file_path in files:
 
-        doc_name = resolve_doc_name(
-            file_path
+        doc_name = (
+            explicit_doc_name
+            if explicit_doc_name
+            else resolve_doc_name(file_path)
         )
 
         if not doc_name:
 
             errors.append(
                 f"{file_path.name}: "
-                f"Для файла '{file_path.name}' "
-                f"нет записи в DOC_NAME_MAP.\n"
+                f"нет записи в DOC_NAME_MAP. "
                 f"Нормализованное имя: "
                 f"'{normalize_filename_stem(file_path)}'"
             )
@@ -669,15 +589,19 @@ def validate_source_files(
         )
 
         for error in errors:
-            logger.error(error)
+            logger.error(
+                " - %s",
+                error,
+            )
 
         raise RuntimeError(
-            "Не все DOCX-файлы сопоставлены "
-            "с DOC_NAME_MAP."
+            "Не все выбранные DOCX-файлы "
+            "сопоставлены с DOC_NAME_MAP."
         )
 
     logger.info(
-        "DOC_NAME_MAP | все файлы успешно сопоставлены."
+        "DOC_NAME_MAP | выбранные файлы "
+        "успешно сопоставлены."
     )
 
 
@@ -713,10 +637,6 @@ def supabase_execute(
     operation,
     description: str = "Supabase operation",
 ):
-    """
-    Выполняет Supabase operation
-    с повторными попытками.
-    """
 
     last_error = None
 
@@ -759,7 +679,7 @@ def supabase_execute(
 
 
 # ============================================================
-# SUPABASE CONNECTION TEST
+# SUPABASE CONNECTION
 # ============================================================
 
 def test_supabase_connection(
@@ -787,26 +707,24 @@ def test_supabase_connection(
 
 
 # ============================================================
-# DOCUMENT EXISTENCE / DUPLICATE PROTECTION
+# DOCUMENT EXISTENCE
 # ============================================================
 
 def document_exists(
     supabase,
     doc_name: str,
 ) -> bool:
-    """
-    Проверяет, есть ли уже chunks данного НПА в Supabase.
-
-    При обычном запуске существующий документ пропускается.
-    Это предотвращает повторную загрузку всего корпуса.
-    """
 
     def operation():
+
         return (
             supabase
             .table("npa_chunks")
             .select("id")
-            .eq("doc_name", doc_name)
+            .eq(
+                "doc_name",
+                doc_name,
+            )
             .limit(1)
             .execute()
         )
@@ -819,20 +737,76 @@ def document_exists(
     return bool(response.data)
 
 
+# ============================================================
+# DOCUMENT COUNT
+# ============================================================
+
+def count_document_rows(
+    supabase,
+    doc_name: str,
+) -> int:
+    """
+    Возвращает фактическое количество chunks документа.
+    """
+
+    def operation():
+
+        return (
+            supabase
+            .table("npa_chunks")
+            .select(
+                "id",
+                count="exact",
+            )
+            .eq(
+                "doc_name",
+                doc_name,
+            )
+            .limit(1)
+            .execute()
+        )
+
+    response = supabase_execute(
+        operation,
+        f"COUNT DOCUMENT | {doc_name}",
+    )
+
+    count = getattr(
+        response,
+        "count",
+        None,
+    )
+
+    if count is None:
+
+        data = getattr(
+            response,
+            "data",
+            None,
+        )
+
+        return len(
+            data or []
+        )
+
+    return int(count)
+
+
+# ============================================================
+# REINDEX CONFIG
+# ============================================================
+
 def should_reindex_document(
     doc_name: str,
 ) -> bool:
-    """
-    Определяет, нужно ли принудительно переиндексировать документ.
-
-    REINDEX_ALL=true  -> все документы.
-    REINDEX_DOCS      -> только перечисленные документы.
-    """
 
     if REINDEX_ALL:
         return True
 
-    if REINDEX_DOCS and doc_name in REINDEX_DOCS:
+    if (
+        REINDEX_DOCS
+        and doc_name in REINDEX_DOCS
+    ):
         return True
 
     return False
@@ -846,13 +820,9 @@ def delete_document_vectors(
     supabase,
     doc_name: str,
 ) -> None:
-    """
-    При REINDEX_ALL=true удаляет все старые chunks
-    конкретного документа.
-    """
 
     logger.info(
-        "REINDEX | удаление старых chunks: %s",
+        "DELETE | chunks документа: %s",
         doc_name,
     )
 
@@ -876,6 +846,51 @@ def delete_document_vectors(
 
 
 # ============================================================
+# RENAME STAGING DOCUMENT
+# ============================================================
+
+def update_document_name(
+    supabase,
+    old_doc_name: str,
+    new_doc_name: str,
+) -> None:
+    """
+    Переводит staging chunks в каноническое имя.
+    """
+
+    logger.info(
+        "ACTIVATE | %s -> %s",
+        old_doc_name,
+        new_doc_name,
+    )
+
+    def operation():
+
+        return (
+            supabase
+            .table("npa_chunks")
+            .update(
+                {
+                    "doc_name": new_doc_name
+                }
+            )
+            .eq(
+                "doc_name",
+                old_doc_name,
+            )
+            .execute()
+        )
+
+    supabase_execute(
+        operation,
+        (
+            "ACTIVATE DOCUMENT | "
+            f"{old_doc_name} -> {new_doc_name}"
+        ),
+    )
+
+
+# ============================================================
 # EMBEDDING VALIDATION
 # ============================================================
 
@@ -886,7 +901,10 @@ def validate_embeddings(
     expected_count: int,
 ) -> None:
 
-    if len(embeddings) != expected_count:
+    if (
+        len(embeddings)
+        != expected_count
+    ):
 
         raise RuntimeError(
             "Embedding count mismatch: "
@@ -898,7 +916,10 @@ def validate_embeddings(
         embeddings
     ):
 
-        if len(embedding) != EMBEDDING_DIM:
+        if (
+            len(embedding)
+            != EMBEDDING_DIM
+        ):
 
             raise RuntimeError(
                 "Embedding dimension mismatch "
@@ -909,9 +930,6 @@ def validate_embeddings(
 
 
 def validate_embedding_model() -> None:
-    """
-    Загружает модель и проверяет размерность.
-    """
 
     logger.info(
         "EMBEDDING MODEL | %s",
@@ -949,6 +967,194 @@ def validate_embedding_model() -> None:
 
 
 # ============================================================
+# PREPARE CHUNKS
+# ============================================================
+
+def prepare_chunks(
+    doc_name: str,
+    chunks: Sequence[
+        Tuple[str, str]
+    ],
+    legal_domain: str,
+    topic: str,
+    storage_doc_name: Optional[str] = None,
+) -> List[dict]:
+    """
+    Формирует уникальные chunks.
+
+    storage_doc_name используется для staging.
+    """
+
+    actual_doc_name = (
+        storage_doc_name
+        or doc_name
+    )
+
+    prepared_chunks: List[dict] = []
+
+    seen_chunks = set()
+
+    duplicate_chunks = 0
+
+    for point_num, content in chunks:
+
+        content = content.strip()
+
+        if not content:
+            continue
+
+        chunk_key = (
+            str(point_num).strip(),
+            content,
+        )
+
+        if chunk_key in seen_chunks:
+
+            duplicate_chunks += 1
+
+            continue
+
+        seen_chunks.add(
+            chunk_key
+        )
+
+        prepared_chunks.append(
+            {
+                "doc_name": actual_doc_name,
+                "doc_type": "НПА",
+                "point_num": point_num,
+                "content": content,
+                "legal_domain": legal_domain,
+                "topic": topic,
+            }
+        )
+
+    if duplicate_chunks:
+
+        logger.warning(
+            "CHUNKS | удалено внутренних дублей=%s",
+            duplicate_chunks,
+        )
+
+    logger.info(
+        "CHUNKS | unique to upload=%s",
+        len(prepared_chunks),
+    )
+
+    return prepared_chunks
+
+
+# ============================================================
+# GENERATE EMBEDDINGS
+# ============================================================
+
+def generate_embeddings_for_chunks(
+    prepared_chunks: Sequence[dict],
+) -> List[List[float]]:
+
+    if not prepared_chunks:
+        return []
+
+    all_embeddings: List[
+        List[float]
+    ] = []
+
+    total_embedding_batches = (
+        len(prepared_chunks)
+        + EMBEDDING_BATCH_SIZE
+        - 1
+    ) // EMBEDDING_BATCH_SIZE
+
+    for start in range(
+        0,
+        len(prepared_chunks),
+        EMBEDDING_BATCH_SIZE,
+    ):
+
+        batch = prepared_chunks[
+            start:
+            start + EMBEDDING_BATCH_SIZE
+        ]
+
+        batch_number = (
+            start
+            // EMBEDDING_BATCH_SIZE
+        ) + 1
+
+        logger.info(
+            "EMBEDDING | batch %s/%s | chunks=%s",
+            batch_number,
+            total_embedding_batches,
+            len(batch),
+        )
+
+        batch_texts = [
+            item["content"]
+            for item in batch
+        ]
+
+        embeddings = (
+            get_document_embeddings(
+                batch_texts
+            )
+        )
+
+        validate_embeddings(
+            embeddings,
+            len(batch),
+        )
+
+        all_embeddings.extend(
+            embeddings
+        )
+
+    validate_embeddings(
+        all_embeddings,
+        len(prepared_chunks),
+    )
+
+    return all_embeddings
+
+
+# ============================================================
+# BUILD SUPABASE ROWS
+# ============================================================
+
+def build_rows(
+    prepared_chunks: Sequence[dict],
+    embeddings: Sequence[
+        Sequence[float]
+    ],
+) -> List[dict]:
+
+    validate_embeddings(
+        embeddings,
+        len(prepared_chunks),
+    )
+
+    rows: List[dict] = []
+
+    for item, embedding in zip(
+        prepared_chunks,
+        embeddings,
+    ):
+
+        rows.append(
+            {
+                "doc_name": item["doc_name"],
+                "doc_type": item["doc_type"],
+                "point_num": item["point_num"],
+                "content": item["content"],
+                "legal_domain": item["legal_domain"],
+                "topic": item["topic"],
+                "embedding": embedding,
+            }
+        )
+
+    return rows
+
+
+# ============================================================
 # SUPABASE INSERT
 # ============================================================
 
@@ -956,9 +1162,6 @@ def insert_rows(
     supabase,
     rows: List[dict],
 ) -> int:
-    """
-    Загружает chunks в Supabase батчами.
-    """
 
     if not rows:
         return 0
@@ -1017,30 +1220,404 @@ def insert_rows(
 
 
 # ============================================================
+# STAGING CLEANUP
+# ============================================================
+
+def cleanup_staging(
+    supabase,
+    staging_doc_name: str,
+) -> None:
+
+    try:
+
+        count = count_document_rows(
+            supabase,
+            staging_doc_name,
+        )
+
+        if count <= 0:
+            return
+
+        logger.warning(
+            "STAGING CLEANUP | "
+            "удаляем %s временных chunks: %s",
+            count,
+            staging_doc_name,
+        )
+
+        delete_document_vectors(
+            supabase,
+            staging_doc_name,
+        )
+
+    except Exception as exc:
+
+        logger.error(
+            "STAGING CLEANUP FAILED | %s | %s",
+            staging_doc_name,
+            exc,
+        )
+
+
+# ============================================================
+# SAFE REPLACEMENT
+# ============================================================
+
+def replace_document_safely(
+    supabase,
+    doc_name: str,
+    rows: List[dict],
+    dry_run: bool = False,
+) -> int:
+    """
+    Безопасная замена редакции НПА.
+
+    Последовательность:
+
+    1. Новая редакция полностью подготовлена.
+    2. Embeddings рассчитаны.
+    3. Rows сформированы.
+    4. Rows загружаются под временным staging-именем.
+    5. Staging проверяется.
+    6. Только после этого удаляется старая редакция.
+    7. Staging переименовывается в canonical doc_name.
+    8. Выполняется финальная проверка.
+    """
+
+    if not rows:
+
+        raise RuntimeError(
+            f"Нет данных для замены документа: "
+            f"{doc_name}"
+        )
+
+    expected_count = len(rows)
+
+    if dry_run:
+
+        logger.info(
+            "DRY-RUN | замена НЕ выполняется."
+        )
+
+        logger.info(
+            "DRY-RUN | документ=%s | "
+            "новых chunks=%s",
+            doc_name,
+            expected_count,
+        )
+
+        return expected_count
+
+    # --------------------------------------------------------
+    # Проверяем, что старый документ действительно существует.
+    # --------------------------------------------------------
+
+    if not document_exists(
+        supabase,
+        doc_name,
+    ):
+
+        raise RuntimeError(
+            "REPLACE требует существующий документ. "
+            f"Документ '{doc_name}' "
+            "не найден в Supabase."
+        )
+
+    staging_doc_name = (
+        f"{STAGING_PREFIX}"
+        f"{uuid4().hex}"
+    )
+
+    staging_rows = []
+
+    for row in rows:
+
+        staged_row = dict(
+            row
+        )
+
+        staged_row[
+            "doc_name"
+        ] = staging_doc_name
+
+        staging_rows.append(
+            staged_row
+        )
+
+    logger.info(
+        "REPLACE | staging name=%s",
+        staging_doc_name,
+    )
+
+    try:
+
+        # ====================================================
+        # 1. ЗАГРУЖАЕМ НОВУЮ РЕДАКЦИЮ
+        # ====================================================
+
+        inserted = insert_rows(
+            supabase,
+            staging_rows,
+        )
+
+        if inserted != expected_count:
+
+            raise RuntimeError(
+                "STAGING INSERT COUNT MISMATCH: "
+                f"expected {expected_count}, "
+                f"inserted {inserted}"
+            )
+
+        # ====================================================
+        # 2. ПРОВЕРЯЕМ STAGING
+        # ====================================================
+
+        staged_count = (
+            count_document_rows(
+                supabase,
+                staging_doc_name,
+            )
+        )
+
+        if staged_count != expected_count:
+
+            raise RuntimeError(
+                "STAGING VERIFY COUNT MISMATCH: "
+                f"expected {expected_count}, "
+                f"found {staged_count}"
+            )
+
+        logger.info(
+            "STAGING VERIFY | OK | chunks=%s",
+            staged_count,
+        )
+
+        # ====================================================
+        # 3. ТЕПЕРЬ МОЖНО УДАЛИТЬ СТАРУЮ РЕДАКЦИЮ
+        # ====================================================
+
+        delete_document_vectors(
+            supabase,
+            doc_name,
+        )
+
+        old_count_after_delete = (
+            count_document_rows(
+                supabase,
+                doc_name,
+            )
+        )
+
+        if old_count_after_delete != 0:
+
+            raise RuntimeError(
+                "OLD DOCUMENT DELETE VERIFY FAILED: "
+                f"remaining="
+                f"{old_count_after_delete}"
+            )
+
+        # ====================================================
+        # 4. АКТИВИРУЕМ НОВУЮ РЕДАКЦИЮ
+        # ====================================================
+
+        update_document_name(
+            supabase,
+            staging_doc_name,
+            doc_name,
+        )
+
+        # ====================================================
+        # 5. ФИНАЛЬНАЯ ПРОВЕРКА
+        # ====================================================
+
+        final_count = (
+            count_document_rows(
+                supabase,
+                doc_name,
+            )
+        )
+
+        if final_count != expected_count:
+
+            raise RuntimeError(
+                "FINAL DOCUMENT COUNT MISMATCH: "
+                f"expected {expected_count}, "
+                f"found {final_count}"
+            )
+
+        staging_left = (
+            count_document_rows(
+                supabase,
+                staging_doc_name,
+            )
+        )
+
+        if staging_left != 0:
+
+            raise RuntimeError(
+                "STAGING ROWS REMAIN "
+                "AFTER ACTIVATION: "
+                f"{staging_left}"
+            )
+
+        logger.info(
+            "REPLACE COMPLETE | %s | chunks=%s",
+            doc_name,
+            final_count,
+        )
+
+        return final_count
+
+    except Exception:
+
+        # Удаляем только staging.
+        # Канонический документ здесь не удаляем.
+        cleanup_staging(
+            supabase,
+            staging_doc_name,
+        )
+
+        raise
+
+
+# ============================================================
+# ADD NEW DOCUMENT
+# ============================================================
+
+def add_document(
+    supabase,
+    doc_name: str,
+    rows: List[dict],
+    dry_run: bool = False,
+) -> int:
+
+    if not rows:
+
+        raise RuntimeError(
+            f"Нет данных для добавления документа: "
+            f"{doc_name}"
+        )
+
+    expected_count = len(rows)
+
+    if document_exists(
+        supabase,
+        doc_name,
+    ):
+
+        raise RuntimeError(
+            "ADD отменён: документ уже "
+            "существует в Supabase: "
+            f"{doc_name}"
+        )
+
+    if dry_run:
+
+        logger.info(
+            "DRY-RUN | добавление НЕ выполняется."
+        )
+
+        logger.info(
+            "DRY-RUN | документ=%s | chunks=%s",
+            doc_name,
+            expected_count,
+        )
+
+        return expected_count
+
+    inserted = insert_rows(
+        supabase,
+        rows,
+    )
+
+    if inserted != expected_count:
+
+        raise RuntimeError(
+            "ADD INSERT COUNT MISMATCH: "
+            f"expected {expected_count}, "
+            f"inserted {inserted}"
+        )
+
+    actual_count = (
+        count_document_rows(
+            supabase,
+            doc_name,
+        )
+    )
+
+    if actual_count != expected_count:
+
+        raise RuntimeError(
+            "ADD VERIFY COUNT MISMATCH: "
+            f"expected {expected_count}, "
+            f"found {actual_count}"
+        )
+
+    logger.info(
+        "ADD COMPLETE | %s | chunks=%s",
+        doc_name,
+        actual_count,
+    )
+
+    return actual_count
+
+
+# ============================================================
 # PROCESS FILE
 # ============================================================
 
 def process_file(
     supabase,
     file_path: Path,
+    mode: str = "auto",
+    explicit_doc_name: Optional[str] = None,
+    dry_run: bool = False,
 ) -> Tuple[int, int]:
+    """
+    mode:
 
-    doc_name = resolve_doc_name(
-        file_path
-    )
+    auto:
+        новый документ -> add
+        существующий -> skip
+        REINDEX -> safe replace
+
+    add:
+        только добавление
+
+    replace:
+        только безопасная замена
+    """
+
+    # --------------------------------------------------------
+    # DOC NAME
+    # --------------------------------------------------------
+
+    if explicit_doc_name:
+
+        doc_name = (
+            resolve_explicit_doc_name(
+                explicit_doc_name
+            )
+        )
+
+    else:
+
+        doc_name = resolve_doc_name(
+            file_path
+        )
 
     if not doc_name:
 
         raise RuntimeError(
             f"Не найден DOC_NAME_MAP "
-            f"для '{file_path.name}'."
+            f"для '{file_path.name}'. "
+            "Используйте --doc-name "
+            "для явного указания "
+            "канонического имени."
         )
 
     logger.info("")
-
-    logger.info(
-        "=" * 70
-    )
+    logger.info("=" * 70)
 
     logger.info(
         "PROCESS | %s",
@@ -1052,10 +1629,9 @@ def process_file(
         doc_name,
     )
 
-    # ========================================================
-    # НОВОЕ:
-    # Определяем legal_domain и topic
-    # ========================================================
+    # --------------------------------------------------------
+    # CLASSIFICATION
+    # --------------------------------------------------------
 
     legal_domain, topic = (
         get_document_classification(
@@ -1073,9 +1649,7 @@ def process_file(
         topic,
     )
 
-    logger.info(
-        "=" * 70
-    )
+    logger.info("=" * 70)
 
     # --------------------------------------------------------
     # READ
@@ -1103,8 +1677,10 @@ def process_file(
     # CHUNKS
     # --------------------------------------------------------
 
-    chunks = split_text_into_chunks(
-        text
+    chunks = (
+        split_text_into_chunks(
+            text
+        )
     )
 
     if not chunks:
@@ -1122,203 +1698,317 @@ def process_file(
     )
 
     # --------------------------------------------------------
-    # DUPLICATE PROTECTION / REINDEX
-    # --------------------------------------------------------
-
-    force_reindex = should_reindex_document(doc_name)
-
-    if force_reindex:
-        logger.info(
-            "REINDEX | принудительная переиндексация: %s",
-            doc_name,
-        )
-
-        delete_document_vectors(
-            supabase,
-            doc_name,
-        )
-
-    else:
-        if document_exists(
-            supabase,
-            doc_name,
-        ):
-            logger.info(
-                "SKIP EXISTING | документ уже есть в Supabase: %s",
-                doc_name,
-            )
-
-            return 0, 1
-
-        logger.info(
-            "NEW DOCUMENT | документ отсутствует в Supabase: %s",
-            doc_name,
-        )
-
-    # --------------------------------------------------------
     # PREPARE
     # --------------------------------------------------------
 
-    prepared_chunks = []
-
-    # Защита от повторов, которые могут возникнуть
-    # непосредственно при извлечении текста из DOCX.
-    seen_chunks = set()
-    duplicate_chunks = 0
-
-    for point_num, content in chunks:
-
-        content = content.strip()
-
-        if not content:
-            continue
-
-        chunk_key = (
-            str(point_num).strip(),
-            content,
+    prepared_chunks = (
+        prepare_chunks(
+            doc_name=doc_name,
+            chunks=chunks,
+            legal_domain=legal_domain,
+            topic=topic,
         )
-
-        if chunk_key in seen_chunks:
-            duplicate_chunks += 1
-            continue
-
-        seen_chunks.add(chunk_key)
-
-        prepared_chunks.append(
-            {
-                "doc_name": doc_name,
-                "doc_type": "НПА",
-                "point_num": point_num,
-                "content": content,
-
-                # ====================================================
-                # КЛАССИФИКАЦИЯ:
-                # сохраняем legal_domain и topic каждого chunk
-                # ====================================================
-
-                "legal_domain": legal_domain,
-                "topic": topic,
-            }
-        )
-
-    if duplicate_chunks:
-        logger.warning(
-            "CHUNKS | удалено внутренних дублей=%s",
-            duplicate_chunks,
-        )
-
-    logger.info(
-        "CHUNKS | unique to upload=%s",
-        len(prepared_chunks),
     )
 
     if not prepared_chunks:
 
-        return 0, 0
+        raise RuntimeError(
+            "После очистки не осталось chunks: "
+            f"{doc_name}"
+        )
 
     # --------------------------------------------------------
     # EMBEDDINGS
+    #
+    # КРИТИЧЕСКИ ВАЖНО:
+    # здесь старая редакция ещё существует.
     # --------------------------------------------------------
 
-    all_embeddings: List[
-        List[float]
-    ] = []
+    embeddings = (
+        generate_embeddings_for_chunks(
+            prepared_chunks
+        )
+    )
 
-    total_embedding_batches = (
-        len(prepared_chunks)
-        + EMBEDDING_BATCH_SIZE
-        - 1
-    ) // EMBEDDING_BATCH_SIZE
+    # --------------------------------------------------------
+    # BUILD ROWS
+    # --------------------------------------------------------
 
-    for start in range(
-        0,
-        len(prepared_chunks),
-        EMBEDDING_BATCH_SIZE,
+    rows = build_rows(
+        prepared_chunks,
+        embeddings,
+    )
+
+    if len(rows) != len(
+        prepared_chunks
     ):
 
-        batch = prepared_chunks[
-            start:
-            start + EMBEDDING_BATCH_SIZE
-        ]
-
-        batch_number = (
-            start
-            // EMBEDDING_BATCH_SIZE
-        ) + 1
-
-        logger.info(
-            "EMBEDDING | batch %s/%s | chunks=%s",
-            batch_number,
-            total_embedding_batches,
-            len(batch),
+        raise RuntimeError(
+            "ROWS COUNT MISMATCH: "
+            f"prepared="
+            f"{len(prepared_chunks)}, "
+            f"rows={len(rows)}"
         )
 
-        batch_texts = [
-            item["content"]
-            for item in batch
-        ]
+    # --------------------------------------------------------
+    # EXPLICIT REPLACE
+    # --------------------------------------------------------
 
-        embeddings = (
-            get_document_embeddings(
-                batch_texts
+    if mode == "replace":
+
+        uploaded = (
+            replace_document_safely(
+                supabase,
+                doc_name,
+                rows,
+                dry_run=dry_run,
             )
         )
 
-        validate_embeddings(
-            embeddings,
-            len(batch),
+        return uploaded, 0
+
+    # --------------------------------------------------------
+    # EXPLICIT ADD
+    # --------------------------------------------------------
+
+    if mode == "add":
+
+        uploaded = add_document(
+            supabase,
+            doc_name,
+            rows,
+            dry_run=dry_run,
         )
 
-        all_embeddings.extend(
-            embeddings
+        return uploaded, 0
+
+    # --------------------------------------------------------
+    # AUTO MODE
+    # --------------------------------------------------------
+
+    force_reindex = (
+        should_reindex_document(
+            doc_name
         )
-
-    # --------------------------------------------------------
-    # BUILD SUPABASE ROWS
-    # --------------------------------------------------------
-
-    rows = []
-
-    for item, embedding in zip(
-        prepared_chunks,
-        all_embeddings,
-    ):
-
-        rows.append(
-            {
-                "doc_name": item["doc_name"],
-                "doc_type": item["doc_type"],
-                "point_num": item["point_num"],
-                "content": item["content"],
-
-                # ====================================================
-                # НОВОЕ:
-                # записываем legal_domain и topic в Supabase
-                # ====================================================
-
-                "legal_domain": item["legal_domain"],
-                "topic": item["topic"],
-
-                "embedding": embedding,
-            }
-        )
-
-    # --------------------------------------------------------
-    # INSERT
-    # --------------------------------------------------------
-
-    uploaded = insert_rows(
-        supabase,
-        rows,
     )
 
+    if force_reindex:
+
+        logger.info(
+            "REINDEX | безопасная замена документа: %s",
+            doc_name,
+        )
+
+        uploaded = (
+            replace_document_safely(
+                supabase,
+                doc_name,
+                rows,
+                dry_run=dry_run,
+            )
+        )
+
+        return uploaded, 0
+
+    # --------------------------------------------------------
+    # EXISTING
+    # --------------------------------------------------------
+
+    if document_exists(
+        supabase,
+        doc_name,
+    ):
+
+        logger.info(
+            "SKIP EXISTING | документ уже "
+            "есть в Supabase: %s",
+            doc_name,
+        )
+
+        return 0, 1
+
+    # --------------------------------------------------------
+    # NEW DOCUMENT
+    # --------------------------------------------------------
+
     logger.info(
-        "DONE FILE | %s | uploaded=%s",
-        file_path.name,
-        uploaded,
+        "NEW DOCUMENT | документ отсутствует "
+        "в Supabase: %s",
+        doc_name,
+    )
+
+    uploaded = add_document(
+        supabase,
+        doc_name,
+        rows,
+        dry_run=dry_run,
     )
 
     return uploaded, 0
+
+
+# ============================================================
+# CLI
+# ============================================================
+
+def parse_args() -> argparse.Namespace:
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Загрузчик НПА Республики Беларусь "
+            "в Supabase pgvector."
+        )
+    )
+
+    mode_group = (
+        parser.add_mutually_exclusive_group()
+    )
+
+    mode_group.add_argument(
+        "--replace",
+        metavar="FILE",
+        help=(
+            "Безопасно заменить существующую "
+            "редакцию указанного НПА."
+        ),
+    )
+
+    mode_group.add_argument(
+        "--add",
+        metavar="FILE",
+        help=(
+            "Добавить новый НПА. "
+            "Если документ уже существует, "
+            "операция будет отменена."
+        ),
+    )
+
+    parser.add_argument(
+        "--doc-name",
+        help=(
+            "Каноническое имя НПА в Supabase. "
+            "Используется, если имя нового DOCX "
+            "отличается от имени старого файла."
+        ),
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Прочитать DOCX, сформировать chunks "
+            "и embeddings, но не изменять Supabase."
+        ),
+    )
+
+    return parser.parse_args()
+
+
+# ============================================================
+# SELECT FILES
+# ============================================================
+
+def select_files_for_run(
+    args: argparse.Namespace,
+) -> Tuple[
+    List[Path],
+    Optional[str],
+    str,
+]:
+
+    # --------------------------------------------------------
+    # REPLACE
+    # --------------------------------------------------------
+
+    if args.replace:
+
+        file_path = Path(
+            args.replace
+        )
+
+        if not file_path.is_absolute():
+
+            file_path = (
+                SCRIPT_DIR
+                / file_path
+            )
+
+        if not file_path.exists():
+
+            raise RuntimeError(
+                f"Файл не найден: "
+                f"{file_path}"
+            )
+
+        if (
+            file_path.suffix.lower()
+            != ".docx"
+        ):
+
+            raise RuntimeError(
+                "Для --replace требуется "
+                f"DOCX-файл: "
+                f"{file_path.name}"
+            )
+
+        return (
+            [file_path],
+            args.doc_name,
+            "replace",
+        )
+
+    # --------------------------------------------------------
+    # ADD
+    # --------------------------------------------------------
+
+    if args.add:
+
+        file_path = Path(
+            args.add
+        )
+
+        if not file_path.is_absolute():
+
+            file_path = (
+                SCRIPT_DIR
+                / file_path
+            )
+
+        if not file_path.exists():
+
+            raise RuntimeError(
+                f"Файл не найден: "
+                f"{file_path}"
+            )
+
+        if (
+            file_path.suffix.lower()
+            != ".docx"
+        ):
+
+            raise RuntimeError(
+                "Для --add требуется "
+                f"DOCX-файл: "
+                f"{file_path.name}"
+            )
+
+        return (
+            [file_path],
+            args.doc_name,
+            "add",
+        )
+
+    # --------------------------------------------------------
+    # AUTO / LEGACY MODE
+    # --------------------------------------------------------
+
+    files = find_source_files()
+
+    return (
+        files,
+        None,
+        "auto",
+    )
 
 
 # ============================================================
@@ -1327,19 +2017,16 @@ def process_file(
 
 def main() -> int:
 
-    logger.info("")
+    args = parse_args()
 
-    logger.info(
-        "============================================================"
-    )
+    logger.info("")
+    logger.info("=" * 60)
 
     logger.info(
         "NPA LOADER START"
     )
 
-    logger.info(
-        "============================================================"
-    )
+    logger.info("=" * 60)
 
     logger.info(
         "SCRIPT DIR | %s",
@@ -1363,7 +2050,11 @@ def main() -> int:
 
     logger.info(
         "REINDEX_DOCS | %s",
-        sorted(REINDEX_DOCS) if REINDEX_DOCS else "не задан",
+        (
+            sorted(REINDEX_DOCS)
+            if REINDEX_DOCS
+            else "не задан"
+        ),
     )
 
     logger.info(
@@ -1376,8 +2067,26 @@ def main() -> int:
         UPLOAD_BATCH_SIZE,
     )
 
+    mode = (
+        "replace"
+        if args.replace
+        else "add"
+        if args.add
+        else "auto"
+    )
+
+    logger.info(
+        "MODE | %s",
+        mode,
+    )
+
+    logger.info(
+        "DRY-RUN | %s",
+        args.dry_run,
+    )
+
     # --------------------------------------------------------
-    # CONFIG VALIDATION
+    # CONFIG
     # --------------------------------------------------------
 
     if not SUPABASE_URL:
@@ -1391,16 +2100,34 @@ def main() -> int:
     if not SUPABASE_SERVICE_ROLE_KEY:
 
         logger.error(
-            "SUPABASE_SERVICE_ROLE_KEY не задан."
+            "SUPABASE_SERVICE_ROLE_KEY "
+            "не задан."
         )
 
         return 1
 
     # --------------------------------------------------------
-    # FIND DOCX
+    # SELECT DOCX
     # --------------------------------------------------------
 
-    files = find_source_files()
+    try:
+
+        (
+            files,
+            explicit_doc_name,
+            mode,
+        ) = select_files_for_run(
+            args
+        )
+
+    except Exception as exc:
+
+        logger.error(
+            "FILE SELECTION ERROR | %s",
+            exc,
+        )
+
+        return 1
 
     logger.info(
         "Найдено документов для обработки: %s",
@@ -1423,13 +2150,20 @@ def main() -> int:
         return 1
 
     # --------------------------------------------------------
-    # VALIDATE MAP
+    # VALIDATE FILE MAP
     # --------------------------------------------------------
 
     try:
 
         validate_source_files(
-            files
+            files,
+            explicit_doc_name=(
+                resolve_explicit_doc_name(
+                    explicit_doc_name
+                )
+                if explicit_doc_name
+                else None
+            ),
         )
 
     except Exception as exc:
@@ -1464,7 +2198,9 @@ def main() -> int:
 
     try:
 
-        supabase = get_supabase_client()
+        supabase = (
+            get_supabase_client()
+        )
 
         test_supabase_connection(
             supabase
@@ -1510,12 +2246,21 @@ def main() -> int:
                 process_file(
                     supabase,
                     file_path,
+                    mode=mode,
+                    explicit_doc_name=(
+                        explicit_doc_name
+                    ),
+                    dry_run=args.dry_run,
                 )
             )
 
-            total_uploaded += uploaded
+            total_uploaded += (
+                uploaded
+            )
 
-            total_skipped += skipped
+            total_skipped += (
+                skipped
+            )
 
         except Exception as exc:
 
@@ -1543,17 +2288,13 @@ def main() -> int:
 
     logger.info("")
 
-    logger.info(
-        "============================================================"
-    )
+    logger.info("=" * 60)
 
     logger.info(
         "FINISHED"
     )
 
-    logger.info(
-        "============================================================"
-    )
+    logger.info("=" * 60)
 
     logger.info(
         "Embedding model: %s",
@@ -1566,13 +2307,27 @@ def main() -> int:
     )
 
     logger.info(
+        "Mode: %s",
+        mode,
+    )
+
+    logger.info(
+        "Dry-run: %s",
+        args.dry_run,
+    )
+
+    logger.info(
         "Reindex all: %s",
         REINDEX_ALL,
     )
 
     logger.info(
         "Reindex docs: %s",
-        sorted(REINDEX_DOCS) if REINDEX_DOCS else "не задан",
+        (
+            sorted(REINDEX_DOCS)
+            if REINDEX_DOCS
+            else "не задан"
+        ),
     )
 
     logger.info(
@@ -1608,7 +2363,9 @@ def main() -> int:
             "FAILED DOCUMENTS:"
         )
 
-        for filename, error in failed_files:
+        for filename, error in (
+            failed_files
+        ):
 
             logger.error(
                 " - %s: %s",
@@ -1621,10 +2378,38 @@ def main() -> int:
     logger.info("")
 
     logger.info(
-        "ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО. "
-        "Новые документы загружены, существующие пропущены, "
-        "принудительно выбранные документы переиндексированы."
+        "ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО."
     )
+
+    if args.dry_run:
+
+        logger.info(
+            "DRY-RUN: Supabase "
+            "не изменялся."
+        )
+
+    elif mode == "replace":
+
+        logger.info(
+            "REPLACE: новая редакция "
+            "успешно активирована."
+        )
+
+    elif mode == "add":
+
+        logger.info(
+            "ADD: новый документ "
+            "успешно добавлен."
+        )
+
+    else:
+
+        logger.info(
+            "AUTO: новые документы "
+            "добавлены, существующие "
+            "пропущены, REINDEX-документы "
+            "заменены безопасным способом."
+        )
 
     return 0
 
