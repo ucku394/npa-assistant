@@ -3545,3 +3545,5 @@ async def retrieve_context(
             "RAG | search[%s] candidates=%s | query=%s",
             index,
             len(result or []),
+            valid_queries[index],
+        )
