@@ -2553,6 +2553,64 @@ def _legal_chunk_role(
     return "general"
 
 
+
+def _accident_worker_not_report_relevance_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """
+    Узкий score для вопроса: работник/потерпевший не сообщил о НС
+    непосредственному руководителю/нанимателю.
+
+    Наличие слова «сообщить» само по себе недостаточно: нормы о сообщении
+    в прокуратуру, ГИТ, страховщику, оформлении Н-1 и вручении акта относятся
+    к другим этапам процедуры расследования.
+    """
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+
+    score = 0.0
+
+    direct_phrases = (
+        ("не сообщил", 0.45),
+        ("не сообщила", 0.45),
+        ("не сообщив", 0.40),
+        ("сообщить о несчастном случае", 0.45),
+        ("сообщить о происшедшем несчастном случае", 0.50),
+        ("сообщить непосредственному руководителю", 0.60),
+        ("непосредственному руководителю", 0.45),
+        ("сообщить руководителю", 0.40),
+        ("немедленно сообщить", 0.35),
+        ("обязан сообщить", 0.35),
+    )
+
+    for phrase, weight in direct_phrases:
+        if phrase in text:
+            score += weight
+
+    if "30" in document:
+        score += 0.12
+    if "81 144" in document or "81-144" in document:
+        score += 0.10
+
+    unrelated_markers = (
+        "группов",
+        "акт н-1",
+        "форма н-1",
+        "вручение потерпевшему",
+        "вручение родственникам",
+        "после окончания расследования",
+        "прокуратур",
+        "государственной инспекции труда",
+        "страховщик",
+    )
+    unrelated_matches = sum(marker in text for marker in unrelated_markers)
+    score -= min(unrelated_matches * 0.12, 0.48)
+
+    return max(0.0, min(score, 1.50))
+
+
 def _select_legal_diverse_chunks(
     ranked_chunks: List[Dict[str, Any]],
     limit: int,
@@ -2563,6 +2621,7 @@ def _select_legal_diverse_chunks(
     labor_code_query: bool = False,
     special_category: Optional[str] = None,
     special_issue: Optional[str] = None,
+    accident_mode: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if not ranked_chunks or limit <= 0:
         return []
@@ -2572,6 +2631,57 @@ def _select_legal_diverse_chunks(
     roles_seen = set()
     documents_seen: Dict[str, int] = {}
     points_seen = set()
+
+    if accident_mode == "worker_did_not_report":
+        # Для этого intent финальный отбор идёт из узкого targeted-пула.
+        # Общий vector/hybrid-поиск не должен вытеснять нужные нормы
+        # правилами про Н-1, групповые НС, прокуратуру или вручение акта.
+        targeted_pool = [
+            chunk for chunk in ranked_chunks
+            if chunk.get("_accident_worker_not_report_targeted")
+        ]
+
+        targeted_pool.sort(
+            key=lambda chunk: (
+                _accident_worker_not_report_relevance_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for chunk in targeted_pool:
+            relevance = _accident_worker_not_report_relevance_score(chunk)
+            if relevance < 0.45:
+                continue
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+
+        # Добор разрешён только из основных НПА №30 и №81-144
+        # и только при наличии прямой связи с сообщением о НС.
+        fallback_pool = [
+            chunk for chunk in ranked_chunks
+            if _accident_worker_not_report_relevance_score(chunk) >= 0.35
+            and (
+                "30" in _get_document_name(chunk).lower()
+                or "81 144" in _get_document_name(chunk).lower()
+                or "81-144" in _get_document_name(chunk).lower()
+            )
+        ]
+        fallback_pool.sort(
+            key=lambda chunk: (
+                _accident_worker_not_report_relevance_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for chunk in fallback_pool:
+            _add(chunk, max_per_document=4, max_per_point=1)
+            if len(selected) >= limit:
+                return selected
+
+        return selected
 
     def _key(chunk: Dict[str, Any]):
         return (
@@ -2884,6 +2994,15 @@ async def retrieve_context(
     )
 
     if targeted_chunks:
+        accident_worker_not_report_mode = (
+            topic == "accident_investigation"
+            and _accident_query_mode(user_query) == "worker_did_not_report"
+        )
+
+        if accident_worker_not_report_mode:
+            for chunk in targeted_chunks:
+                chunk["_accident_worker_not_report_targeted"] = True
+
         targeted_merged = _merge_search_results([targeted_chunks], ["targeted"])
         candidate_chunks = _merge_search_results(
             [candidate_chunks, targeted_merged],
@@ -2961,6 +3080,12 @@ async def retrieve_context(
         else RAG_FINAL_COUNT
     )
 
+    accident_mode = (
+        _accident_query_mode(user_query)
+        if topic == "accident_investigation"
+        else None
+    )
+
     final_chunks = _select_legal_diverse_chunks(
         ranked_chunks,
         final_limit,
@@ -2971,11 +3096,13 @@ async def retrieve_context(
         labor_code_query=labor_code_query,
         special_category=special_category,
         special_issue=special_issue,
+        accident_mode=accident_mode,
     )
 
     logger.info(
-        "RAG | final | count=%s | special_category=%s | special_issue=%s | sources=%s",
+        "RAG | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
         len(final_chunks),
+        accident_mode,
         special_category,
         special_issue,
         [
