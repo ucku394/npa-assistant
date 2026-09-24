@@ -1011,13 +1011,40 @@ def _targeted_attestation_search(
     mode = _attestation_query_mode(user_query)
 
     if mode == "periodicity":
-        queries = [
-            "doc_name.ilike.%253%",
-            "content.ilike.%срок действия результатов аттестации составляет пять лет%",
-            "content.ilike.%один раз в пять лет%",
-            "content.ilike.%приказ об утверждении очередной аттестации%",
-            "point_num.ilike.%19%",
-        ]
+        # Для периодичности нельзя использовать общий OR-запрос с
+        # doc_name.ilike.%253%: он совпадает со всеми chunks НПА №253
+        # и может вытеснить п. 19 из лимита. Сначала ограничиваемся №253,
+        # затем ищем внутри него признаки нормы о пятилетнем сроке.
+        try:
+            response = (
+                supabase.table("npa_chunks")
+                .select(
+                    "doc_name,"
+                    "doc_type,"
+                    "point_num,"
+                    "content,"
+                    "legal_domain,"
+                    "topic,"
+                    "source_url"
+                )
+                .eq("legal_domain", "occupational_safety")
+                .ilike("doc_name", "%253%")
+                .or_(
+                    "content.ilike.%срок действия результатов аттестации составляет пять лет%,"
+                    "content.ilike.%один раз в пять лет%,"
+                    "content.ilike.%приказ об утверждении очередной аттестации%,"
+                    "point_num.ilike.%19%"
+                )
+                .limit(TARGETED_SEARCH_LIMIT)
+                .execute()
+            )
+            return _deduplicate_chunks(response.data or [])
+        except Exception as exc:
+            logger.warning(
+                "RAG | attestation periodicity targeted search failed: %s",
+                exc,
+            )
+            return []
     elif mode == "extraordinary":
         queries = [
             "doc_name.ilike.%253%",
