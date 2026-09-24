@@ -2600,6 +2600,50 @@ def _select_legal_diverse_chunks(
     documents_seen: Dict[str, int] = {}
     points_seen = set()
 
+    def _key(chunk: Dict[str, Any]):
+        return (
+            _get_document_key(chunk),
+            _get_point_number(chunk).lower(),
+            str(chunk.get("content") or "")[:200].lower(),
+        )
+
+    def _point_key(chunk: Dict[str, Any]):
+        point = _get_point_number(chunk).strip().lower()
+        if not point:
+            return None
+        return (
+            _get_document_key(chunk),
+            point,
+        )
+
+    def _add(
+        chunk: Dict[str, Any],
+        max_per_document: int = 4,
+        max_per_point: int = 1,
+    ) -> bool:
+        key = _key(chunk)
+        document_key = _get_document_key(chunk)
+        point_key = _point_key(chunk)
+
+        if key in selected_keys:
+            return False
+
+        # Один и тот же пункт/статья не должен занимать несколько мест
+        # финального юридического контекста. Разные пункты одного документа
+        # по-прежнему могут попадать в ответ.
+        if point_key is not None and point_key in points_seen:
+            return False
+
+        if documents_seen.get(document_key, 0) >= max_per_document:
+            return False
+
+        selected.append(chunk)
+        selected_keys.add(key)
+        documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+        if point_key is not None:
+            points_seen.add(point_key)
+        return True
+
     if accident_mode == "worker_did_not_report":
         # Для этого intent финальный отбор идёт из узкого targeted-пула.
         # Общий vector/hybrid-поиск не должен вытеснять нужные нормы
