@@ -87,7 +87,7 @@ logger = logging.getLogger(__name__)
 async def continuous_typing(chat, interval: float = 4.0):
     """
     Фоновая задача, которая периодически обновляет статус 'печатает' в чате,
-    пока выполняются долгие операции поиска в базе и генерации ответа.
+    пока выполняются операции поиска в базе и генерации ответа.
     """
     async def _send_action():
         try:
@@ -458,8 +458,18 @@ async def text_handler(
     if not question:
         return
 
+    status_message = None
+    try:
+        status_message = await update.effective_message.reply_text(
+            "🔍 <i>Ищу в базе НПА Республики Беларусь...</i>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.warning("Не удалось отправить статусное сообщение: %s", e)
+
     try:
         async with continuous_typing(update.effective_chat):
+            # 1. RAG поиск
             rag_result = await retrieve_context(
                 question,
                 supabase,
@@ -477,12 +487,29 @@ async def text_handler(
             )
 
             if not rag_result["found"] or not npa_context:
+                if status_message:
+                    try:
+                        await status_message.delete()
+                    except Exception:
+                        pass
+
                 await update.effective_message.reply_text(
                     "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
                     "поэтому не буду придумывать нормативное требование."
                 )
                 return
 
+            # 2. Обновление статуса на анализ перед вызовом LLM
+            if status_message:
+                try:
+                    await status_message.edit_text(
+                        "⚖️ <i>Анализирую требования законодательства...</i>",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.debug("Не удалось обновить статусное сообщение: %s", e)
+
+            # 3. Вызов модели
             prompt = LEGAL_ASSISTANT_PROMPT.format(
                 retrieved_text=npa_context,
                 user_query=question,
@@ -525,6 +552,13 @@ async def text_handler(
             answer = clean_ai_markup(answer)
             answer = ensure_numbered_list_spacing(answer)
 
+        # 4. Удаление временного сообщения перед финальным выводом
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
         await send_long_message(
             update,
             answer,
@@ -533,6 +567,13 @@ async def text_handler(
 
     except Exception:
         logger.exception("Text handler failed.")
+
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
         await update.effective_message.reply_text(
             "Произошла ошибка при обработке запроса. "
             "Попробуйте ещё раз через несколько секунд."
@@ -579,6 +620,15 @@ async def photo_handler(
         )
         return
 
+    status_message = None
+    try:
+        status_message = await update.effective_message.reply_text(
+            "📷 <i>Анализирую изображение на соответствие требованиям безопасности...</i>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.warning("Не удалось отправить статусное сообщение для фото: %s", e)
+
     try:
         async with continuous_typing(update.effective_chat):
             photo = update.effective_message.photo[-1]
@@ -589,6 +639,12 @@ async def photo_handler(
             image_bytes = buffer.getvalue()
 
             if len(image_bytes) > 20 * 1024 * 1024:
+                if status_message:
+                    try:
+                        await status_message.delete()
+                    except Exception:
+                        pass
+
                 await update.effective_message.reply_text(
                     "Фотография слишком большая для анализа."
                 )
@@ -630,6 +686,12 @@ async def photo_handler(
             if not result:
                 raise RuntimeError("Vision model returned an empty response.")
 
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
         await send_long_message(
             update,
             result,
@@ -638,6 +700,13 @@ async def photo_handler(
 
     except Exception:
         logger.exception("Photo handler failed.")
+
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
         await update.effective_message.reply_text(
             "Не удалось проанализировать фотографию. Попробуйте отправить её ещё раз."
         )
