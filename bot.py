@@ -430,7 +430,7 @@ async def debug_update(
 
 async def start(
     update: Update,
-    context: ContextTypes.DEFAULTTYPE if hasattr(ContextTypes, "DEFAULTTYPE") else ContextTypes.DEFAULT_TYPE,
+    context: ContextTypes.DEFAULT_TYPE,
 ):
     if not update.effective_message:
         return
