@@ -308,10 +308,14 @@ def _minor_special_issue(user_query: str) -> Optional[str]:
     """Определяет конкретное ограничение для несовершеннолетнего работника."""
     query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
 
-    if re.search(
-        r"\bгосударственн\w*\s+праздник\w*|\bпраздничн\w*\s+дн\w*|\bнерабоч\w*\s+праздник\w*|\bвыходн\w*\s+дн\w*",
-        query,
-        flags=re.IGNORECASE,
+    holiday_markers = (
+        "государственн",
+        "праздничн",
+        "нерабоч",
+        "выходн",
+    )
+    if any(marker in query for marker in holiday_markers) and (
+        "дн" in query or "праздник" in query or "выходн" in query
     ):
         return "holiday_weekend"
 
@@ -1064,6 +1068,66 @@ def _targeted_accident_search(supabase) -> List[Dict[str, Any]]:
     return _deduplicate_chunks(results)
 
 
+def _targeted_minor_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
+    """
+    Прямой lexical search для специальных гарантий несовершеннолетних.
+    Нужен как страховка: vector search не должен быть единственным способом
+    найти статью 276, если запрос явно содержит возраст работника.
+    """
+    issue = _minor_special_issue(user_query)
+    if not issue:
+        return []
+
+    base_queries = [
+        "doc_name.ilike.%Трудовой кодекс%",
+        "content.ilike.%моложе восемнадцати лет%",
+        "content.ilike.%несовершеннолетн%",
+    ]
+
+    article_queries = {
+        "holiday_weekend": [
+            "point_num.ilike.%276%",
+            "content.ilike.%статья 276%",
+            "content.ilike.%государственные праздники%",
+            "content.ilike.%праздничные дни%",
+            "content.ilike.%выходные дни%",
+        ],
+        "night_overtime": [
+            "point_num.ilike.%276%",
+            "content.ilike.%статья 276%",
+            "content.ilike.%ночным%",
+            "content.ilike.%сверхурочным%",
+        ],
+        "prohibited_work": [
+            "point_num.ilike.%274%",
+            "content.ilike.%статья 274%",
+            "content.ilike.%тяжелых работах%",
+            "content.ilike.%вредными%",
+        ],
+        "medical": [
+            "point_num.ilike.%275%",
+            "content.ilike.%статья 275%",
+            "content.ilike.%медицинских осмотров%",
+        ],
+        "leave": [
+            "point_num.ilike.%277%",
+            "content.ilike.%статья 277%",
+            "content.ilike.%трудовые отпуска%",
+        ],
+        "work_time": [
+            "point_num.ilike.%278%",
+            "point_num.ilike.%279%",
+            "content.ilike.%сокращенной продолжительности%",
+        ],
+    }
+
+    results = _execute_combined_targeted_search(
+        supabase,
+        base_queries + article_queries.get(issue, []),
+    )
+    return _deduplicate_chunks(results)
+
+
 def _deduplicate_chunks(
     chunks: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -1095,6 +1159,15 @@ async def _get_targeted_chunks(
     topic: str,
     user_query: str = "",
 ) -> List[Dict[str, Any]]:
+    if detect_special_category(user_query) == "minor":
+        minor_results = await asyncio.to_thread(
+            _targeted_minor_search,
+            supabase,
+            user_query,
+        )
+        if minor_results:
+            return minor_results
+
     if topic == "ppe_nonprovision":
         return await asyncio.to_thread(_targeted_ppe_nonprovision_search, supabase)
     if topic == "medical_examinations":
@@ -2322,6 +2395,10 @@ async def retrieve_context(
         intents,
     )
 
+    logger.info(
+        "RAG | query_input | %r",
+        user_query,
+    )
     logger.info(
         "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s",
         legal_domain,
