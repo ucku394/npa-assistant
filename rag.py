@@ -637,7 +637,42 @@ def _topic_relevance_score(
         if marker_matches:
             score += min(marker_matches * 0.15, 0.75)
 
-    return min(score, 2.5)
+        accident_mode = _accident_query_mode(
+            str(chunk.get("_user_query_for_scoring") or "")
+        )
+        if accident_mode == "worker_did_not_report":
+            worker_reporting_markers = [
+                "не сообщил",
+                "не сообщила",
+                "сообщить о несчастном случае",
+                "сообщить непосредственному руководителю",
+                "сообщить руководителю",
+                "немедленно сообщить",
+                "обязан сообщить",
+            ]
+            worker_reporting_matches = sum(
+                1 for marker in worker_reporting_markers if marker in content
+            )
+            if worker_reporting_matches:
+                score += min(worker_reporting_matches * 0.55, 1.80)
+
+            unrelated_markers = [
+                "группов",
+                "прокуратур",
+                "государственной инспекции труда",
+                "акт н-1",
+                "форма н-1",
+                "вруч",
+                "родственник",
+                "окончани",
+            ]
+            unrelated_matches = sum(
+                1 for marker in unrelated_markers if marker in content
+            )
+            if unrelated_matches:
+                score -= min(unrelated_matches * 0.18, 0.72)
+
+    return min(max(score, 0.0), 2.5)
 
 
 # ============================================================
@@ -1169,7 +1204,88 @@ def _targeted_occupational_briefing_search(
     return _deduplicate_chunks(results)
 
 
-def _targeted_accident_search(supabase) -> List[Dict[str, Any]]:
+def _accident_query_mode(user_query: str) -> str:
+    """Определяет узкий поисковый intent внутри темы расследования НС."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+
+    if not query:
+        return "general"
+
+    worker_did_not_report_patterns = [
+        r"\bне\s+сообщил\w*\b.*\bнесчастн\w*\s+случа\w*\b",
+        r"\bнесчастн\w*\s+случа\w*\b.*\bне\s+сообщил\w*\b",
+        r"\bне\s+сообщил\w*\b.*\bруководител\w*\b",
+        r"\bне\s+сообщил\w*\b.*\bнанимател\w*\b",
+        r"\bне\s+сообщил\w*\b.*\bначальник\w*\b",
+        r"\bпотерпевш\w*\b.*\bне\s+сообщил\w*\b",
+        r"\bработник\w*\b.*\bне\s+сообщил\w*\b",
+        r"\bнесообщен\w*\b.*\bнесчастн\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in worker_did_not_report_patterns):
+        return "worker_did_not_report"
+
+    group_patterns = [
+        r"\bгруппов\w*\s+несчастн\w*\s+случа\w*\b",
+        r"\bдвух\s+и\s+более\b.*\bпострадавш\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in group_patterns):
+        return "group_accident"
+
+    n1_patterns = [
+        r"\bакт\w*\s+н[-–—]?\s*1\b",
+        r"\bформа\w*\s+н[-–—]?\s*1\b",
+        r"\bвруч\w*\s+н[-–—]?\s*1\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in n1_patterns):
+        return "n1"
+
+    return "general"
+
+
+def _targeted_accident_worker_not_report_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный lexical-search для ситуации, когда работник не сообщил о НС."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,"
+                "doc_type,"
+                "point_num,"
+                "content,"
+                "legal_domain,"
+                "topic,"
+                "source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .or_("doc_name.ilike.%30%,doc_name.ilike.%81 144%")
+            .or_(
+                "content.ilike.%не сообщил%,"
+                "content.ilike.%не сообщила%,"
+                "content.ilike.%сообщить о несчастном случае%,"
+                "content.ilike.%сообщить о происшедшем несчастном случае%,"
+                "content.ilike.%сообщить непосредственному руководителю%,"
+                "content.ilike.%сообщить руководителю%,"
+                "content.ilike.%немедленно сообщить%,"
+                "content.ilike.%обязан сообщить%"
+            )
+            .limit(TARGETED_SEARCH_LIMIT)
+            .execute()
+        )
+        return _deduplicate_chunks(response.data or [])
+    except Exception as exc:
+        logger.warning(
+            "RAG | accident worker-not-report targeted search failed: %s",
+            exc,
+        )
+        return []
+
+
+def _targeted_accident_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
+    mode = _accident_query_mode(user_query)
+
+    if mode == "worker_did_not_report":
+        return _targeted_accident_worker_not_report_search(supabase)
+
     queries = [
         "doc_name.ilike.%Правила%",
         "doc_name.ilike.%30%",
@@ -1317,7 +1433,11 @@ async def _get_targeted_chunks(
     if topic == "occupational_briefing":
         return await asyncio.to_thread(_targeted_occupational_briefing_search, supabase, user_query)
     if topic == "accident_investigation":
-        return await asyncio.to_thread(_targeted_accident_search, supabase)
+        return await asyncio.to_thread(
+            _targeted_accident_search,
+            supabase,
+            user_query,
+        )
     if topic == "occupational_training":
         return await asyncio.to_thread(_targeted_occupational_training_search, supabase)
     return []
@@ -1729,12 +1849,9 @@ def build_search_queries(
         "occupational_briefing": [],
         "accident_investigation": [
             f"несчастный случай расследование {original}",
-            "групповой несчастный случай немедленно сообщает прокуратуре государственной инспекции труда профсоюзу страховщику",
-            "групповой несчастный случай срок извещения уполномоченных органов немедленно сообщает",
-            "порядок сообщения о групповом несчастном случае на производстве",
-            "порядок расследования несчастного случая на производстве права потерпевшего",
-            "акт Н-1 утверждение вручение потерпевшему родственникам",
-            "обязанности нанимателя после окончания расследования несчастного случая",
+            "порядок расследования несчастного случая на производстве",
+            "сообщение о несчастном случае работником непосредственному руководителю",
+            "обязанность работника сообщить о несчастном случае нанимателю",
         ],
         "workplace_attestation": [
             f"аттестация рабочих мест условия труда {original}",
@@ -1752,6 +1869,18 @@ def build_search_queries(
             "стажировка рабочие дни рабочие смены повышенная опасность проверка знаний",
         ],
     }
+
+    if topic == "accident_investigation":
+        accident_mode = _accident_query_mode(original)
+
+        if accident_mode == "worker_did_not_report":
+            queries.extend([
+                f"работник не сообщил о несчастном случае руководителю {original}",
+                "если работник не сообщил о несчастном случае непосредственному руководителю",
+                "потерпевший не сообщил о несчастном случае что делать",
+                "обязанность работника немедленно сообщить о несчастном случае",
+                "сообщить о несчастном случае непосредственному руководителю порядок действий",
+            ])
 
     if topic == "workplace_attestation":
         attestation_mode = _attestation_query_mode(original)
@@ -1845,6 +1974,11 @@ def build_search_queries(
     result: List[str] = []
     seen = set()
 
+    accident_worker_not_report_query = (
+        topic == "accident_investigation"
+        and _accident_query_mode(original) == "worker_did_not_report"
+    )
+
     target_forbidden = (
         "кто проводит",
         "кто должен проводить",
@@ -1872,6 +2006,20 @@ def build_search_queries(
             continue
 
         if responsible_briefing_query and any(marker in qn for marker in responsible_forbidden):
+            continue
+
+        if accident_worker_not_report_query and any(
+            marker in qn
+            for marker in (
+                "групповой несчастный случай",
+                "прокуратур",
+                "государственной инспекции труда",
+                "акт н-1",
+                "вручение потерпевшему",
+                "вручение родственникам",
+                "после окончания расследования",
+            )
+        ):
             continue
 
         if qn not in seen:
