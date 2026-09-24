@@ -10,6 +10,7 @@ from openai import OpenAI, RateLimitError
 
 from config import (
     GEMINI_API_KEY,
+    CHAT_MODEL,
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
     OPENROUTER_FALLBACK_MODEL,
@@ -17,9 +18,18 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-# Временный сбой Gemini: короткий cooldown, чтобы не делать
-# повторные запросы при transient 429/503.
-GEMINI_COOLDOWN_SECONDS = 1800
+# Gemini: cooldown зависит от типа ошибки.
+# 429/quota обычно требует более долгой паузы, а 503/timeout —
+# короткой. Это не отключает Gemini на 30 минут после каждого
+# кратковременного сбоя.
+GEMINI_RATE_LIMIT_COOLDOWN_SECONDS = 300
+GEMINI_TEMPORARY_COOLDOWN_SECONDS = 60
+GEMINI_UNKNOWN_COOLDOWN_SECONDS = 120
+
+# Один повторный запрос Gemini после transient-ошибки.
+# Если повтор снова неудачен — сразу переходим к OpenRouter.
+GEMINI_RETRY_ATTEMPTS = 1
+GEMINI_RETRY_DELAY_SECONDS = 2
 
 # Ошибки конфигурации/доступности API (например, location is not supported)
 # не имеют смысла повторять каждые 30 минут. В таком случае Gemini
@@ -670,12 +680,15 @@ def generate_with_gemini(prompt: str) -> str:
             "Gemini client is not initialized"
         )
 
-    logger.info("AI | trying Gemini")
+    logger.info(
+        "AI | trying Gemini | model=%s",
+        CHAT_MODEL,
+    )
 
     system_prompt = _build_legal_system_prompt(prompt)
 
     response = gemini_client.models.generate_content(
-        model="gemini-3.6-flash",
+        model=CHAT_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.1,
@@ -1233,6 +1246,16 @@ def _classify_gemini_error(
 # MAIN AI ROUTER
 # ============================================================
 
+def _gemini_cooldown_seconds(category: str) -> int:
+    if category == "temporary":
+        return GEMINI_TEMPORARY_COOLDOWN_SECONDS
+
+    if category == "rate_limit":
+        return GEMINI_RATE_LIMIT_COOLDOWN_SECONDS
+
+    return GEMINI_UNKNOWN_COOLDOWN_SECONDS
+
+
 def generate_answer(prompt: str) -> str:
     global _gemini_disabled_until
 
@@ -1248,42 +1271,71 @@ def generate_answer(prompt: str) -> str:
 
         if now >= _gemini_disabled_until:
 
-            try:
-                return generate_with_gemini(prompt)
+            last_gemini_error = None
 
-            except Exception as e:
+            for attempt in range(GEMINI_RETRY_ATTEMPTS + 1):
+                try:
+                    result = generate_with_gemini(prompt)
 
-                category = _classify_gemini_error(e)
+                    # Успешный запрос снимает предыдущий transient cooldown.
+                    _gemini_disabled_until = 0.0
 
-                logger.exception(
-                    "AI | Gemini failed | category=%s | error=%s",
-                    category,
-                    e,
-                )
+                    return result
 
-                if category == "temporary":
-                    _gemini_disabled_until = (
-                        time.time()
-                        + GEMINI_COOLDOWN_SECONDS
-                    )
+                except Exception as e:
+                    last_gemini_error = e
+                    category = _classify_gemini_error(e)
 
                     logger.warning(
-                        "AI | Gemini temporarily disabled "
-                        "for %ss | category=%s",
-                        GEMINI_COOLDOWN_SECONDS,
-                        category,
-                    )
-
-                elif category == "configuration":
-                    _gemini_disabled_until = GEMINI_CONFIG_DISABLED
-
-                    logger.error(
-                        "AI | Gemini disabled until process restart "
-                        "because the error is configuration/access related | "
+                        "AI | Gemini failed | attempt=%s/%s | "
                         "category=%s | error=%s",
+                        attempt + 1,
+                        GEMINI_RETRY_ATTEMPTS + 1,
                         category,
                         e,
                     )
+
+                    # Ошибки конфигурации/доступа бессмысленно повторять.
+                    if category == "configuration":
+                        _gemini_disabled_until = GEMINI_CONFIG_DISABLED
+
+                        logger.error(
+                            "AI | Gemini disabled until process restart "
+                            "because the error is configuration/access related | "
+                            "category=%s | error=%s",
+                            category,
+                            e,
+                        )
+                        break
+
+                    # Для transient-ошибки делаем один быстрый повтор.
+                    if (
+                        category in ("temporary", "rate_limit")
+                        and attempt < GEMINI_RETRY_ATTEMPTS
+                    ):
+                        logger.info(
+                            "AI | Gemini retry scheduled | "
+                            "attempt=%s | delay=%ss | category=%s",
+                            attempt + 2,
+                            GEMINI_RETRY_DELAY_SECONDS,
+                            category,
+                        )
+                        time.sleep(GEMINI_RETRY_DELAY_SECONDS)
+                        continue
+
+                    cooldown = _gemini_cooldown_seconds(category)
+                    _gemini_disabled_until = (
+                        time.time() + cooldown
+                    )
+
+                    logger.warning(
+                        "AI | Gemini cooldown set | "
+                        "category=%s | seconds=%s | error=%s",
+                        category,
+                        cooldown,
+                        last_gemini_error,
+                    )
+                    break
 
         else:
 
@@ -1293,8 +1345,9 @@ def generate_answer(prompt: str) -> str:
                     "(configuration/access error)"
                 )
             else:
-                remaining = int(
-                    _gemini_disabled_until - now
+                remaining = max(
+                    0,
+                    int(_gemini_disabled_until - now),
                 )
 
                 logger.info(
