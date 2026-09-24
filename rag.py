@@ -2252,6 +2252,7 @@ def _select_legal_diverse_chunks(
     selected_keys = set()
     roles_seen = set()
     documents_seen: Dict[str, int] = {}
+    points_seen = set()
 
     def _key(chunk: Dict[str, Any]):
         return (
@@ -2260,11 +2261,31 @@ def _select_legal_diverse_chunks(
             str(chunk.get("content") or "")[:200].lower(),
         )
 
-    def _add(chunk: Dict[str, Any], max_per_document: int = 4) -> bool:
+    def _point_key(chunk: Dict[str, Any]):
+        point = _get_point_number(chunk).strip().lower()
+        if not point:
+            return None
+        return (
+            _get_document_key(chunk),
+            point,
+        )
+
+    def _add(
+        chunk: Dict[str, Any],
+        max_per_document: int = 4,
+        max_per_point: int = 1,
+    ) -> bool:
         key = _key(chunk)
         document_key = _get_document_key(chunk)
+        point_key = _point_key(chunk)
 
         if key in selected_keys:
+            return False
+
+        # Один и тот же пункт/статья не должен занимать несколько мест
+        # финального юридического контекста. Разные пункты одного документа
+        # по-прежнему могут попадать в ответ.
+        if point_key is not None and point_key in points_seen:
             return False
 
         if documents_seen.get(document_key, 0) >= max_per_document:
@@ -2273,16 +2294,16 @@ def _select_legal_diverse_chunks(
         selected.append(chunk)
         selected_keys.add(key)
         documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
+        if point_key is not None:
+            points_seen.add(point_key)
         return True
 
     if special_category == "minor":
         # Для конкретного ограничения несовершеннолетнего сначала выбираем
-        # только релевантные именно этому ограничению фрагменты.
-        # Например, для holiday_weekend это должна быть ст. 276, а не
-        # случайные статьи главы 20 о возрасте, отпусках или общих гарантиях.
+        # именно норму, регулирующую этот вопрос. Для holiday_weekend это
+        # должна быть ст. 276, а не случайные статьи главы 20.
         if special_issue:
             issue_threshold = 0.70
-            issue_selected = 0
 
             for chunk in ranked_chunks:
                 special_score = _minor_special_relevance_score(
@@ -2293,24 +2314,37 @@ def _select_legal_diverse_chunks(
                 if special_score < issue_threshold:
                     continue
 
-                if _add(chunk, max_per_document=3):
-                    issue_selected += 1
-                    if issue_selected >= min(2, limit):
-                        break
+                # max_per_point=1 не позволяет двум chunks одной статьи
+                # занимать два из пяти мест финального контекста.
+                if _add(
+                    chunk,
+                    max_per_document=3,
+                    max_per_point=1,
+                ):
+                    break
 
-        # Затем добираем общие нормы для несовершеннолетних только если
-        # основного issue-specific контекста недостаточно.
-        if len(selected) < min(2, limit):
+            # Если основной нормы недостаточно для заполнения контекста,
+            # добираем только действительно релевантные нормы той же
+            # специальной категории. Слабые совпадения (например, общие
+            # статьи ТК о труде) сюда не должны попадать на раннем этапе.
+            category_threshold = 0.50
+
             for chunk in ranked_chunks:
+                if len(selected) >= min(3, limit):
+                    break
+
                 if _minor_special_relevance_score(
                     chunk,
                     special_category,
                     special_issue,
-                ) < 0.35:
+                ) < category_threshold:
                     continue
-                if _add(chunk, max_per_document=3):
-                    if len(selected) >= min(2, limit):
-                        break
+
+                _add(
+                    chunk,
+                    max_per_document=3,
+                    max_per_point=1,
+                )
 
     if primary_intent:
         for chunk in ranked_chunks:
