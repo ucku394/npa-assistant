@@ -17,7 +17,15 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Временный сбой Gemini: короткий cooldown, чтобы не делать
+# повторные запросы при transient 429/503.
 GEMINI_COOLDOWN_SECONDS = 1800
+
+# Ошибки конфигурации/доступности API (например, location is not supported)
+# не имеют смысла повторять каждые 30 минут. В таком случае Gemini
+# отключается до перезапуска процесса.
+GEMINI_CONFIG_DISABLED = float("inf")
+
 OPENROUTER_RETRY_COOLDOWN_SECONDS = 60
 OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS = 180
 OPENROUTER_MODEL_COOLDOWN_SECONDS = 180
@@ -1170,29 +1178,55 @@ def generate_with_openrouter(prompt: str) -> str:
 # GEMINI ERROR CLASSIFICATION
 # ============================================================
 
-def _is_temporary_gemini_error(
+def _classify_gemini_error(
     error: Exception,
-) -> bool:
+) -> str:
+    """
+    Классифицирует ошибку Gemini.
 
+    temporary:
+        429/quota/503 и другие кратковременные сбои.
+
+    configuration:
+        ошибки, которые бессмысленно повторять в рамках того же
+        процесса, например ограничение API по региону/локации,
+        проблемы авторизации или некорректная конфигурация.
+    """
     message = str(error).lower()
 
-    temporary_markers = [
-        "429",
-        "resource_exhausted",
-        "quota",
-        "rate limit",
-        "too many requests",
-        "503",
-        "service unavailable",
-        "temporarily unavailable",
-        "failed_precondition",
-        "location is not supported",
-    ]
-
-    return any(
+    if any(
         marker in message
-        for marker in temporary_markers
-    )
+        for marker in (
+            "location is not supported",
+            "user location is not supported",
+            "invalid api key",
+            "api key not valid",
+            "permission denied",
+            "unauthenticated",
+            "unauthorized",
+            "403",
+        )
+    ):
+        return "configuration"
+
+    if any(
+        marker in message
+        for marker in (
+            "429",
+            "resource_exhausted",
+            "quota",
+            "rate limit",
+            "too many requests",
+            "503",
+            "service unavailable",
+            "temporarily unavailable",
+            "deadline exceeded",
+            "timeout",
+        )
+    ):
+        return "temporary"
+
+    return "unknown"
 
 
 # ============================================================
@@ -1219,13 +1253,15 @@ def generate_answer(prompt: str) -> str:
 
             except Exception as e:
 
+                category = _classify_gemini_error(e)
+
                 logger.exception(
-                    "AI | Gemini failed | error=%s",
+                    "AI | Gemini failed | category=%s | error=%s",
+                    category,
                     e,
                 )
 
-                if _is_temporary_gemini_error(e):
-
+                if category == "temporary":
                     _gemini_disabled_until = (
                         time.time()
                         + GEMINI_COOLDOWN_SECONDS
@@ -1233,20 +1269,38 @@ def generate_answer(prompt: str) -> str:
 
                     logger.warning(
                         "AI | Gemini temporarily disabled "
-                        "for %ss",
+                        "for %ss | category=%s",
                         GEMINI_COOLDOWN_SECONDS,
+                        category,
+                    )
+
+                elif category == "configuration":
+                    _gemini_disabled_until = GEMINI_CONFIG_DISABLED
+
+                    logger.error(
+                        "AI | Gemini disabled until process restart "
+                        "because the error is configuration/access related | "
+                        "category=%s | error=%s",
+                        category,
+                        e,
                     )
 
         else:
 
-            remaining = int(
-                _gemini_disabled_until - now
-            )
+            if _gemini_disabled_until == GEMINI_CONFIG_DISABLED:
+                logger.info(
+                    "AI | Gemini disabled until process restart "
+                    "(configuration/access error)"
+                )
+            else:
+                remaining = int(
+                    _gemini_disabled_until - now
+                )
 
-            logger.info(
-                "AI | Gemini disabled | remaining=%ss",
-                remaining,
-            )
+                logger.info(
+                    "AI | Gemini temporarily disabled | remaining=%ss",
+                    remaining,
+                )
 
     # --------------------------------------------------------
     # 2. OPENROUTER
