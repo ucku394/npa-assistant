@@ -1210,17 +1210,102 @@ def detect_primary_intent(
     intents: List[str],
     user_query: str = "",
 ) -> Optional[str]:
-    priority = [
+    """
+    Определяет главный intent не по фиксированному приоритету,
+    а по форме реального вопроса. Это важно для составных запросов:
+    «кто обязан...», «имеет ли право...», «что должен сделать...».
+    """
+    if not intents:
+        return None
+
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+
+    explicit_patterns = [
+        (
+            "responsible_person",
+            (
+                r"\bкто\s+(?:провод\w*|должен\s+провод\w*|имеет\s+право\s+провод\w*)",
+                r"\bкем\s+провод\w*",
+                r"\bкакое\s+лицо\s+провод\w*",
+                r"\bкто\s+ответствен\w*",
+            ),
+        ),
+        (
+            "employer_duty",
+            (
+                r"\bкто\s+обязан\b",
+                r"\bобязан\s+ли\s+(?:наниматель|работодатель)",
+                r"\bчто\s+обязан\s+(?:сделать|обеспечить|организовать)",
+                r"\bобязанност\w*\s+(?:нанимателя|работодателя)",
+            ),
+        ),
+        (
+            "employee_right",
+            (
+                r"\bимеет\s+ли\s+прав\w*",
+                r"\bимеет\s+ли\s+работник\s+прав\w*",
+                r"\bвправе\s+ли\b",
+                r"\bможет\s+ли\s+работник\b",
+            ),
+        ),
+        (
+            "refusal",
+            (
+                r"\bимеет\s+ли\s+прав\w*.*\bотказ\w*",
+                r"\bможет\s+ли\s+отказ\w*",
+                r"\bправ\w*.*\bотказ\w*.*\bработ\w*",
+            ),
+        ),
+        (
+            "procedure",
+            (
+                r"\bчто\s+делать\b",
+                r"\bчто\s+должен\s+сделать\b",
+                r"\bкак\s+(?:должен|следует|правильно)\s+действ\w*",
+                r"\bпорядок\s+(?:действий|проведения|оформления)",
+                r"\bкаков\s+порядок\b",
+            ),
+        ),
+        (
+            "danger",
+            (
+                r"\bугроз\w*\s+(?:жизни|здоров\w*)",
+                r"\bопасн\w*\s+для\s+(?:жизни|здоров\w*)",
+            ),
+        ),
+        (
+            "liability",
+            (
+                r"\bкакая\s+ответственност\w*",
+                r"\bкто\s+нес[её]т\s+ответственност\w*",
+                r"\bчто\s+грозит\b",
+            ),
+        ),
+    ]
+
+    matched = []
+    for intent, patterns in explicit_patterns:
+        if intent in intents and any(re.search(p, query, re.IGNORECASE) for p in patterns):
+            matched.append(intent)
+
+    if matched:
+        # Для вопросов «имеет ли право отказаться» юридически важен
+        # именно refusal, если он уже обнаружен классификатором.
+        if "refusal" in matched:
+            return "refusal"
+        return matched[0]
+
+    # Fallback: только если форма вопроса не дала явного сигнала.
+    fallback_priority = [
         "responsible_person",
         "employer_duty",
         "employee_right",
         "refusal",
-        "danger",
         "procedure",
+        "danger",
         "liability",
     ]
-
-    for intent in priority:
+    for intent in fallback_priority:
         if intent in intents:
             return intent
 
@@ -1667,7 +1752,7 @@ def _exact_match_score(
     if topic in ("occupational_briefing", "occupational_training") and "175" in document_name:
         score += 0.08
 
-    return max(0.0, min(score, 1.80))
+    return max(0.0, min(score, 1.00))
 
 
 def _legal_relevance_score(
@@ -1721,13 +1806,13 @@ def _legal_relevance_score(
         )
 
         if mode == "target":
-            briefing_mode_bonus += min(target_matches * 0.16, 0.80)
-            briefing_mode_bonus -= min(responsible_matches * 0.08, 0.32)
+            briefing_mode_bonus += min(target_matches * 0.08, 0.24)
+            briefing_mode_bonus -= min(responsible_matches * 0.04, 0.12)
             if "175" in document_lower:
-                briefing_mode_bonus += 0.10
+                briefing_mode_bonus += 0.04
         elif mode == "responsible":
-            briefing_mode_bonus += min(responsible_matches * 0.16, 0.80)
-            briefing_mode_bonus -= min(target_matches * 0.06, 0.24)
+            briefing_mode_bonus += min(responsible_matches * 0.08, 0.24)
+            briefing_mode_bonus -= min(target_matches * 0.04, 0.12)
 
     chunk["_briefing_mode_bonus"] = briefing_mode_bonus
     topic_score = min(_topic_relevance_score(chunk, topic), 1.0)
@@ -1749,13 +1834,13 @@ def _legal_relevance_score(
             labor_code_bonus = 0.10
 
     return (
-        semantic * 0.30
-        + hybrid_score * 0.12
-        + exact_score * 0.28
+        semantic * 0.35
+        + hybrid_score * 0.15
+        + exact_score * 0.20
         + keyword * keyword_weight
         + topic_score * topic_weight
-        + intent_score * 0.10
-        + primary_score * 0.20
+        + intent_score * 0.05
+        + primary_score * 0.10
         + briefing_mode_bonus
         + labor_code_bonus
         + repeated_bonus
@@ -2031,6 +2116,21 @@ async def retrieve_context(
         intents,
     )
 
+    logger.info(
+        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s",
+        legal_domain,
+        topic,
+        intents,
+        primary_intent,
+        cross_reference,
+        labor_code_query,
+    )
+    logger.info(
+        "RAG | search_queries | count=%s | queries=%s",
+        len(search_queries),
+        search_queries,
+    )
+
     query_vectors = await asyncio.to_thread(
         get_query_embeddings,
         search_queries,
@@ -2170,6 +2270,21 @@ async def retrieve_context(
         reverse=True,
     )
 
+    for rank, chunk in enumerate(ranked_chunks[:10], start=1):
+        logger.info(
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | doc=%s | point=%s",
+            rank,
+            _safe_float(chunk.get("_combined_score")),
+            _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
+            _safe_float(_exact_match_score(chunk, user_query, topic)),
+            _safe_float(_topic_relevance_score(chunk, topic)),
+            _safe_float(_intent_relevance_score(chunk, intents)),
+            _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
+            _safe_float(chunk.get("_briefing_mode_bonus")),
+            _get_document_name(chunk),
+            _get_point_number(chunk),
+        )
+
     final_limit = (
         max(RAG_FINAL_COUNT, 7)
         if cross_reference
@@ -2184,6 +2299,15 @@ async def retrieve_context(
         cross_reference,
         primary_intent=primary_intent,
         labor_code_query=labor_code_query,
+    )
+
+    logger.info(
+        "RAG | final | count=%s | sources=%s",
+        len(final_chunks),
+        [
+            f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
+            for chunk in final_chunks
+        ],
     )
 
     source_references = []
