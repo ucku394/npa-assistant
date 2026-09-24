@@ -586,6 +586,20 @@ def _topic_relevance_score(
             score += 0.35
         if "рабоч" in content and "мест" in content:
             score += 0.15
+
+        attestation_mode = _attestation_query_mode(
+            str(chunk.get("_user_query_for_scoring") or "")
+        )
+        if attestation_mode == "periodicity":
+            if "один раз в пять лет" in content:
+                score += 1.20
+            if "срок действия результатов аттестации" in content:
+                score += 0.90
+            if "очередн" in content and "аттестаци" in content:
+                score += 0.35
+            if re.search(r"\b19\b", str(chunk.get("point_num") or "")):
+                score += 0.90
+
         if "253" in document_name and (
             "аттестаци" in document_name or "аттестаци" in content or "рабоч" in content
         ):
@@ -931,12 +945,107 @@ def _execute_combined_targeted_search(
         return []
 
 
-def _targeted_attestation_search(supabase) -> List[Dict[str, Any]]:
-    queries = [
-        "doc_name.ilike.%253%",
-        "doc_name.ilike.%аттестаци%",
-        "content.ilike.%аттестаци%",
+def _attestation_query_mode(user_query: str) -> str:
+    """
+    Определяет узкий тип вопроса внутри темы аттестации рабочих мест.
+
+    Это не новая правовая тема. Это поисковый intent, позволяющий не
+    смешивать вопрос о периодичности с вопросами о результатах,
+    комиссии, основаниях и внеочередной аттестации.
+    """
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+
+    if not query:
+        return "general"
+
+    periodicity_patterns = [
+        r"\bс\s+какой\s+периодичност\w*\b",
+        r"\bкак\s+часто\b",
+        r"\bпериодичност\w*\b",
+        r"\bодин\s+раз\s+в\s+пять\s+лет\b",
+        r"\bсрок\s+действ\w*\s+результат\w*\s+аттестаци\w*\b",
+        r"\bсрок\w*\s+действ\w*\s+результат\w*\b",
+        r"\bочередн\w*\s+аттестаци\w*\b",
     ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in periodicity_patterns):
+        return "periodicity"
+
+    extraordinary_patterns = [
+        r"\bвнеочередн\w*\s+аттестаци\w*\b",
+        r"\bпереаттестаци\w*\b",
+        r"\bв\s+течение\s+шести\s+месяц\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in extraordinary_patterns):
+        return "extraordinary"
+
+    results_patterns = [
+        r"\bрезультат\w*\s+аттестаци\w*\b",
+        r"\bдополнительн\w*\s+отпуск\w*\b",
+        r"\bдоплат\w*\b",
+        r"\bпенсион\w*\s+страхован\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in results_patterns):
+        return "results"
+
+    commission_patterns = [
+        r"\bкомисс\w*\s+по\s+аттестаци\w*\b",
+        r"\bсостав\w*\s+комисс\w*\b",
+        r"\bкто\s+входит\s+в\s+комисс\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in commission_patterns):
+        return "commission"
+
+    return "general"
+
+
+def _targeted_attestation_search(
+    supabase,
+    user_query: str = "",
+) -> List[Dict[str, Any]]:
+    """
+    Узкий lexical-search для аттестации рабочих мест.
+
+    Для вопроса о периодичности специально ищем норму п. 19 Положения
+    о порядке проведения аттестации рабочих мест по условиям труда.
+    """
+    mode = _attestation_query_mode(user_query)
+
+    if mode == "periodicity":
+        queries = [
+            "doc_name.ilike.%253%",
+            "content.ilike.%срок действия результатов аттестации составляет пять лет%",
+            "content.ilike.%один раз в пять лет%",
+            "content.ilike.%приказ об утверждении очередной аттестации%",
+            "point_num.ilike.%19%",
+        ]
+    elif mode == "extraordinary":
+        queries = [
+            "doc_name.ilike.%253%",
+            "content.ilike.%внеочередная аттестация%",
+            "content.ilike.%переаттестация%",
+            "content.ilike.%в течение шести месяцев%",
+            "point_num.ilike.%17%",
+        ]
+    elif mode == "results":
+        queries = [
+            "doc_name.ilike.%253%",
+            "content.ilike.%результаты аттестации%",
+            "content.ilike.%дополнительный отпуск%",
+            "content.ilike.%профессиональное пенсионное страхование%",
+        ]
+    elif mode == "commission":
+        queries = [
+            "doc_name.ilike.%253%",
+            "content.ilike.%комиссия по проведению аттестации%",
+            "content.ilike.%комиссия%",
+        ]
+    else:
+        queries = [
+            "doc_name.ilike.%253%",
+            "doc_name.ilike.%аттестаци%",
+            "content.ilike.%аттестаци%",
+        ]
+
     results = _execute_combined_targeted_search(supabase, queries)
     return _deduplicate_chunks(results)
 
@@ -1173,7 +1282,11 @@ async def _get_targeted_chunks(
     if topic == "medical_examinations":
         return await asyncio.to_thread(_targeted_medical_exam_search, supabase)
     if topic == "workplace_attestation":
-        return await asyncio.to_thread(_targeted_attestation_search, supabase)
+        return await asyncio.to_thread(
+            _targeted_attestation_search,
+            supabase,
+            user_query,
+        )
     if topic == "occupational_briefing":
         return await asyncio.to_thread(_targeted_occupational_briefing_search, supabase, user_query)
     if topic == "accident_investigation":
@@ -1613,6 +1726,33 @@ def build_search_queries(
         ],
     }
 
+    if topic == "workplace_attestation":
+        attestation_mode = _attestation_query_mode(original)
+
+        if attestation_mode == "periodicity":
+            queries.extend([
+                f"периодичность аттестации рабочих мест по условиям труда {original}",
+                "пункт 19 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+                "срок действия результатов аттестации составляет пять лет",
+                "аттестация рабочих мест проводится один раз в пять лет",
+            ])
+        elif attestation_mode == "extraordinary":
+            queries.extend([
+                f"внеочередная аттестация рабочих мест по условиям труда {original}",
+                "пункт 17 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+                "внеочередная аттестация переаттестация в течение шести месяцев",
+            ])
+        elif attestation_mode == "results":
+            queries.extend([
+                f"результаты аттестации рабочих мест по условиям труда {original}",
+                "пункт 12 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+            ])
+        elif attestation_mode == "commission":
+            queries.extend([
+                f"комиссия по аттестации рабочих мест по условиям труда {original}",
+                "состав комиссии по проведению аттестации рабочих мест",
+            ])
+
     if topic == "occupational_briefing":
         if target_briefing_query:
             queries.extend([
@@ -1865,6 +2005,10 @@ def _exact_match_score(
             ("условия труда", 0.30),
             ("вредные условия труда", 0.35),
             ("полный рабочий день", 0.25),
+            ("периодичность аттестации", 0.70),
+            ("один раз в пять лет", 0.90),
+            ("срок действия результатов аттестации", 0.75),
+            ("очередной аттестации", 0.55),
         ),
         "accident_investigation": (
             ("акт формы н-1", 0.45),
@@ -2597,6 +2741,10 @@ async def retrieve_context(
     )
 
     for chunk in candidate_chunks:
+        # Передаём исходный вопрос в topic-score, чтобы различать
+        # подтипы внутри workplace_attestation.
+        chunk["_user_query_for_scoring"] = user_query
+
         chunk["_combined_score"] = _legal_relevance_score(
             chunk,
             query_terms,
