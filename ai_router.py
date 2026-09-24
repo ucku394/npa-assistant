@@ -1222,6 +1222,8 @@ def _classify_gemini_error(
     ):
         return "configuration"
 
+    # 429/quota — отдельная категория: после rate-limit
+    # cooldown должен быть длиннее, чем после обычного 503/timeout.
     if any(
         marker in message
         for marker in (
@@ -1230,11 +1232,19 @@ def _classify_gemini_error(
             "quota",
             "rate limit",
             "too many requests",
+        )
+    ):
+        return "rate_limit"
+
+    if any(
+        marker in message
+        for marker in (
             "503",
             "service unavailable",
             "temporarily unavailable",
             "deadline exceeded",
             "timeout",
+            "connection error",
         )
     ):
         return "temporary"
