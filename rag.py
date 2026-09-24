@@ -2276,16 +2276,41 @@ def _select_legal_diverse_chunks(
         return True
 
     if special_category == "minor":
-        for chunk in ranked_chunks:
-            if _minor_special_relevance_score(
-                chunk,
-                special_category,
-                special_issue,
-            ) < 0.35:
-                continue
-            if _add(chunk, max_per_document=3):
-                if len(selected) >= min(2, limit):
-                    break
+        # Для конкретного ограничения несовершеннолетнего сначала выбираем
+        # только релевантные именно этому ограничению фрагменты.
+        # Например, для holiday_weekend это должна быть ст. 276, а не
+        # случайные статьи главы 20 о возрасте, отпусках или общих гарантиях.
+        if special_issue:
+            issue_threshold = 0.70
+            issue_selected = 0
+
+            for chunk in ranked_chunks:
+                special_score = _minor_special_relevance_score(
+                    chunk,
+                    special_category,
+                    special_issue,
+                )
+                if special_score < issue_threshold:
+                    continue
+
+                if _add(chunk, max_per_document=3):
+                    issue_selected += 1
+                    if issue_selected >= min(2, limit):
+                        break
+
+        # Затем добираем общие нормы для несовершеннолетних только если
+        # основного issue-specific контекста недостаточно.
+        if len(selected) < min(2, limit):
+            for chunk in ranked_chunks:
+                if _minor_special_relevance_score(
+                    chunk,
+                    special_category,
+                    special_issue,
+                ) < 0.35:
+                    continue
+                if _add(chunk, max_per_document=3):
+                    if len(selected) >= min(2, limit):
+                        break
 
     if primary_intent:
         for chunk in ranked_chunks:
