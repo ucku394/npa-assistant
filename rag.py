@@ -278,6 +278,66 @@ def detect_topic(user_query: str) -> str:
 
 
 # ============================================================
+# СПЕЦИАЛЬНЫЕ КАТЕГОРИИ РАБОТНИКОВ
+# ============================================================
+
+def detect_special_category(user_query: str) -> Optional[str]:
+    """Определяет специальную категорию работника для точечного поиска."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if not query:
+        return None
+
+    minor_patterns = [
+        r"\bнесовершеннолетн\w*",
+        r"\bлиц\w*\s+до\s+18\s+лет\b",
+        r"\bлиц\w*\s+моложе\s+18\s+лет\b",
+        r"\bработник\w*\s+моложе\s+18\s+лет\b",
+        r"\bработник\w*\s+моложе\s+восемнадцат\w*\s+лет\b",
+        r"\bдо\s+восемнадцат\w*\s+лет\b",
+        r"\bмоложе\s+восемнадцат\w*\s+лет\b",
+        r"\b\d{1,2}[-–—]?летн\w*\s+работник\w*",
+        r"\bработник\w*\s+\d{1,2}[-–—]?летн\w*",
+        r"\b\d{1,2}\s*летн\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in minor_patterns):
+        return "minor"
+    return None
+
+
+def _minor_special_issue(user_query: str) -> Optional[str]:
+    """Определяет конкретное ограничение для несовершеннолетнего работника."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+
+    if re.search(
+        r"\bгосударственн\w*\s+праздник\w*|\bпраздничн\w*\s+дн\w*|\bнерабоч\w*\s+праздник\w*|\bвыходн\w*\s+дн\w*",
+        query,
+        flags=re.IGNORECASE,
+    ):
+        return "holiday_weekend"
+
+    if re.search(r"\bночн\w*|\bсверхурочн\w*", query, flags=re.IGNORECASE):
+        return "night_overtime"
+
+    if re.search(
+        r"\bтяжел\w*\s+работ\w*|\bвредн\w*\s+услов\w*|\bопасн\w*\s+услов\w*|\bподземн\w*|\bгорн\w*\s+работ\w*",
+        query,
+        flags=re.IGNORECASE,
+    ):
+        return "prohibited_work"
+
+    if re.search(r"\bмедицинск\w*\s+осмотр\w*|\bмедосмотр\w*", query, flags=re.IGNORECASE):
+        return "medical"
+
+    if re.search(r"\bотпуск\w*", query, flags=re.IGNORECASE):
+        return "leave"
+
+    if re.search(r"\bрабоч\w*\s+врем\w*|\bсокращенн\w*\s+продолжительност\w*", query, flags=re.IGNORECASE):
+        return "work_time"
+
+    return None
+
+
+# ============================================================
 # КЛЮЧЕВЫЕ СЛОВА
 # ============================================================
 
@@ -1407,6 +1467,44 @@ def build_search_queries(
         )
     )
 
+    special_category = detect_special_category(original)
+    minor_issue = _minor_special_issue(original) if special_category == "minor" else None
+
+    if special_category == "minor":
+        minor_queries = [
+            "несовершеннолетние работники глава 20 Трудового кодекса Республики Беларусь",
+            "работники моложе восемнадцати лет Трудовой кодекс Республики Беларусь",
+            "статья 273 Трудовой кодекс Республики Беларусь несовершеннолетние",
+            "статья 274 Трудовой кодекс Республики Беларусь лица моложе восемнадцати лет",
+            "статья 275 Трудовой кодекс Республики Беларусь медицинские осмотры лиц моложе восемнадцати лет",
+            "статья 276 Трудовой кодекс Республики Беларусь работники моложе восемнадцати лет",
+        ]
+
+        if minor_issue == "holiday_weekend":
+            minor_queries[0:0] = [
+                "статья 276 Трудовой кодекс Республики Беларусь работники моложе восемнадцати лет государственные праздники праздничные выходные дни",
+                "несовершеннолетний работник праздничный день можно ли привлекать статья 276",
+                "работник 17 лет праздничный нерабочий день статья 276",
+            ]
+        elif minor_issue == "night_overtime":
+            minor_queries[0:0] = [
+                "статья 276 Трудовой кодекс Республики Беларусь работники моложе восемнадцати лет ночные сверхурочные работы",
+            ]
+        elif minor_issue == "prohibited_work":
+            minor_queries[0:0] = [
+                "статья 274 Трудовой кодекс Республики Беларусь лица моложе восемнадцати лет тяжелые вредные опасные работы",
+            ]
+        elif minor_issue == "medical":
+            minor_queries[0:0] = [
+                "статья 275 Трудовой кодекс Республики Беларусь медицинские осмотры лиц моложе восемнадцати лет",
+            ]
+        elif minor_issue == "leave":
+            minor_queries[0:0] = [
+                "статья 277 Трудовой кодекс Республики Беларусь трудовые отпуска работникам моложе восемнадцати лет",
+            ]
+
+        queries.extend(minor_queries)
+
     topic_queries = {
         "ppe_nonprovision": [
             f"СИЗ не выданы повреждены неисправны работник безопасность труда {original}",
@@ -1771,6 +1869,72 @@ def _exact_match_score(
     return max(0.0, min(score, 1.00))
 
 
+def _minor_special_relevance_score(
+    chunk: Dict[str, Any],
+    special_category: Optional[str],
+    issue: Optional[str],
+) -> float:
+    """Точечный score для специальных гарантий несовершеннолетних."""
+    if special_category != "minor":
+        return 0.0
+
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+    score = 0.0
+
+    if issue == "holiday_weekend":
+        if re.search(r"(?<!\d)276(?!\d)", point) or "статья 276" in text:
+            score += 0.50
+        if "работников моложе восемнадцати лет" in text:
+            score += 0.28
+        if "государственные праздники" in text or "праздничные дни" in text:
+            score += 0.22
+        if "выходные дни" in text:
+            score += 0.12
+    elif issue == "night_overtime":
+        if re.search(r"(?<!\d)276(?!\d)", point) or "статья 276" in text:
+            score += 0.50
+        if "работников моложе восемнадцати лет" in text:
+            score += 0.25
+        if "ночным" in text or "сверхурочным" in text:
+            score += 0.20
+    elif issue == "prohibited_work":
+        if re.search(r"(?<!\d)274(?!\d)", point) or "статья 274" in text:
+            score += 0.50
+        if "лиц моложе восемнадцати лет" in text:
+            score += 0.25
+        if "тяжелых работах" in text or "вредными" in text or "опасными условиями" in text:
+            score += 0.20
+    elif issue == "medical":
+        if re.search(r"(?<!\d)275(?!\d)", point) or "статья 275" in text:
+            score += 0.50
+        if "лиц моложе восемнадцати лет" in text:
+            score += 0.25
+        if "медицинских осмотров" in text:
+            score += 0.20
+    elif issue == "leave":
+        if re.search(r"(?<!\d)277(?!\d)", point) or "статья 277" in text:
+            score += 0.50
+        if "работникам моложе восемнадцати лет" in text:
+            score += 0.30
+        if "трудовые отпуска" in text:
+            score += 0.20
+    elif issue == "work_time":
+        if re.search(r"(?<!\d)278(?!\d)|(?<!\d)279(?!\d)", point):
+            score += 0.50
+        if "работников моложе восемнадцати лет" in text:
+            score += 0.20
+        if "сокращенной продолжительности" in text:
+            score += 0.20
+
+    if "моложе восемнадцати лет" in text or "несовершеннолетн" in text:
+        score += 0.10
+
+    return min(score, 1.00)
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -1780,6 +1944,8 @@ def _legal_relevance_score(
     primary_intent: Optional[str] = None,
     labor_code_query: bool = False,
     user_query: str = "",
+    special_category: Optional[str] = None,
+    special_issue: Optional[str] = None,
 ) -> float:
     semantic = _safe_float(chunk.get("_best_similarity", _semantic_score(chunk)))
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
@@ -1849,6 +2015,13 @@ def _legal_relevance_score(
         ):
             labor_code_bonus = 0.10
 
+    special_category_bonus = _minor_special_relevance_score(
+        chunk,
+        special_category,
+        special_issue,
+    )
+    chunk["_special_category_bonus"] = special_category_bonus
+
     return (
         semantic * 0.35
         + hybrid_score * 0.15
@@ -1859,6 +2032,7 @@ def _legal_relevance_score(
         + primary_score * 0.10
         + briefing_mode_bonus
         + labor_code_bonus
+        + special_category_bonus
         + repeated_bonus
     )
 
@@ -1995,6 +2169,8 @@ def _select_legal_diverse_chunks(
     cross_reference: bool,
     primary_intent: Optional[str] = None,
     labor_code_query: bool = False,
+    special_category: Optional[str] = None,
+    special_issue: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if not ranked_chunks or limit <= 0:
         return []
@@ -2025,6 +2201,18 @@ def _select_legal_diverse_chunks(
         selected_keys.add(key)
         documents_seen[document_key] = documents_seen.get(document_key, 0) + 1
         return True
+
+    if special_category == "minor":
+        for chunk in ranked_chunks:
+            if _minor_special_relevance_score(
+                chunk,
+                special_category,
+                special_issue,
+            ) < 0.35:
+                continue
+            if _add(chunk, max_per_document=3):
+                if len(selected) >= min(2, limit):
+                    break
 
     if primary_intent:
         for chunk in ranked_chunks:
@@ -2124,6 +2312,8 @@ async def retrieve_context(
     cross_reference = is_cross_reference_query(intents)
     primary_intent = detect_primary_intent(intents, user_query)
     labor_code_query = _is_labor_code_query(user_query)
+    special_category = detect_special_category(user_query)
+    special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
 
     search_queries = build_search_queries(
         user_query,
@@ -2133,13 +2323,15 @@ async def retrieve_context(
     )
 
     logger.info(
-        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s",
+        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s",
         legal_domain,
         topic,
         intents,
         primary_intent,
         cross_reference,
         labor_code_query,
+        special_category,
+        special_issue,
     )
     logger.info(
         "RAG | search_queries | count=%s | queries=%s",
@@ -2278,6 +2470,8 @@ async def retrieve_context(
             primary_intent=primary_intent,
             labor_code_query=labor_code_query,
             user_query=user_query,
+            special_category=special_category,
+            special_issue=special_issue,
         )
 
     ranked_chunks = sorted(
@@ -2288,7 +2482,7 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
@@ -2297,6 +2491,7 @@ async def retrieve_context(
             _safe_float(_intent_relevance_score(chunk, intents)),
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
             _safe_float(chunk.get("_briefing_mode_bonus")),
+            _safe_float(chunk.get("_special_category_bonus")),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
@@ -2315,11 +2510,15 @@ async def retrieve_context(
         cross_reference,
         primary_intent=primary_intent,
         labor_code_query=labor_code_query,
+        special_category=special_category,
+        special_issue=special_issue,
     )
 
     logger.info(
-        "RAG | final | count=%s | sources=%s",
+        "RAG | final | count=%s | special_category=%s | special_issue=%s | sources=%s",
         len(final_chunks),
+        special_category,
+        special_issue,
         [
             f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
             for chunk in final_chunks
