@@ -2126,6 +2126,9 @@ def _merge_search_results(
                         break
 
             item["_search_hits"] = int(item.get("_search_hits", 0)) + 1
+
+            if chunk.get("_accident_worker_not_report_targeted"):
+                item["_accident_worker_not_report_targeted"] = True
             roles = item.setdefault("_query_roles", [])
             if role not in roles:
                 roles.append(role)
