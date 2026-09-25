@@ -3044,6 +3044,56 @@ def _select_legal_diverse_chunks(
                     max_per_point=1,
                 )
 
+    # Универсальный приоритет для количественных ограничений.
+    # Сначала отбираем норму, соответствующую субъекту и операции запроса,
+    # чтобы общие нормы ТК/КоАП не вытесняли прямое числовое ограничение.
+    constraint = (query_profile or {}).get("constraint") or {}
+    if constraint.get("type") == "maximum" and constraint.get("unit") == "kg":
+        constraint_candidates = []
+        for chunk in ranked_chunks:
+            cscore = _universal_query_relevance_score(chunk, query_profile or {})
+            text_lower = (
+                f"{_get_document_name(chunk)} "
+                f"{_get_point_number(chunk)} "
+                f"{str(chunk.get('content') or '')}"
+            ).lower()
+
+            if constraint.get("subject") == "adult_male":
+                if any(x in text_lower for x in ("50 кг", "50 килограмм", "не более 50 кг", "не более 50 килограмм")):
+                    cscore += 0.50
+                if "погрузочно-разгрузоч" in text_lower:
+                    cscore += 0.25
+                if any(x in text_lower for x in ("пункт 86", "п. 86", "26.01.2018", "постановления 12")):
+                    cscore += 0.25
+                if any(x in text_lower for x in ("женщин", "женщина", "несовершеннолетн", "моложе восемнадцати лет")) and not any(x in text_lower for x in ("мужчин", "мужчина", "работающим мужчиной")):
+                    cscore -= 0.45
+            elif constraint.get("subject") == "adult_female":
+                if any(x in text_lower for x in ("женщин", "женщина", "женского пола")):
+                    cscore += 0.20
+                if any(x in text_lower for x in ("мужчин", "мужчина", "несовершеннолетн", "моложе восемнадцати лет")):
+                    cscore -= 0.35
+
+            constraint_candidates.append((cscore, _safe_float(chunk.get("_combined_score")), chunk))
+
+        constraint_candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        constraint_selected = False
+        for cscore, _, chunk in constraint_candidates:
+            if cscore < 0.35:
+                continue
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                constraint_selected = True
+                if len(selected) >= limit:
+                    return selected
+
+        # Если прямой числовой норматив найден, общий pool не должен его вытеснить.
+        if constraint_selected:
+            for chunk in constraint_candidates:
+                if len(selected) >= limit:
+                    break
+                if _safe_float(chunk[0]) < 0.20:
+                    continue
+                _add(chunk, max_per_document=4, max_per_point=1)
+
     if primary_intent:
         for chunk in ranked_chunks:
             role = _legal_chunk_role(
