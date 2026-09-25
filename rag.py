@@ -1875,18 +1875,24 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
 
 def build_universal_search_queries(profile: Dict[str, Any], original: str) -> List[str]:
     """Генерирует нормативные формулировки независимо от конкретной темы."""
-    queries = list(profile.get("legal_phrases") or [])
     event = profile.get("event")
     qtype = profile.get("question_type")
     state = profile.get("action_state")
+
+    # Для количественного ограничения сначала идут точные нормативные
+    # формулировки. Это важно: build_search_queries() ограничивает
+    # универсальное расширение, поэтому специфические запросы не должны
+    # теряться после общих legal_phrases.
+    queries: List[str] = []
 
     if event == "lifting_and_moving_loads":
         constraint = profile.get("constraint") or {}
         if constraint.get("subject") == "adult_male":
             queries.extend([
-                "предельно допустимая норма разового подъема тяжестей вручную работающим мужчиной 50 кг",
                 "пункт 86 постановления 12 26.01.2018 погрузочно-разгрузочные работы 50 кг мужчина",
+                "предельно допустимая норма разового подъема тяжестей вручную работающим мужчиной 50 кг",
                 "ручные погрузочно-разгрузочные работы разовый подъем тяжестей мужчиной не более 50 кг",
+                "погрузочно-разгрузочные работы мужчина разовый подъем 50 кг",
             ])
         elif constraint.get("subject") == "adult_female":
             queries.extend([
@@ -1899,7 +1905,12 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
                 "предельные нормы подъема и перемещения тяжестей вручную кг",
                 "нормы подъема тяжестей вручную Республика Беларусь",
             ])
-    elif event == "work_accident":
+
+        queries.extend(profile.get("legal_phrases") or [])
+    else:
+        queries.extend(profile.get("legal_phrases") or [])
+
+    if event == "lifting_and_moving_loads":
         queries.extend([
             "обязанность немедленно сообщить о несчастном случае непосредственному руководителю",
             "работник не сообщил о несчастном случае порядок действий",
@@ -3061,10 +3072,15 @@ def _select_legal_diverse_chunks(
             if constraint.get("subject") == "adult_male":
                 if any(x in text_lower for x in ("50 кг", "50 килограмм", "не более 50 кг", "не более 50 килограмм")):
                     cscore += 0.50
-                if "погрузочно-разгрузоч" in text_lower:
+                if "погрузочно-разгрузоч" in text_lower or "погрузочно разгрузоч" in text_lower:
                     cscore += 0.25
                 if any(x in text_lower for x in ("пункт 86", "п. 86", "26.01.2018", "постановления 12")):
                     cscore += 0.25
+                # Для вопроса именно о мужчинах общая норма о ручном
+                # перемещении тяжестей без числового ограничения слабее,
+                # чем прямой норматив о разовом подъеме.
+                if any(x in text_lower for x in ("разовый подъем", "разового подъема", "разовом подъеме")):
+                    cscore += 0.18
                 if any(x in text_lower for x in ("женщин", "женщина", "несовершеннолетн", "моложе восемнадцати лет")) and not any(x in text_lower for x in ("мужчин", "мужчина", "работающим мужчиной")):
                     cscore -= 0.45
             elif constraint.get("subject") == "adult_female":
@@ -3087,12 +3103,12 @@ def _select_legal_diverse_chunks(
 
         # Если прямой числовой норматив найден, общий pool не должен его вытеснить.
         if constraint_selected:
-            for chunk in constraint_candidates:
+            for cscore, _, candidate in constraint_candidates:
                 if len(selected) >= limit:
                     break
-                if _safe_float(chunk[0]) < 0.20:
+                if cscore < 0.20:
                     continue
-                _add(chunk, max_per_document=4, max_per_point=1)
+                _add(candidate, max_per_document=4, max_per_point=1)
 
     if primary_intent:
         for chunk in ranked_chunks:
