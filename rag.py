@@ -774,6 +774,59 @@ def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     return _deduplicate_chunks(results)
 
 
+def _targeted_work_break_briefing_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный lexical-search для п. 27 Инструкции № 175:
+    внеплановый инструктаж при перерыве в работе по профессии
+    (в должности) более шести месяцев.
+    """
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .eq("point_num", "27")
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        if results:
+            for chunk in results:
+                chunk["_work_break_targeted"] = True
+            return results
+
+        # Резервный поиск, если point_num в БД хранится не как точное "27".
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .or_(
+                "content.ilike.%перерывах в работе%,"
+                "content.ilike.%более шести месяцев%,"
+                "content.ilike.%внеплановый инструктаж%"
+            )
+            .limit(20)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        for chunk in results:
+            chunk["_work_break_targeted"] = True
+        return results
+    except Exception as exc:
+        logger.warning(
+            "RAG | work-break briefing targeted search failed: %s",
+            exc,
+        )
+        return []
+
+
 def _targeted_occupational_briefing_search(
     supabase,
     user_query: str = "",
@@ -1048,6 +1101,17 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if (
+            query_profile.get("event") == "occupational_briefing"
+            and "work_break_over_six_months" in (query_profile.get("qualifiers") or [])
+        ):
+            work_break_results = await asyncio.to_thread(
+                _targeted_work_break_briefing_search,
+                supabase,
+            )
+            if work_break_results:
+                return work_break_results
 
     if topic == "ppe_nonprovision":
         return await asyncio.to_thread(_targeted_ppe_nonprovision_search, supabase)
@@ -1510,6 +1574,35 @@ def _constraint_scope_relevance_score(
             score += 0.20
 
     return min(score, 1.0)
+
+
+def _work_break_briefing_relevance_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """Точечный score для п. 27 Инструкции № 175."""
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+
+    score = 0.0
+
+    if chunk.get("_work_break_targeted"):
+        score += 0.60
+    if "175" in document:
+        score += 0.20
+    if re.search(r"(?<!\d)27(?!\d)", point):
+        score += 0.80
+    if "внеплановый инструктаж" in text:
+        score += 0.45
+    if "перерывах в работе" in text or "перерыв в работе" in text:
+        score += 0.40
+    if "более шести месяцев" in text or "более 6 месяцев" in text:
+        score += 0.50
+    if "по профессии" in text or "в должности" in text:
+        score += 0.20
+
+    return min(score, 2.50)
 
 
 def _universal_query_relevance_score(
@@ -2140,6 +2233,40 @@ def _select_legal_diverse_chunks(
                 if cscore < 0.20:
                     continue
                 _add(candidate, max_per_document=4, max_per_point=1)
+
+    # Для запроса о перерыве более шести месяцев п. 27 Инструкции № 175
+    # является прямой нормой. Он должен попасть в контекст раньше общих
+    # пунктов № 25/26/30, даже если vector/hybrid search ранжировал их выше.
+    work_break_qualifier = "work_break_over_six_months" in (
+        (query_profile or {}).get("qualifiers") or []
+    )
+
+    if work_break_qualifier:
+        work_break_pool = [
+            chunk for chunk in ranked_chunks
+            if _work_break_briefing_relevance_score(chunk) >= 0.80
+        ]
+        work_break_pool.sort(
+            key=lambda chunk: (
+                _work_break_briefing_relevance_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for chunk in work_break_pool:
+            if _add(chunk, max_per_document=3, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+
+        # Если точная норма найдена, общий отбор может только добирать
+        # контекст, но не заменять п. 27.
+        if selected:
+            for chunk in ranked_chunks:
+                if len(selected) >= limit:
+                    break
+                if _work_break_briefing_relevance_score(chunk) >= 0.35:
+                    _add(chunk, max_per_document=3, max_per_point=1)
 
     if primary_intent:
         for chunk in ranked_chunks:
