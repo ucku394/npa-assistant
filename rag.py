@@ -3376,7 +3376,72 @@ async def retrieve_context(
             query_profile=query_profile,
         )
 
-    ranked_chunks = sorted(
-        candidate_chunks,
-        key=lambda chunk: chunk.get("_combined_score", 0.0),
-        reverse=True,
+            reference = f"{document_name} — пункт/статья {point}"
+        else:
+            reference = document_name
+
+        source_references.append(
+            {
+                "source_id": source_id,
+                "reference": reference,
+            }
+        )
+
+    retrieved_text = _build_retrieved_text(final_chunks)
+
+    return {
+        "chunks": final_chunks,
+        "retrieved_text": retrieved_text,
+        "found": bool(final_chunks),
+        "candidate_count": candidate_count,
+        "final_count": len(final_chunks),
+        "source_references": source_references,
+        "legal_domain": legal_domain,
+        "topic": topic,
+        "intents": intents,
+        "query_profile": query_profile,
+        "cross_reference": cross_reference,
+        "domain_specific_count": domain_specific_count,
+        "topic_specific_count": topic_specific_count,
+    }
+
+
+# ============================================================
+# ИСТОЧНИКИ
+# ============================================================
+
+def get_source_references(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+    references = []
+    seen = set()
+
+    for chunk in chunks:
+        document_name = _get_document_name(chunk)
+        point = _get_point_number(chunk)
+
+        if point:
+            reference = f"{document_name} — пункт/статья {point}"
+        else:
+            reference = document_name
+
+        if reference not in seen:
+            seen.add(reference)
+            references.append(reference)
+
+    return references
+
+
+def get_source_names(
+    chunks: List[Dict[str, Any]],
+) -> List[str]:
+    names = []
+    seen = set()
+
+    for chunk in chunks:
+        document_name = _get_document_name(chunk)
+        if document_name not in seen:
+            seen.add(document_name)
+            names.append(document_name)
+
+    return names
