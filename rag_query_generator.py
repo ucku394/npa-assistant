@@ -40,7 +40,17 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
 
         queries.extend(profile.get("legal_phrases") or [])
     else:
-        if (
+        if "refusal_due_to_no_ppe" in (profile.get("qualifiers") or []):
+            # Для вопроса о праве отказаться от работы без СИЗ
+            # приоритет имеют нормы о праве работника, а не общий
+            # поиск по выдаче/хранению СИЗ.
+            queries.extend([
+                "право работника отказаться от выполнения работы при необеспечении средствами индивидуальной защиты",
+                "отказ работника от выполнения работы при отсутствии средств индивидуальной защиты",
+                "право на отказ от работы при невыдаче средств индивидуальной защиты",
+                "права работника в области охраны труда средства индивидуальной защиты отказ от работы",
+            ])
+        elif (
             event == "occupational_briefing"
             and qtype == "kind"
             and "work_break_over_six_months" in (profile.get("qualifiers") or [])
