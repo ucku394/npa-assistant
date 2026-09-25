@@ -1811,13 +1811,15 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "предельно допустимая масса тяжести",
             "нормы подъема тяжестей вручную",
         ])
-        if re.search(r"\bмужчин\w*", query, re.IGNORECASE):
+        is_male = bool(re.search(r"\bмужчин\w*", query, re.IGNORECASE))
+        is_female = bool(re.search(r"\bженщин\w*", query, re.IGNORECASE))
+        if is_male:
             profile["qualifiers"].append("men")
             profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_male", "action": "lifting"})
-        if re.search(r"\bженщин\w*", query, re.IGNORECASE):
+        elif is_female:
             profile["qualifiers"].append("women")
             profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_female", "action": "lifting"})
-        elif event == "lifting_and_moving_loads":
+        else:
             profile["constraint"].update({"type": "maximum", "unit": "kg", "action": "lifting"})
 
     if re.search(r"\bаттестаци\w*\s+рабоч\w*\s+мест", query, re.IGNORECASE):
@@ -3378,91 +3380,3 @@ async def retrieve_context(
         candidate_chunks,
         key=lambda chunk: chunk.get("_combined_score", 0.0),
         reverse=True,
-    )
-
-    for rank, chunk in enumerate(ranked_chunks[:10], start=1):
-        logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
-            rank,
-            _safe_float(chunk.get("_combined_score")),
-            _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
-            _safe_float(_exact_match_score(chunk, user_query, topic)),
-            _safe_float(chunk.get("_universal_score")),
-            _safe_float(_topic_relevance_score(chunk, topic)),
-            _safe_float(_intent_relevance_score(chunk, intents)),
-            _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
-            _safe_float(chunk.get("_briefing_mode_bonus")),
-            _safe_float(chunk.get("_special_category_bonus")),
-            _get_document_name(chunk),
-            _get_point_number(chunk),
-        )
-
-    final_limit = (
-        max(RAG_FINAL_COUNT, 7)
-        if cross_reference
-        else RAG_FINAL_COUNT
-    )
-
-    accident_mode = (
-        _accident_query_mode(user_query)
-        if topic == "accident_investigation"
-        else None
-    )
-
-    final_chunks = _select_legal_diverse_chunks(
-        ranked_chunks,
-        final_limit,
-        topic,
-        intents,
-        cross_reference,
-        primary_intent=primary_intent,
-        labor_code_query=labor_code_query,
-        special_category=special_category,
-        special_issue=special_issue,
-        accident_mode=accident_mode,
-        query_profile=query_profile,
-    )
-
-    logger.info(
-        "RAG | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
-        len(final_chunks),
-        accident_mode,
-        special_category,
-        special_issue,
-        [
-            f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
-            for chunk in final_chunks
-        ],
-    )
-
-    source_references = []
-
-    for index, chunk in enumerate(final_chunks, start=1):
-        source_id = build_source_id(chunk, index)
-        chunk["_source_id"] = source_id
-
-        document_name = _get_document_name(chunk)
-        point = _get_point_number(chunk)
-
-        if point:
-            reference = f"{document_name} — пункт/статья {point}"
-        else:
-            reference = document_name
-
-        source_references.append(
-            {
-                "source_id": source_id,
-                "reference": reference,
-            }
-        )
-
-    retrieved_text = _build_retrieved_text(final_chunks)
-
-    return {
-        "chunks": final_chunks,
-        "retrieved_text": retrieved_text,
-        "found": bool(final_chunks),
-        "candidate_count": candidate_count,
-        "final_count": len(final_chunks),
-        "source_references": source_references,
-        "legal_domain": legal_domain,
