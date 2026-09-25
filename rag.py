@@ -774,6 +774,58 @@ def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     return _deduplicate_chunks(results)
 
 
+def _targeted_ppe_refusal_search(
+    supabase,
+) -> List[Dict[str, Any]]:
+    """
+    Точечный поиск ст. 11 Закона № 356-З:
+    право работника отказаться от порученной работы при
+    непредоставлении СИЗ, непосредственно обеспечивающих безопасность труда.
+    """
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .eq("doc_name", "Закон об охране труда от 23 июня 2008 г. № 356-З")
+            .or_("point_num.eq.Статья 11,point_num.eq.11")
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        if results:
+            for chunk in results:
+                chunk["_ppe_refusal_targeted"] = True
+            return results
+
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%356-З%")
+            .or_(
+                "content.ilike.%отказ от выполнения порученной работы%,"
+                "content.ilike.%непредоставлении ему средств индивидуальной защиты%,"
+                "content.ilike.%непосредственно обеспечивающих безопасность труда%"
+            )
+            .limit(20)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        for chunk in results:
+            chunk["_ppe_refusal_targeted"] = True
+        return results
+    except Exception as exc:
+        logger.warning(
+            "RAG | PPE refusal targeted search failed: %s",
+            exc,
+        )
+        return []
+
+
 def _targeted_work_break_briefing_search(
     supabase,
 ) -> List[Dict[str, Any]]:
@@ -1101,6 +1153,14 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if "refusal_due_to_no_ppe" in (query_profile.get("qualifiers") or []):
+            refusal_results = await asyncio.to_thread(
+                _targeted_ppe_refusal_search,
+                supabase,
+            )
+            if refusal_results:
+                return refusal_results
 
         if (
             query_profile.get("event") == "occupational_briefing"
@@ -1574,6 +1634,40 @@ def _constraint_scope_relevance_score(
             score += 0.20
 
     return min(score, 1.0)
+
+
+def _ppe_refusal_relevance_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """
+    Узкий score для вопроса о праве работника отказаться от работы
+    при непредоставлении СИЗ. Приоритет — ст. 11 Закона № 356-З.
+    """
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+
+    score = 0.0
+
+    if chunk.get("_ppe_refusal_targeted"):
+        score += 0.80
+    if "356-з" in document or ("закон" in document and "охране труда" in document):
+        score += 0.35
+    if re.search(r"статья\s*11|ст\.\s*11|(?<!\d)11(?!\d)", point):
+        score += 1.00
+    if "отказ от выполнения порученной работы" in text:
+        score += 0.70
+    if "непредоставлении ему средств индивидуальной защиты" in text:
+        score += 0.90
+    if "непосредственно обеспечивающих безопасность труда" in text:
+        score += 0.70
+    if "имеет право" in text and "работник" in text:
+        score += 0.35
+    if "незамедлительно письменно сообщить работодателю" in text:
+        score += 0.25
+
+    return min(score, 4.00)
 
 
 def _work_break_briefing_relevance_score(
@@ -2233,6 +2327,37 @@ def _select_legal_diverse_chunks(
                 if cscore < 0.20:
                     continue
                 _add(candidate, max_per_document=4, max_per_point=1)
+
+    ppe_refusal_qualifier = "refusal_due_to_no_ppe" in (
+        (query_profile or {}).get("qualifiers") or []
+    )
+
+    if ppe_refusal_qualifier:
+        ppe_refusal_pool = [
+            chunk for chunk in ranked_chunks
+            if _ppe_refusal_relevance_score(chunk) >= 1.20
+        ]
+        ppe_refusal_pool.sort(
+            key=lambda chunk: (
+                _ppe_refusal_relevance_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for chunk in ppe_refusal_pool:
+            if _add(chunk, max_per_document=3, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+
+        if selected:
+            # После прямой нормы можно добрать только связанные с ней
+            # материалы, не вытесняя саму ст. 11.
+            for chunk in ranked_chunks:
+                if len(selected) >= limit:
+                    break
+                if _ppe_refusal_relevance_score(chunk) >= 0.45:
+                    _add(chunk, max_per_document=3, max_per_point=1)
 
     # Для запроса о перерыве более шести месяцев п. 27 Инструкции № 175
     # является прямой нормой. Он должен попасть в контекст раньше общих
