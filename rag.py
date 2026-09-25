@@ -2462,6 +2462,93 @@ def _minor_special_relevance_score(
     return min(score, 1.00)
 
 
+
+def _universal_query_relevance_score(
+    chunk: Dict[str, Any],
+    profile: Dict[str, Any],
+) -> float:
+    """Универсальный reranker: насколько chunk отвечает именно вопросу."""
+    document = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    point = _get_point_number(chunk).lower()
+    text = f"{document} {point} {content}"
+    score = 0.0
+
+    qtype = profile.get("question_type") or "general"
+    event = profile.get("event")
+    state = profile.get("action_state")
+    qualifiers = set(profile.get("qualifiers") or [])
+    phrases = profile.get("legal_phrases") or []
+
+    def hits(markers):
+        return sum(1 for marker in markers if marker in text)
+
+    score += min(sum(1 for phrase in phrases if phrase.lower() in text) * 0.16, 0.48)
+
+    if event == "work_accident":
+        score += min(hits(("несчастный случай", "несчастном случае")) * 0.10, 0.20)
+        score += min(hits(("сообщить", "сообщает", "сообщают", "уведомить")) * 0.07, 0.21)
+        if profile.get("recipient") == "immediate_supervisor":
+            score += min(hits(("непосредственному руководителю", "должностному лицу страхователя", "руководителю")) * 0.10, 0.30)
+        if state == "not_done":
+            score += min(hits(("не сообщил", "не сообщила", "несвоевременно")) * 0.14, 0.28)
+
+    if event == "lifting_and_moving_loads":
+        score += min(hits(("подъем", "подъема", "перемещение", "перемещения", "тяжест")) * 0.07, 0.28)
+        score += min(hits(("вручную", "ручн")) * 0.10, 0.20)
+        score += min(hits(("предельно допустим", "предельные нормы", "нормы подъема")) * 0.18, 0.36)
+        if "men" in qualifiers:
+            score += min(hits(("мужчин", "мужчина", "мужского пола")) * 0.12, 0.24)
+        if "women" in qualifiers:
+            score += min(hits(("женщин", "женщина", "женского пола")) * 0.12, 0.24)
+        if qtype == "limit":
+            score += min(hits(("кг", "килограмм", "масса", "вес")) * 0.08, 0.16)
+
+    if event == "workplace_attestation":
+        score += min(hits(("аттестаци", "рабочих мест", "условия труда")) * 0.08, 0.24)
+        if qtype == "frequency":
+            score += min(hits(("периодичност", "срок действия результатов", "пять лет", "очередн")) * 0.15, 0.45)
+
+    if event == "occupational_briefing":
+        score += min(hits(("инструктаж", "охране труда")) * 0.08, 0.16)
+        if qtype == "kind":
+            score += min(hits(("виды инструктажей", "вводный инструктаж", "первичный инструктаж", "повторный инструктаж", "внеплановый инструктаж", "целевой инструктаж")) * 0.13, 0.39)
+        elif qtype == "who":
+            score += min(hits(("проводит", "специалист по охране труда", "уполномоченное должностное лицо", "руководитель")) * 0.12, 0.36)
+
+    if event == "ppe":
+        score += min(hits(("средств индивидуальной защиты", "сиз", "обеспеч", "выдач")) * 0.08, 0.24)
+        if state == "not_done":
+            score += min(hits(("не выдан", "не обеспечен", "неисправн", "поврежден")) * 0.14, 0.28)
+
+    if event == "medical_exam":
+        score += min(hits(("медицинск", "осмотр", "обязательн", "предварительн", "периодическ")) * 0.08, 0.32)
+
+    if event == "occupational_training":
+        score += min(hits(("стажиров", "самостоятельной работе", "рабочих дней", "рабочих смен")) * 0.10, 0.35)
+
+    focus_markers = {
+        "what_to_do": ("порядок", "действия", "обязан", "должен", "немедленно", "следует"),
+        "who": ("проводит", "обязан", "должностному лицу", "ответствен", "назнач"),
+        "frequency": ("периодичност", "раз в", "срок действия", "пять лет"),
+        "limit": ("предельн", "норм", "максимальн", "кг", "килограмм", "допустим"),
+        "whether": ("вправе", "имеет право", "может", "допускается", "разрешается"),
+        "responsibility": ("ответствен", "взыскан", "штраф", "нарушен"),
+        "term": ("срок", "в течение", "не позднее", "дней", "месяц", "лет"),
+        "document": ("положение", "правила", "инструкция", "кодекс", "постановлен", "приказ"),
+        "kind": ("виды инструктаж", "вводный", "первичный", "повторный", "внеплановый", "целевой"),
+    }
+    if qtype in focus_markers:
+        score += min(hits(focus_markers[qtype]) * 0.08, 0.24)
+
+    if state == "not_done":
+        negative_hits = hits(("не сообщил", "не выдан", "не обеспечен", "не прошел", "не проведен", "не допущен", "не приступ"))
+        if negative_hits:
+            score += min(negative_hits * 0.10, 0.20)
+
+    return max(0.0, min(score, 1.0))
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -2473,6 +2560,7 @@ def _legal_relevance_score(
     user_query: str = "",
     special_category: Optional[str] = None,
     special_issue: Optional[str] = None,
+    query_profile: Optional[Dict[str, Any]] = None,
 ) -> float:
     semantic = _safe_float(chunk.get("_best_similarity", _semantic_score(chunk)))
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
@@ -2549,10 +2637,17 @@ def _legal_relevance_score(
     )
     chunk["_special_category_bonus"] = special_category_bonus
 
+    universal_score = _universal_query_relevance_score(
+        chunk,
+        query_profile or build_universal_query_profile(user_query),
+    )
+    chunk["_universal_score"] = universal_score
+
     return (
-        semantic * 0.35
-        + hybrid_score * 0.15
-        + exact_score * 0.20
+        semantic * 0.28
+        + hybrid_score * 0.12
+        + exact_score * 0.16
+        + universal_score * 0.22
         + keyword * keyword_weight
         + topic_score * topic_weight
         + intent_score * 0.05
@@ -3008,6 +3103,7 @@ async def retrieve_context(
     labor_code_query = _is_labor_code_query(user_query)
     special_category = detect_special_category(user_query)
     special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
+    query_profile = build_universal_query_profile(user_query)
 
     search_queries = build_search_queries(
         user_query,
@@ -3021,7 +3117,7 @@ async def retrieve_context(
         user_query,
     )
     logger.info(
-        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s",
+        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s",
         legal_domain,
         topic,
         intents,
@@ -3030,6 +3126,11 @@ async def retrieve_context(
         labor_code_query,
         special_category,
         special_issue,
+        query_profile.get("question_type"),
+        query_profile.get("subject"),
+        query_profile.get("event"),
+        query_profile.get("action"),
+        query_profile.get("action_state"),
     )
     logger.info(
         "RAG | search_queries | count=%s | queries=%s",
@@ -3183,6 +3284,7 @@ async def retrieve_context(
             user_query=user_query,
             special_category=special_category,
             special_issue=special_issue,
+            query_profile=query_profile,
         )
 
     ranked_chunks = sorted(
@@ -3193,7 +3295,7 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
@@ -3203,6 +3305,7 @@ async def retrieve_context(
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
             _safe_float(chunk.get("_briefing_mode_bonus")),
             _safe_float(chunk.get("_special_category_bonus")),
+            _safe_float(chunk.get("_universal_score")),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
@@ -3277,6 +3380,7 @@ async def retrieve_context(
         "legal_domain": legal_domain,
         "topic": topic,
         "intents": intents,
+        "query_profile": query_profile,
         "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
