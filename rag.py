@@ -790,7 +790,7 @@ def _targeted_work_break_briefing_search(
             )
             .eq("legal_domain", "occupational_safety")
             .ilike("doc_name", "%175%")
-            .eq("point_num", "27")
+            .or_("point_num.eq.27,point_num.eq.27.")
             .execute()
         )
         results = _deduplicate_chunks(response.data or [])
