@@ -1245,6 +1245,38 @@ def _targeted_accident_worker_not_report_search(supabase) -> List[Dict[str, Any]
         return []
 
 
+def _targeted_lifting_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
+    """Точечный lexical-search для норм ручного подъема/перемещения грузов."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .or_(
+                "doc_name.ilike.%12%,"
+                "doc_name.ilike.%погрузочно-разгрузоч%,"
+                "doc_name.ilike.%погрузочно разгрузоч%"
+            )
+            .or_(
+                "content.ilike.%50 кг%,"
+                "content.ilike.%разовый подъем%,"
+                "content.ilike.%разового подъема%,"
+                "content.ilike.%погрузочно-разгрузоч%"
+            )
+            .limit(TARGETED_SEARCH_LIMIT)
+            .execute()
+        )
+        return _deduplicate_chunks(response.data or [])
+    except Exception as exc:
+        logger.warning(
+            "RAG | lifting targeted search failed: %s",
+            exc,
+        )
+        return []
+
+
 def _targeted_accident_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
     mode = _accident_query_mode(user_query)
 
@@ -1384,6 +1416,18 @@ async def _get_targeted_chunks(
         )
         if minor_results:
             return minor_results
+
+    if query_profile := build_universal_query_profile(user_query):
+        if query_profile.get("event") == "lifting_and_moving_loads":
+            lifting_results = await asyncio.to_thread(
+                _targeted_lifting_search,
+                supabase,
+                user_query,
+            )
+            if lifting_results:
+                for chunk in lifting_results:
+                    chunk["_lifting_constraint_targeted"] = True
+                return lifting_results
 
     if topic == "ppe_nonprovision":
         return await asyncio.to_thread(_targeted_ppe_nonprovision_search, supabase)
@@ -1910,13 +1954,7 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
     else:
         queries.extend(profile.get("legal_phrases") or [])
 
-    if event == "lifting_and_moving_loads":
-        queries.extend([
-            "обязанность немедленно сообщить о несчастном случае непосредственному руководителю",
-            "работник не сообщил о несчастном случае порядок действий",
-            "порядок действий работодателя при получении сообщения о несчастном случае",
-        ])
-    elif event == "workplace_attestation" and qtype == "frequency":
+    if event == "workplace_attestation" and qtype == "frequency":
         queries.extend([
             "срок действия результатов аттестации составляет пять лет",
             "пункт 19 аттестация рабочих мест срок действия результатов",
@@ -3063,6 +3101,9 @@ def _select_legal_diverse_chunks(
         constraint_candidates = []
         for chunk in ranked_chunks:
             cscore = _universal_query_relevance_score(chunk, query_profile or {})
+
+            if chunk.get("_lifting_constraint_targeted"):
+                cscore += 0.80
             text_lower = (
                 f"{_get_document_name(chunk)} "
                 f"{_get_point_number(chunk)} "
@@ -3072,6 +3113,17 @@ def _select_legal_diverse_chunks(
             if constraint.get("subject") == "adult_male":
                 if any(x in text_lower for x in ("50 кг", "50 килограмм", "не более 50 кг", "не более 50 килограмм")):
                     cscore += 0.50
+                if re.search(r"\b12\b", text_lower) and (
+                    "погрузочно-разгрузоч" in text_lower
+                    or "погрузочно разгрузоч" in text_lower
+                ):
+                    cscore += 0.35
+                if re.search(r"\b86\b", text_lower) and (
+                    "50 кг" in text_lower
+                    or "разовый подъем" in text_lower
+                    or "разового подъема" in text_lower
+                ):
+                    cscore += 0.35
                 if "погрузочно-разгрузоч" in text_lower or "погрузочно разгрузоч" in text_lower:
                     cscore += 0.25
                 if any(x in text_lower for x in ("пункт 86", "п. 86", "26.01.2018", "постановления 12")):
