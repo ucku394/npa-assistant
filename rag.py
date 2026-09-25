@@ -1742,6 +1742,171 @@ def _is_responsible_briefing_query(user_query: str) -> bool:
     return any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in responsible_patterns)
 
 
+
+# ============================================================
+# УНИВЕРСАЛЬНЫЙ ПРОФИЛЬ ЗАПРОСА
+# ============================================================
+
+def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
+    """Детерминированно извлекает юридическую структуру вопроса."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    profile: Dict[str, Any] = {
+        "question_type": "general",
+        "subject": None,
+        "event": None,
+        "action": None,
+        "action_state": None,
+        "actor": None,
+        "recipient": None,
+        "object": None,
+        "qualifiers": [],
+        "legal_phrases": [],
+    }
+    if not query:
+        return profile
+
+    qtypes = [
+        ("what_to_do", [r"\bчто\s+делать\b", r"\bкак\s+(?:должен|следует)\s+действ", r"\bпорядок\s+действ"]),
+        ("frequency", [r"\bкак\s+часто\b", r"\bс\s+какой\s+периодичност", r"\bпериодичност\w*\b"]),
+        ("limit", [r"\bсколько\b.*\bкг\b", r"\bсколько\s+разрешено\b", r"\bпредельн\w*\s+норм", r"\bнорм\w*\s+(?:подъема|перемещения)"]),
+        ("who", [r"^кто\b", r"\bкто\s+(?:провод|должен|обязан|назнач|ответствен)", r"\bкем\b", r"\bкакое\s+лицо\b"]),
+        ("kind", [r"\bкакой\s+(?:вид\s+)?инструктаж", r"\bкакому\s+инструктаж", r"\bвид\w*\s+инструктаж"]),
+        ("whether", [r"\bможно\s+ли\b", r"\bразрешено\s+ли\b", r"\bдопускается\s+ли\b", r"\bимеет\s+ли\s+прав"]),
+        ("responsibility", [r"\bкто\s+нес[её]т\s+ответствен", r"\bкто\s+ответствен", r"\bкакая\s+ответствен"]),
+        ("term", [r"\bкакой\s+срок\b", r"\bсрок\w*\b", r"\bв\s+течение\b"]),
+        ("document", [r"\bкаким\s+документ", r"\bкакой\s+(?:нпа|документ|акт)\b"]),
+    ]
+    for qtype, patterns in qtypes:
+        if any(re.search(p, query, re.IGNORECASE) for p in patterns):
+            profile["question_type"] = qtype
+            break
+
+    if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
+        profile["action_state"] = "not_done"
+
+    if re.search(r"\bнесчастн\w*\s+случа\w*|\bтравм\w*\s+на\s+производств", query, re.IGNORECASE):
+        profile.update({"subject": "employee", "event": "work_accident", "action": "report", "object": "work_accident"})
+        profile["legal_phrases"].extend([
+            "несчастный случай на производстве",
+            "сообщить о несчастном случае",
+            "немедленно сообщить о несчастном случае",
+            "непосредственному руководителю",
+            "порядок действий работодателя при несчастном случае",
+        ])
+        if re.search(r"\bруководител\w*|\bначальник\w*", query, re.IGNORECASE):
+            profile["recipient"] = "immediate_supervisor"
+
+    if re.search(r"\bподнима\w*|\bперемещ\w*\s+тяжест\w*|\bтяжест\w*\s+вручн\w*|\bсколько\s+кг\b", query, re.IGNORECASE):
+        profile.update({"subject": "manual_handling", "event": "lifting_and_moving_loads", "action": "lift_move", "object": "load"})
+        profile["legal_phrases"].extend([
+            "предельно допустимые нормы подъема и перемещения тяжестей вручную",
+            "подъем и перемещение тяжестей вручную",
+            "предельно допустимая масса тяжести",
+            "нормы подъема тяжестей вручную",
+        ])
+        if re.search(r"\bмужчин\w*", query, re.IGNORECASE):
+            profile["qualifiers"].append("men")
+        if re.search(r"\bженщин\w*", query, re.IGNORECASE):
+            profile["qualifiers"].append("women")
+
+    if re.search(r"\bаттестаци\w*\s+рабоч\w*\s+мест", query, re.IGNORECASE):
+        profile.update({"subject": "workplace", "event": "workplace_attestation", "action": "attest", "object": "working_conditions"})
+        profile["legal_phrases"].extend([
+            "аттестация рабочих мест по условиям труда",
+            "срок действия результатов аттестации",
+            "результаты аттестации рабочих мест",
+        ])
+
+    if re.search(r"\bсиз\b|\bсредств\w*\s+индивидуальн\w*\s+защит", query, re.IGNORECASE):
+        profile.update({"subject": "employee", "event": "ppe", "object": "personal_protective_equipment"})
+        profile["legal_phrases"].extend([
+            "средства индивидуальной защиты",
+            "обеспечение средствами индивидуальной защиты",
+            "невыдача средств индивидуальной защиты",
+        ])
+
+    if re.search(r"\bмедицинск\w*\s+осмотр\w*|\bмедосмотр\w*", query, re.IGNORECASE):
+        profile.update({"subject": "employee", "event": "medical_exam", "action": "medical_examination", "object": "medical_exam"})
+        profile["legal_phrases"].extend([
+            "обязательный медицинский осмотр",
+            "предварительный медицинский осмотр",
+            "периодический медицинский осмотр",
+        ])
+
+    if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
+        profile["event"] = "occupational_briefing"
+        profile["object"] = "occupational_briefing"
+        if profile["question_type"] == "kind":
+            profile["legal_phrases"].extend([
+                "виды инструктажей по охране труда",
+                "вводный инструктаж",
+                "первичный инструктаж",
+                "повторный инструктаж",
+                "внеплановый инструктаж",
+                "целевой инструктаж",
+            ])
+
+    if re.search(r"\bстажиров\w*", query, re.IGNORECASE):
+        profile["event"] = "occupational_training"
+        profile["object"] = "internship"
+        profile["legal_phrases"].extend([
+            "стажировка по охране труда",
+            "допуск к самостоятельной работе",
+            "продолжительность стажировки",
+        ])
+
+    profile["legal_phrases"] = list(dict.fromkeys(profile["legal_phrases"]))
+    profile["qualifiers"] = list(dict.fromkeys(profile["qualifiers"]))
+    return profile
+
+
+def build_universal_search_queries(profile: Dict[str, Any], original: str) -> List[str]:
+    """Генерирует нормативные формулировки независимо от конкретной темы."""
+    queries = list(profile.get("legal_phrases") or [])
+    event = profile.get("event")
+    qtype = profile.get("question_type")
+    state = profile.get("action_state")
+
+    if event == "lifting_and_moving_loads":
+        queries.extend([
+            "предельно допустимые нормы подъема и перемещения тяжестей вручную мужчинами",
+            "предельные нормы подъема и перемещения тяжестей вручную мужчины кг",
+            "нормы подъема тяжестей вручную мужчины Республика Беларусь",
+        ])
+    elif event == "work_accident":
+        queries.extend([
+            "обязанность немедленно сообщить о несчастном случае непосредственному руководителю",
+            "работник не сообщил о несчастном случае порядок действий",
+            "порядок действий работодателя при получении сообщения о несчастном случае",
+        ])
+    elif event == "workplace_attestation" and qtype == "frequency":
+        queries.extend([
+            "срок действия результатов аттестации составляет пять лет",
+            "пункт 19 аттестация рабочих мест срок действия результатов",
+        ])
+    elif event == "occupational_briefing" and qtype == "kind":
+        queries.extend([
+            "виды инструктажей по охране труда",
+            "какой инструктаж проводится при разовых работах не связанных с прямыми обязанностями",
+        ])
+
+    if qtype == "what_to_do":
+        queries.append(f"порядок действий {event or ''} {original}".strip())
+    elif qtype == "frequency":
+        queries.append(f"периодичность {event or ''} {original}".strip())
+    elif qtype == "limit":
+        queries.append(f"предельно допустимая норма {event or ''} {original}".strip())
+    elif qtype == "who":
+        queries.append(f"кто обязан кто проводит кто отвечает {event or ''} {original}".strip())
+    elif qtype == "whether":
+        queries.append(f"разрешено ли допускается имеет право {event or ''} {original}".strip())
+
+    if state == "not_done":
+        queries.append(f"нарушение обязанности не выполнено {event or ''} что делать {original}".strip())
+
+    return list(dict.fromkeys(q for q in queries if q))[:6]
+
+
 def build_search_queries(
     user_query: str,
     topic: str,
@@ -1749,7 +1914,9 @@ def build_search_queries(
     intents: List[str],
 ) -> List[str]:
     original = str(user_query or "").strip()
+    universal_profile = build_universal_query_profile(original)
     queries: List[str] = [original]
+    queries.extend(build_universal_search_queries(universal_profile, original))
 
     target_briefing_query = (
         topic == "occupational_briefing"
