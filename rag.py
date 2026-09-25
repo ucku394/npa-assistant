@@ -1154,12 +1154,20 @@ async def _get_targeted_chunks(
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
 
-        if "refusal_due_to_no_ppe" in (query_profile.get("qualifiers") or []):
+        if (
+            "refusal_due_to_no_ppe" in (query_profile.get("qualifiers") or [])
+            or "ppe_nonprovision_action" in (query_profile.get("qualifiers") or [])
+        ):
             refusal_results = await asyncio.to_thread(
                 _targeted_ppe_refusal_search,
                 supabase,
             )
             if refusal_results:
+                for chunk in refusal_results:
+                    chunk["_ppe_nonprovision_action_targeted"] = (
+                        "ppe_nonprovision_action"
+                        in (query_profile.get("qualifiers") or [])
+                    )
                 return refusal_results
 
         if (
@@ -2331,8 +2339,11 @@ def _select_legal_diverse_chunks(
     ppe_refusal_qualifier = "refusal_due_to_no_ppe" in (
         (query_profile or {}).get("qualifiers") or []
     )
+    ppe_nonprovision_action_qualifier = "ppe_nonprovision_action" in (
+        (query_profile or {}).get("qualifiers") or []
+    )
 
-    if ppe_refusal_qualifier:
+    if ppe_refusal_qualifier or ppe_nonprovision_action_qualifier:
         ppe_refusal_pool = [
             chunk for chunk in ranked_chunks
             if _ppe_refusal_relevance_score(chunk) >= 1.20
