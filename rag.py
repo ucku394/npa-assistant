@@ -1761,6 +1761,13 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         "object": None,
         "qualifiers": [],
         "legal_phrases": [],
+        "constraint": {
+            "type": None,
+            "value": None,
+            "unit": None,
+            "subject": None,
+            "action": None,
+        },
     }
     if not query:
         return profile
@@ -1806,8 +1813,12 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         ])
         if re.search(r"\bмужчин\w*", query, re.IGNORECASE):
             profile["qualifiers"].append("men")
+            profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_male", "action": "lifting"})
         if re.search(r"\bженщин\w*", query, re.IGNORECASE):
             profile["qualifiers"].append("women")
+            profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_female", "action": "lifting"})
+        elif event == "lifting_and_moving_loads":
+            profile["constraint"].update({"type": "maximum", "unit": "kg", "action": "lifting"})
 
     if re.search(r"\bаттестаци\w*\s+рабоч\w*\s+мест", query, re.IGNORECASE):
         profile.update({"subject": "workplace", "event": "workplace_attestation", "action": "attest", "object": "working_conditions"})
@@ -1868,11 +1879,24 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
     state = profile.get("action_state")
 
     if event == "lifting_and_moving_loads":
-        queries.extend([
-            "предельно допустимые нормы подъема и перемещения тяжестей вручную мужчинами",
-            "предельные нормы подъема и перемещения тяжестей вручную мужчины кг",
-            "нормы подъема тяжестей вручную мужчины Республика Беларусь",
-        ])
+        constraint = profile.get("constraint") or {}
+        if constraint.get("subject") == "adult_male":
+            queries.extend([
+                "предельно допустимая норма разового подъема тяжестей вручную работающим мужчиной 50 кг",
+                "пункт 86 постановления 12 26.01.2018 погрузочно-разгрузочные работы 50 кг мужчина",
+                "ручные погрузочно-разгрузочные работы разовый подъем тяжестей мужчиной не более 50 кг",
+            ])
+        elif constraint.get("subject") == "adult_female":
+            queries.extend([
+                "предельные нормы подъема и перемещения тяжестей вручную женщинами",
+                "нормы подъема тяжестей вручную женщины Республика Беларусь",
+            ])
+        else:
+            queries.extend([
+                "предельно допустимые нормы подъема и перемещения тяжестей вручную",
+                "предельные нормы подъема и перемещения тяжестей вручную кг",
+                "нормы подъема тяжестей вручную Республика Беларусь",
+            ])
     elif event == "work_accident":
         queries.extend([
             "обязанность немедленно сообщить о несчастном случае непосредственному руководителю",
@@ -2005,7 +2029,55 @@ def build_search_queries(
     if topic == "accident_investigation":
         accident_mode = _accident_query_mode(original)
 
-        if accident_mode == "worker_did_not_report":
+        constraint = (query_profile or {}).get("constraint") or {}
+
+    if constraint.get("type") == "maximum" and constraint.get("unit") == "kg":
+        scored_constraint = []
+        for chunk in ranked_chunks:
+            cscore = _universal_query_relevance_score(chunk, query_profile or {})
+            text_lower = (
+                f"{_get_document_name(chunk)} "
+                f"{_get_point_number(chunk)} "
+                f"{str(chunk.get('content') or '')}"
+            ).lower()
+
+            if constraint.get("subject") == "adult_male":
+                if "50 кг" in text_lower or "50 килограмм" in text_lower:
+                    cscore += 0.50
+                if "погрузочно-разгрузоч" in text_lower:
+                    cscore += 0.25
+                if "пункт 86" in text_lower or "п. 86" in text_lower:
+                    cscore += 0.25
+                if any(x in text_lower for x in (
+                    "женщин", "женщина", "несовершеннолетн",
+                    "моложе восемнадцати лет",
+                )) and not any(x in text_lower for x in (
+                    "мужчин", "мужчина", "работающим мужчиной",
+                )):
+                    cscore -= 0.45
+
+            scored_constraint.append((
+                cscore,
+                _safe_float(chunk.get("_combined_score")),
+                chunk,
+            ))
+
+        scored_constraint.sort(
+            key=lambda item: (item[0], item[1]),
+            reverse=True,
+        )
+
+        for cscore, _, chunk in scored_constraint:
+            if cscore < 0.35:
+                continue
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+
+        if selected:
+            return selected
+
+    if accident_mode == "worker_did_not_report":
             queries.extend([
                 f"работник не сообщил о несчастном случае руководителю {original}",
                 "если работник не сообщил о несчастном случае непосредственному руководителю",
@@ -2497,10 +2569,24 @@ def _universal_query_relevance_score(
         score += min(hits(("подъем", "подъема", "перемещение", "перемещения", "тяжест")) * 0.07, 0.28)
         score += min(hits(("вручную", "ручн")) * 0.10, 0.20)
         score += min(hits(("предельно допустим", "предельные нормы", "нормы подъема")) * 0.18, 0.36)
-        if "men" in qualifiers:
-            score += min(hits(("мужчин", "мужчина", "мужского пола")) * 0.12, 0.24)
-        if "women" in qualifiers:
-            score += min(hits(("женщин", "женщина", "женского пола")) * 0.12, 0.24)
+        constraint = profile.get("constraint") or {}
+        constraint_subject = constraint.get("subject")
+        if "men" in qualifiers or constraint_subject == "adult_male":
+            score += min(hits(("мужчин", "мужчина", "мужского пола", "работающим мужчиной")) * 0.16, 0.32)
+            wrong_subject_hits = hits(("женщин", "женщина", "лиц моложе восемнадцати лет", "несовершеннолетн"))
+            score -= min(wrong_subject_hits * 0.18, 0.36)
+            if hits(("50 кг", "50 килограмм", "не более 50 кг", "не более 50 килограмм")):
+                score += 0.42
+            if hits(("погрузочно-разгрузочн", "погрузочно разгрузочн")):
+                score += 0.22
+            if hits(("разовый подъем", "разового подъема", "разовом подъеме")):
+                score += 0.18
+            if hits(("пункт 86", "п. 86", "26.01.2018", "постановления 12")):
+                score += 0.20
+        elif "women" in qualifiers or constraint_subject == "adult_female":
+            score += min(hits(("женщин", "женщина", "женского пола")) * 0.16, 0.32)
+            wrong_subject_hits = hits(("мужчин", "мужчина", "лиц моложе восемнадцати лет", "несовершеннолетн"))
+            score -= min(wrong_subject_hits * 0.18, 0.36)
         if qtype == "limit":
             score += min(hits(("кг", "килограмм", "масса", "вес")) * 0.08, 0.16)
 
@@ -2852,6 +2938,7 @@ def _select_legal_diverse_chunks(
     special_category: Optional[str] = None,
     special_issue: Optional[str] = None,
     accident_mode: Optional[str] = None,
+    query_profile: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     if not ranked_chunks or limit <= 0:
         return []
@@ -3300,12 +3387,12 @@ async def retrieve_context(
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
             _safe_float(_exact_match_score(chunk, user_query, topic)),
+            _safe_float(chunk.get("_universal_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
             _safe_float(chunk.get("_briefing_mode_bonus")),
             _safe_float(chunk.get("_special_category_bonus")),
-            _safe_float(chunk.get("_universal_score")),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
@@ -3333,6 +3420,7 @@ async def retrieve_context(
         special_category=special_category,
         special_issue=special_issue,
         accident_mode=accident_mode,
+        query_profile=query_profile,
     )
 
     logger.info(
@@ -3378,51 +3466,3 @@ async def retrieve_context(
         "final_count": len(final_chunks),
         "source_references": source_references,
         "legal_domain": legal_domain,
-        "topic": topic,
-        "intents": intents,
-        "query_profile": query_profile,
-        "cross_reference": cross_reference,
-        "domain_specific_count": domain_specific_count,
-        "topic_specific_count": topic_specific_count,
-    }
-
-
-# ============================================================
-# ИСТОЧНИКИ
-# ============================================================
-
-def get_source_references(
-    chunks: List[Dict[str, Any]],
-) -> List[str]:
-    references = []
-    seen = set()
-
-    for chunk in chunks:
-        document_name = _get_document_name(chunk)
-        point = _get_point_number(chunk)
-
-        if point:
-            reference = f"{document_name} — пункт/статья {point}"
-        else:
-            reference = document_name
-
-        if reference not in seen:
-            seen.add(reference)
-            references.append(reference)
-
-    return references
-
-
-def get_source_names(
-    chunks: List[Dict[str, Any]],
-) -> List[str]:
-    names = []
-    seen = set()
-
-    for chunk in chunks:
-        document_name = _get_document_name(chunk)
-        if document_name not in seen:
-            seen.add(document_name)
-            names.append(document_name)
-
-    return names
