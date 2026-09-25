@@ -169,6 +169,44 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
                 "права работника в области охраны труда средства индивидуальной защиты отказ от работы",
             ])
 
+        # Отдельный сценарий: пользователь спрашивает не о самом праве
+        # на отказ, а о том, что работник должен сделать при невыдаче СИЗ.
+        ppe_nonprovision_action_pattern = (
+            r"(?:что\s+(?:должен|следует)\s+(?:сделать|делать)|"
+            r"как\s+(?:должен|следует)\s+поступить|"
+            r"каков\w*\s+порядок\s+действий)"
+            r".{0,100}?"
+            r"(?:не\s+выдан\w*|не\s+предостав\w*|не\s+обеспеч\w*)"
+            r".{0,100}?"
+            r"(?:сиз|средств\w*\s+индивидуальн\w*\s+защит)"
+        )
+        ppe_nonprovision_action_reverse_pattern = (
+            r"(?:сиз|средств\w*\s+индивидуальн\w*\s+защит)"
+            r".{0,100}?"
+            r"(?:не\s+выдан\w*|не\s+предостав\w*|не\s+обеспеч\w*)"
+            r".{0,100}?"
+            r"(?:что\s+(?:должен|следует)\s+(?:сделать|делать)|"
+            r"как\s+(?:должен|следует)\s+поступить|"
+            r"порядок\s+действий)"
+        )
+
+        if (
+            re.search(ppe_nonprovision_action_pattern, query, re.IGNORECASE)
+            or re.search(
+                ppe_nonprovision_action_reverse_pattern,
+                query,
+                re.IGNORECASE,
+            )
+        ):
+            profile["qualifiers"].append("ppe_nonprovision_action")
+            profile["action"] = "refuse_work"
+            profile["legal_phrases"].extend([
+                "что должен сделать работник при непредоставлении средств индивидуальной защиты",
+                "действия работника при невыдаче средств индивидуальной защиты",
+                "обязанность работника письменно сообщить о причинах отказа от работы без СИЗ",
+                "статья 11 Закон 356-З средства индивидуальной защиты отказ от работы",
+            ])
+
     if re.search(r"\bмедицинск\w*\s+осмотр\w*|\bмедосмотр\w*", query, re.IGNORECASE):
         profile.update({"subject": "employee", "event": "medical_exam", "action": "medical_examination", "object": "medical_exam"})
         profile["legal_phrases"].extend([
