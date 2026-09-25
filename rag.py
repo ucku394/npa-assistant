@@ -1248,18 +1248,20 @@ def _targeted_accident_worker_not_report_search(supabase) -> List[Dict[str, Any]
 def _targeted_lifting_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
     """Точечный lexical-search для норм ручного подъема/перемещения грузов."""
     try:
+        target_doc = (
+            "Об утверждении Межотраслевых правил по охране труда "
+            "при проведении погрузочно-разгрузочных работ от 26 января 2018 г. № 12"
+        )
+
         response = (
             supabase.table("npa_chunks")
             .select(
                 "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
             )
             .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", f"%{target_doc}%")
             .or_(
-                "doc_name.ilike.%12%,"
-                "doc_name.ilike.%погрузочно-разгрузоч%,"
-                "doc_name.ilike.%погрузочно разгрузоч%"
-            )
-            .or_(
+                "point_num.ilike.%86%,"
                 "content.ilike.%50 кг%,"
                 "content.ilike.%разовый подъем%,"
                 "content.ilike.%разового подъема%,"
@@ -1268,7 +1270,17 @@ def _targeted_lifting_search(supabase, user_query: str = "") -> List[Dict[str, A
             .limit(TARGETED_SEARCH_LIMIT)
             .execute()
         )
-        return _deduplicate_chunks(response.data or [])
+
+        results = _deduplicate_chunks(response.data or [])
+        results.sort(
+            key=lambda chunk: (
+                1 if re.search(r"(?<!\d)86\.?\b", _get_point_number(chunk)) else 0,
+                1 if "50 кг" in str(chunk.get("content") or "").lower() else 0,
+                1 if "разовый подъем" in str(chunk.get("content") or "").lower() else 0,
+            ),
+            reverse=True,
+        )
+        return results
     except Exception as exc:
         logger.warning(
             "RAG | lifting targeted search failed: %s",
@@ -1811,6 +1823,8 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "unit": None,
             "subject": None,
             "action": None,
+            "scope": None,
+            "scope_signals": [],
         },
     }
     if not query:
@@ -1857,14 +1871,50 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         ])
         is_male = bool(re.search(r"\bмужчин\w*", query, re.IGNORECASE))
         is_female = bool(re.search(r"\bженщин\w*", query, re.IGNORECASE))
+
+        # Отдельно определяем область действия нормы. Это предотвращает
+        # ошибочное превращение конкретной нормы «50 кг» в универсальный
+        # предел для любого ручного труда.
+        lifting_scope_signals = []
+        if re.search(
+            r"\bпогрузочн\w*[-–— ]+разгрузочн\w*|\bпогрузк\w*\b|\bразгрузк\w*\b",
+            query,
+            re.IGNORECASE,
+        ):
+            lifting_scope_signals.extend([
+                "manual_loading_unloading",
+                "погрузочно-разгрузочные работы",
+            ])
+        elif re.search(
+            r"\bвручн\w*|\bподнима\w*\b|\bперемещ\w*\s+тяжест\w*|\bперенос\w*\b",
+            query,
+            re.IGNORECASE,
+        ):
+            lifting_scope_signals.append("manual_handling")
+
+        scope = (
+            "manual_loading_unloading"
+            if "manual_loading_unloading" in lifting_scope_signals
+            else "manual_handling"
+            if "manual_handling" in lifting_scope_signals
+            else None
+        )
+
+        constraint_data = {
+            "type": "maximum",
+            "unit": "kg",
+            "action": "lifting",
+            "scope": scope,
+            "scope_signals": lifting_scope_signals,
+        }
         if is_male:
             profile["qualifiers"].append("men")
-            profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_male", "action": "lifting"})
+            constraint_data["subject"] = "adult_male"
         elif is_female:
             profile["qualifiers"].append("women")
-            profile["constraint"].update({"type": "maximum", "unit": "kg", "subject": "adult_female", "action": "lifting"})
-        else:
-            profile["constraint"].update({"type": "maximum", "unit": "kg", "action": "lifting"})
+            constraint_data["subject"] = "adult_female"
+
+        profile["constraint"].update(constraint_data)
 
     if re.search(r"\bаттестаци\w*\s+рабоч\w*\s+мест", query, re.IGNORECASE):
         profile.update({"subject": "workplace", "event": "workplace_attestation", "action": "attest", "object": "working_conditions"})
@@ -2538,6 +2588,53 @@ def _minor_special_relevance_score(
 
 
 
+def _constraint_scope_relevance_score(
+    chunk: Dict[str, Any],
+    constraint: Dict[str, Any],
+) -> float:
+    """Оценивает совпадение области действия количественной нормы."""
+    if not constraint or constraint.get("type") != "maximum":
+        return 0.0
+
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+    scope = constraint.get("scope")
+    score = 0.0
+
+    if scope == "manual_loading_unloading":
+        if any(marker in text for marker in (
+            "погрузочно-разгрузоч",
+            "погрузочно разгрузоч",
+            "погрузочных работ",
+            "разгрузочных работ",
+        )):
+            score += 0.45
+        if re.search(r"(?<!\d)86\.?\b", point) or "пункт 86" in text:
+            score += 0.30
+    elif scope == "manual_handling":
+        if any(marker in text for marker in (
+            "вручную",
+            "ручное перемещение",
+            "ручной перенос",
+            "перемещение тяжестей",
+            "подъем тяжестей",
+        )):
+            score += 0.25
+
+    if constraint.get("unit") == "kg":
+        if any(marker in text for marker in (
+            "50 кг",
+            "50 килограмм",
+            "не более 50 кг",
+            "не более 50 килограмм",
+        )):
+            score += 0.20
+
+    return min(score, 1.0)
+
+
 def _universal_query_relevance_score(
     chunk: Dict[str, Any],
     profile: Dict[str, Any],
@@ -2574,6 +2671,11 @@ def _universal_query_relevance_score(
         score += min(hits(("предельно допустим", "предельные нормы", "нормы подъема")) * 0.18, 0.36)
         constraint = profile.get("constraint") or {}
         constraint_subject = constraint.get("subject")
+        if constraint.get("type") == "maximum":
+            scope_score = _constraint_scope_relevance_score(chunk, constraint)
+            chunk["_constraint_scope_score"] = scope_score
+            score += scope_score * 0.45
+
         if "men" in qualifiers or constraint_subject == "adult_male":
             score += min(hits(("мужчин", "мужчина", "мужского пола", "работающим мужчиной")) * 0.16, 0.32)
             wrong_subject_hits = hits(("женщин", "женщина", "лиц моложе восемнадцати лет", "несовершеннолетн"))
@@ -3291,6 +3393,17 @@ async def retrieve_context(
         query_profile.get("action"),
         query_profile.get("action_state"),
     )
+    constraint = query_profile.get("constraint") or {}
+    logger.info(
+        "RAG | constraint | type=%s | value=%s | unit=%s | subject=%s | action=%s | scope=%s | scope_signals=%s",
+        constraint.get("type"),
+        constraint.get("value"),
+        constraint.get("unit"),
+        constraint.get("subject"),
+        constraint.get("action"),
+        constraint.get("scope"),
+        constraint.get("scope_signals"),
+    )
     logger.info(
         "RAG | search_queries | count=%s | queries=%s",
         len(search_queries),
@@ -3454,12 +3567,13 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
             _safe_float(_exact_match_score(chunk, user_query, topic)),
             _safe_float(chunk.get("_universal_score")),
+            _safe_float(chunk.get("_constraint_scope_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
