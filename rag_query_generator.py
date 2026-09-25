@@ -40,6 +40,17 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
 
         queries.extend(profile.get("legal_phrases") or [])
     else:
+        if (
+            event == "occupational_briefing"
+            and qtype == "kind"
+            and "work_break_over_six_months" in (profile.get("qualifiers") or [])
+        ):
+            queries.extend([
+                "внеплановый инструктаж при перерыве в работе по профессии более шести месяцев",
+                "перерыв в работе по профессии более шести месяцев внеплановый инструктаж",
+                "какой инструктаж проводится при перерыве в работе более шести месяцев",
+                "Инструкция № 175 пункт 27 внеплановый инструктаж перерыв более шести месяцев",
+            ])
         queries.extend(profile.get("legal_phrases") or [])
 
     if event == "workplace_attestation" and qtype == "frequency":
@@ -52,14 +63,6 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
             "виды инструктажей по охране труда",
             "какой инструктаж проводится при разовых работах не связанных с прямыми обязанностями",
         ])
-
-        if "work_break_over_six_months" in (profile.get("qualifiers") or []):
-            queries.extend([
-                "внеплановый инструктаж при перерыве в работе по профессии более шести месяцев",
-                "перерыв в работе по профессии более шести месяцев внеплановый инструктаж",
-                "какой инструктаж проводится при перерыве в работе более шести месяцев",
-                "Инструкция № 175 внеплановый инструктаж перерыв в работе более шести месяцев",
-            ])
 
     if qtype == "what_to_do":
         queries.append(f"порядок действий {event or ''} {original}".strip())
