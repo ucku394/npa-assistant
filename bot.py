@@ -56,10 +56,8 @@ from prompts import (
     VISION_ANALYSIS_PROMPT,
 )
 
-from rag import (
-    retrieve_context,
-    build_source_id,
-)
+from rag import build_source_id
+from core.chat_service import ChatService
 
 
 # ============================================================
@@ -275,6 +273,8 @@ supabase = create_client(
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
+chat_service = ChatService(supabase_client=supabase)
+
 deepseek_client = (
     OpenAI(
         api_key=DEEPSEEK_API_KEY,
@@ -469,37 +469,37 @@ async def text_handler(
 
     try:
         async with continuous_typing(update.effective_chat):
-            # 1. RAG поиск
-            rag_result = await retrieve_context(
-                question,
-                supabase,
-            )
+            if status_message:
+                try:
+                    await status_message.edit_text(
+                        "🔍 <i>Ищу в базе НПА Республики Беларусь...</i>",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.debug("Не удалось обновить статус поиска: %s", e)
 
-            chunks = rag_result["chunks"]
-            npa_context = rag_result["retrieved_text"]
+            # Единый AI Core: RAG -> prompt -> AI -> SOURCE_ID.
+            result = await chat_service.process_text(question)
 
-            logger.info(
-                "RAG | candidates=%s | final=%s | domain=%s | topic=%s",
-                rag_result["candidate_count"],
-                rag_result["final_count"],
-                rag_result["legal_domain"],
-                rag_result["topic"],
-            )
-
-            if not rag_result["found"] or not npa_context:
+            if not result.get("success"):
                 if status_message:
                     try:
                         await status_message.delete()
                     except Exception:
                         pass
 
-                await update.effective_message.reply_text(
-                    "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
-                    "поэтому не буду придумывать нормативное требование."
-                )
+                error = result.get("error")
+                if error == "no_relevant_context":
+                    await update.effective_message.reply_text(
+                        "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
+                        "поэтому не буду придумывать нормативное требование."
+                    )
+                else:
+                    await update.effective_message.reply_text(
+                        "Не удалось обработать вопрос."
+                    )
                 return
 
-            # 2. Обновление статуса на анализ перед вызовом LLM
             if status_message:
                 try:
                     await status_message.edit_text(
@@ -507,52 +507,34 @@ async def text_handler(
                         parse_mode="HTML",
                     )
                 except Exception as e:
-                    logger.debug("Не удалось обновить статусное сообщение: %s", e)
+                    logger.debug("Не удалось обновить статус анализа: %s", e)
 
-            # 3. Вызов модели
-            prompt = LEGAL_ASSISTANT_PROMPT.format(
-                retrieved_text=npa_context,
-                user_query=question,
-            )
-
-            answer = await asyncio.to_thread(
-                generate_answer,
-                prompt,
-            )
-
-            if not answer:
-                raise RuntimeError("AI returned empty answer.")
-
-            answer = clean_ai_markup(answer)
+            answer = clean_ai_markup(result.get("answer") or "")
             answer = ensure_numbered_list_spacing(answer)
 
-            valid_rag_source_ids = []
-            for index, chunk in enumerate(chunks, start=1):
-                source_id = chunk.get("_source_id") or build_source_id(chunk, index)
-                if source_id:
-                    chunk["_source_id"] = source_id
-                    valid_rag_source_ids.append(source_id)
-
-            used_source_ids = extract_used_source_ids(answer)
-            used_source_refs = build_used_source_references(chunks, used_source_ids)
-
-            answer = remove_source_markers(
-                answer,
-                valid_source_ids=valid_rag_source_ids,
-            )
-
-            if used_source_refs:
+            sources = result.get("sources") or []
+            if sources:
                 answer += "\n\n📎 ИСТОЧНИКИ\n\n"
-                answer += "\n\n".join(f"• {source}" for source in used_source_refs)
+                answer += "\n\n".join(
+                    (
+                        f"• {source.get('document', 'Неизвестный НПА')}"
+                        + (
+                            f" — пункт/статья {source.get('point')}"
+                            if source.get("point")
+                            else ""
+                        )
+                    )
+                    for source in sources
+                )
             else:
                 logger.warning(
-                    "LEGAL | AI did not provide valid SOURCE_IDs. No automatic sources will be added."
+                    "LEGAL | AI did not provide valid SOURCE_IDs. "
+                    "No automatic sources will be added."
                 )
 
             answer = clean_ai_markup(answer)
             answer = ensure_numbered_list_spacing(answer)
 
-        # 4. Удаление временного сообщения перед финальным выводом
         if status_message:
             try:
                 await status_message.delete()
