@@ -2031,55 +2031,7 @@ def build_search_queries(
     if topic == "accident_investigation":
         accident_mode = _accident_query_mode(original)
 
-        constraint = (query_profile or {}).get("constraint") or {}
-
-    if constraint.get("type") == "maximum" and constraint.get("unit") == "kg":
-        scored_constraint = []
-        for chunk in ranked_chunks:
-            cscore = _universal_query_relevance_score(chunk, query_profile or {})
-            text_lower = (
-                f"{_get_document_name(chunk)} "
-                f"{_get_point_number(chunk)} "
-                f"{str(chunk.get('content') or '')}"
-            ).lower()
-
-            if constraint.get("subject") == "adult_male":
-                if "50 кг" in text_lower or "50 килограмм" in text_lower:
-                    cscore += 0.50
-                if "погрузочно-разгрузоч" in text_lower:
-                    cscore += 0.25
-                if "пункт 86" in text_lower or "п. 86" in text_lower:
-                    cscore += 0.25
-                if any(x in text_lower for x in (
-                    "женщин", "женщина", "несовершеннолетн",
-                    "моложе восемнадцати лет",
-                )) and not any(x in text_lower for x in (
-                    "мужчин", "мужчина", "работающим мужчиной",
-                )):
-                    cscore -= 0.45
-
-            scored_constraint.append((
-                cscore,
-                _safe_float(chunk.get("_combined_score")),
-                chunk,
-            ))
-
-        scored_constraint.sort(
-            key=lambda item: (item[0], item[1]),
-            reverse=True,
-        )
-
-        for cscore, _, chunk in scored_constraint:
-            if cscore < 0.35:
-                continue
-            if _add(chunk, max_per_document=4, max_per_point=1):
-                if len(selected) >= limit:
-                    return selected
-
-        if selected:
-            return selected
-
-    if accident_mode == "worker_did_not_report":
+        if accident_mode == "worker_did_not_report":
             queries.extend([
                 f"работник не сообщил о несчастном случае руководителю {original}",
                 "если работник не сообщил о несчастном случае непосредственному руководителю",
