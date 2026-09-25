@@ -82,6 +82,15 @@ def build_search_queries(
     queries: List[str] = [original]
     queries.extend(build_universal_search_queries(universal_profile, original))
 
+    # Для вопросов «какой/какому инструктаж» и «кто проводит инструктаж»
+    # должны существовать взаимоисключающие поисковые режимы.
+    # Иначе responsible_person может добавить запросы про вводный
+    # инструктаж даже тогда, когда пользователь спрашивает только вид.
+    briefing_kind_query = (
+        topic == "occupational_briefing"
+        and universal_profile.get("question_type") == "kind"
+    )
+
     target_briefing_query = (
         topic == "occupational_briefing"
         and _is_target_briefing_query(original)
@@ -89,6 +98,7 @@ def build_search_queries(
 
     responsible_briefing_query = (
         topic == "occupational_briefing"
+        and not briefing_kind_query
         and not target_briefing_query
         and (
             _is_responsible_briefing_query(original)
@@ -232,6 +242,7 @@ def build_search_queries(
 
     if (
         "responsible_person" in intents
+        and not briefing_kind_query
         and not target_briefing_query
         and responsible_briefing_query
     ):
@@ -275,14 +286,19 @@ def build_search_queries(
         and _accident_query_mode(original) == "worker_did_not_report"
     )
 
-    target_forbidden = (
+    responsible_markers = (
         "кто проводит",
         "кто должен проводить",
+        "кто обязан проводить",
         "кто имеет право проводить",
+        "кто отвечает за проведение",
         "какое лицо проводит",
         "какой специалист проводит",
         "специалист по охране труда",
+        "уполномоченное должностное лицо",
     )
+
+    target_forbidden = responsible_markers
     responsible_forbidden = (
         "какой инструктаж",
         "какому инструктаж",
@@ -296,6 +312,11 @@ def build_search_queries(
         qn = q_clean.lower()
 
         if not qn:
+            continue
+
+        # Режим «какой инструктаж» никогда не должен смешиваться
+        # с режимом «кто проводит инструктаж».
+        if briefing_kind_query and any(marker in qn for marker in responsible_markers):
             continue
 
         if target_briefing_query and any(marker in qn for marker in target_forbidden):
@@ -323,6 +344,18 @@ def build_search_queries(
             result.append(q_clean)
 
     final_queries = result[:8]
+
+    if briefing_kind_query:
+        final_queries = [
+            q for q in final_queries
+            if not any(marker in q.lower() for marker in responsible_markers)
+        ]
+        if not final_queries:
+            final_queries = [
+                original,
+                "виды инструктажей по охране труда",
+                "вводный первичный повторный внеплановый целевой инструктаж по охране труда",
+            ]
 
     if target_briefing_query:
         final_queries = [
