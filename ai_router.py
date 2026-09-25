@@ -23,13 +23,17 @@ logger = logging.getLogger(__name__)
 # короткой. Это не отключает Gemini на 30 минут после каждого
 # кратковременного сбоя.
 GEMINI_RATE_LIMIT_COOLDOWN_SECONDS = 300
-GEMINI_TEMPORARY_COOLDOWN_SECONDS = 60
+# 503/high-demand: не мучаем перегруженный endpoint повтором через 2 секунды.
+# После одной неудачи Gemini временно пропускается, а запрос сразу уходит
+# в OpenRouter. Следующий пользовательский запрос сможет снова попробовать
+# Gemini после короткого cooldown.
+GEMINI_TEMPORARY_COOLDOWN_SECONDS = 300
 GEMINI_UNKNOWN_COOLDOWN_SECONDS = 120
 
-# Один повторный запрос Gemini после transient-ошибки.
-# Если повтор снова неудачен — сразу переходим к OpenRouter.
-GEMINI_RETRY_ATTEMPTS = 1
-GEMINI_RETRY_DELAY_SECONDS = 2
+# Для 503/high-demand retry внутри одного пользовательского запроса отключён.
+# Это не задерживает Telegram-ответ и не создаёт лишнюю нагрузку на Gemini.
+GEMINI_RETRY_ATTEMPTS = 0
+GEMINI_RETRY_DELAY_SECONDS = 0
 
 # Ошибки конфигурации/доступности API (например, location is not supported)
 # не имеют смысла повторять каждые 30 минут. В таком случае Gemini
@@ -1318,7 +1322,10 @@ def generate_answer(prompt: str) -> str:
                         )
                         break
 
-                    # Для transient-ошибки делаем один быстрый повтор.
+                    # Retry внутри одного Telegram-запроса намеренно отключён для
+                    # transient/rate-limit ошибок. При 503/high-demand
+                    # сразу переключаемся на OpenRouter, а Gemini получает
+                    # cooldown и автоматически возвращается позже.
                     if (
                         category in ("temporary", "rate_limit")
                         and attempt < GEMINI_RETRY_ATTEMPTS
