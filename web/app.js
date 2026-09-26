@@ -260,32 +260,80 @@ function addMessage(role, text, sources = [], meta = "") {
   wrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-function addTyping() {
+function addSearchProgress() {
   const wrap = document.createElement("div");
   wrap.className = "message assistant";
-  wrap.id = "typing";
-  wrap.innerHTML = '<div class="bubble typing">Ищу релевантные фрагменты НПА…</div>';
-  chat.appendChild(wrap);
+  wrap.id = "search-progress";
 
-  let step = 0;
-  const messages = [
-    "Ищу релевантные фрагменты НПА…",
-    "Проверяю нормативное основание…",
-    "Формирую ответ с источниками…"
+  const bubble = document.createElement("div");
+  bubble.className = "bubble search-progress";
+  bubble.innerHTML = '<div class="progress-title">Обрабатываю вопрос</div><div class="progress-steps"></div>';
+
+  const steps = [
+    "Поиск релевантных НПА",
+    "Анализ найденных положений",
+    "Проверка нормативных источников",
+    "Формирование ответа"
   ];
 
-  wrap.dataset.timer = String(window.setInterval(() => {
-    step = (step + 1) % messages.length;
-    const bubble = wrap.querySelector(".bubble");
-    if (bubble) bubble.textContent = messages[step];
-  }, 1800));
+  const list = bubble.querySelector(".progress-steps");
+  steps.forEach((label, index) => {
+    const step = document.createElement("div");
+    step.className = "progress-step" + (index === 0 ? " active" : "");
+    step.dataset.index = String(index);
+    step.innerHTML =
+      '<span class="progress-icon">○</span>' +
+      '<span class="progress-label">' + escapeHtml(label) + "</span>";
+    list.appendChild(step);
+  });
+
+  wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+  wrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  let current = 0;
+  const timer = window.setInterval(() => {
+    current += 1;
+    if (current >= steps.length) {
+      current = steps.length - 1;
+      window.clearInterval(timer);
+    }
+
+    list.querySelectorAll(".progress-step").forEach((step, index) => {
+      step.classList.toggle("done", index < current);
+      step.classList.toggle("active", index === current);
+      const icon = step.querySelector(".progress-icon");
+      if (icon) icon.textContent = index < current ? "✓" : index === current ? "●" : "○";
+    });
+  }, 1200);
+
+  wrap.dataset.timer = String(timer);
 }
 
-function removeTyping() {
-  const typing = document.getElementById("typing");
-  if (!typing) return;
-  if (typing.dataset.timer) window.clearInterval(Number(typing.dataset.timer));
-  typing.remove();
+function finishSearchProgress(success = true) {
+  const wrap = document.getElementById("search-progress");
+  if (!wrap) return;
+
+  if (wrap.dataset.timer) window.clearInterval(Number(wrap.dataset.timer));
+
+  wrap.querySelectorAll(".progress-step").forEach(step => {
+    step.classList.remove("active");
+    step.classList.add("done");
+    const icon = step.querySelector(".progress-icon");
+    if (icon) icon.textContent = "✓";
+  });
+
+  const title = wrap.querySelector(".progress-title");
+  if (title) title.textContent = success ? "Ответ готов" : "Поиск завершён";
+
+  window.setTimeout(() => wrap.remove(), 260);
+}
+
+function removeSearchProgress() {
+  const wrap = document.getElementById("search-progress");
+  if (!wrap) return;
+  if (wrap.dataset.timer) window.clearInterval(Number(wrap.dataset.timer));
+  wrap.remove();
 }
 
 function updateCounter() {
@@ -340,7 +388,7 @@ async function ask(text) {
   updateCounter();
   send.disabled = true;
   setStatus("Обрабатывает…", "busy");
-  addTyping();
+  addSearchProgress();
 
   try {
     const response = await fetch("/api/chat", {
@@ -356,8 +404,6 @@ async function ask(text) {
       throw new Error("Сервер вернул некорректный ответ.");
     }
 
-    removeTyping();
-
     if (!response.ok) {
       throw new Error(data.detail || "Ошибка сервера");
     }
@@ -365,6 +411,7 @@ async function ask(text) {
     const answer = data.answer || "Ответ не получен.";
     const sources = data.sources || [];
 
+    finishSearchProgress(Boolean(data.success));
     addMessage(
       "assistant",
       answer,
@@ -374,7 +421,7 @@ async function ask(text) {
     saveTurn(value, answer, sources, Boolean(data.success));
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
-    removeTyping();
+    removeSearchProgress();
     const errorText = "Не удалось получить ответ. Попробуйте повторить запрос.";
     const wrap = document.createElement("div");
     wrap.className = "message assistant error-message";
