@@ -177,7 +177,50 @@ async function copyText(text, button) {
   }
 }
 
-function addMessage(role, text, sources = [], meta = "") {
+function formatCount(value, one, few, many) {
+  const n = Math.abs(Number(value) || 0);
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+function addSourceSummary(container, sources, rag = null) {
+  if (!sources.length) return;
+
+  const summary = document.createElement("div");
+  summary.className = "source-summary";
+
+  const usedCount = sources.length;
+  const usedLabel = formatCount(
+    usedCount,
+    "источник",
+    "источника",
+    "источников"
+  );
+
+  let details = `Использовано нормативных источников: <strong>${usedCount}</strong> ${usedLabel}`;
+
+  const finalCount = Number(rag?.final_count || 0);
+  if (finalCount > 0) {
+    const fragmentLabel = formatCount(
+      finalCount,
+      "фрагмент",
+      "фрагмента",
+      "фрагментов"
+    );
+    details += `<span class="source-summary-separator">·</span> Отобрано RAG: <strong>${finalCount}</strong> ${fragmentLabel}`;
+  }
+
+  summary.innerHTML =
+    '<span class="source-summary-icon">§</span>' +
+    '<span class="source-summary-text">' + details + "</span>";
+
+  container.appendChild(summary);
+}
+
+function addMessage(role, text, sources = [], meta = "", rag = null) {
   const wrap = document.createElement("div");
   wrap.className = "message " + role;
 
@@ -222,7 +265,11 @@ function addMessage(role, text, sources = [], meta = "") {
   if (role === "assistant" && sources.length) {
     const list = document.createElement("div");
     list.className = "source-list";
-    list.innerHTML = '<div class="source-heading">Использованные источники</div>';
+    addSourceSummary(list, sources, rag);
+    const heading = document.createElement("div");
+    heading.className = "source-heading";
+    heading.textContent = "Использованные источники";
+    list.appendChild(heading);
 
     sources.forEach((src, index) => {
       const item = document.createElement("article");
@@ -346,12 +393,13 @@ function updateCounter() {
   counter.textContent = question.value.length + " / 4000";
 }
 
-function saveTurn(userText, answer, sources, success = true) {
+function saveTurn(userText, answer, sources, success = true, rag = null) {
   history.push({
     user: userText,
     answer,
     sources: sources || [],
     success,
+    rag: rag || null,
     time: Date.now()
   });
   history = history.slice(-40);
@@ -369,7 +417,8 @@ function restoreHistory() {
       "assistant",
       turn.answer,
       turn.sources || [],
-      turn.success === false ? "Ответ сформирован без достаточного нормативного контекста." : ""
+      turn.success === false ? "Ответ сформирован без достаточного нормативного контекста." : "",
+      turn.rag || null
     );
   });
 }
@@ -422,9 +471,10 @@ async function ask(text) {
       "assistant",
       answer,
       sources,
-      data.success ? "" : "Недостаточно релевантного нормативного контекста."
+      data.success ? "" : "Недостаточно релевантного нормативного контекста.",
+      data.rag || null
     );
-    saveTurn(value, answer, sources, Boolean(data.success));
+    saveTurn(value, answer, sources, Boolean(data.success), data.rag || null);
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
     removeSearchProgress();
