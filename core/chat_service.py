@@ -253,6 +253,10 @@ class ChatService:
 
         used_source_ids = self._extract_source_ids(answer)
         sources = self._build_sources(chunks, used_source_ids)
+        answer_with_citations = self._build_citation_answer(
+            answer=answer,
+            sources=sources,
+        )
 
         answer = self._remove_source_markers(answer, valid_source_ids)
 
@@ -261,7 +265,7 @@ class ChatService:
             "error": None,
             "question": question,
             "answer": answer,
-            "answer_with_citations": self._build_citation_answer(answer=answer, sources=sources),
+            "answer_with_citations": answer_with_citations,
             "sources": sources,
             "rag": rag_meta,
         }
