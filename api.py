@@ -93,6 +93,7 @@ class ChatResponse(BaseModel):
     error: str | None = None
     question: str
     answer: str
+    answer_with_citations: str = ""
     sources: list[SourceItem] = []
     rag: RagMeta = RagMeta()
 
@@ -136,6 +137,7 @@ async def chat(request: ChatRequest):
             success=False,
             error="no_relevant_context",
             question=question,
+            answer_with_citations="",
             answer=(
                 "Я не нашёл достаточно релевантных фрагментов НПА "
                 "в базе, поэтому не буду придумывать нормативное требование."
@@ -155,6 +157,7 @@ async def chat(request: ChatRequest):
         error=None,
         question=question,
         answer=result.get("answer") or "",
+        answer_with_citations=result.get("answer_with_citations") or result.get("answer") or "",
         sources=result.get("sources") or [],
         rag=result.get("rag") or {},
     )
