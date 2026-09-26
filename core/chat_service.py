@@ -38,17 +38,16 @@ class ChatService:
         result: List[str] = []
         seen = set()
 
-        patterns = (
-            r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]",
-            r"\bNPA_[A-Za-zА-Яа-яЁё0-9_./-]+\b",
+        pattern = (
+            r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]"
+            r"|\b(NPA_[A-Za-zА-Яа-яЁё0-9_./-]+)\b"
         )
 
-        for pattern in patterns:
-            for source_id in re.findall(pattern, answer):
-                source_id = source_id.strip()
-                if source_id and source_id not in seen:
-                    seen.add(source_id)
-                    result.append(source_id)
+        for match in re.finditer(pattern, answer):
+            source_id = (match.group(1) or match.group(2) or "").strip()
+            if source_id and source_id not in seen:
+                seen.add(source_id)
+                result.append(source_id)
 
         return result
 
