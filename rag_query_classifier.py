@@ -131,6 +131,19 @@ def detect_topic(user_query: str) -> str:
     if not query:
         return "general"
 
+
+    # Проверка знаний по охране труда — отдельная тема.
+    knowledge_testing_patterns = [
+        r"\bпровер\w*\s+знани\w*\b",
+        r"\bне\s+прошел\w*\b.{0,80}\bпровер\w*\s+знани\w*",
+        r"\bне\s+сдал\w*\b.{0,80}\bпровер\w*\s+знани\w*",
+        r"\bнеудовлетворительн\w*\s+результат\w*.{0,80}\bпровер\w*\s+знани\w*",
+        r"\bповторн\w*\s+провер\w*\s+знани\w*",
+        r"\bкомисс\w*\s+по\s+провер\w*\s+знани\w*",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in knowledge_testing_patterns):
+        return "knowledge_testing"
+
     ppe_nonprovision_patterns = [
         r"\bсиз\b.*\bне\s+выдан\w*",
         r"\bне\s+выдан\w*.*\bсиз\b",
@@ -254,6 +267,46 @@ def detect_topic(user_query: str) -> str:
 
     return "general"
 
+
+
+# ============================================================
+# ПРОВЕРКА ЗНАНИЙ: СОСТОЯНИЕ И ДЕЙСТВИЕ
+# ============================================================
+
+def detect_knowledge_testing_state(user_query: str) -> Optional[str]:
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if not query:
+        return None
+    if re.search(r"\bне\s+прош(?:ел|ла|ли)\w*\b|\bне\s+сдал\w*\b|\bнеудовлетворительн\w*\s+результат\w*", query, re.IGNORECASE):
+        return "failed"
+    if re.search(r"\bне\s+явил\w*\b|\bне\s+пришел\w*\b|\bне\s+пришла\w*\b|\bне\s+прошел\w*\s+в\s+срок", query, re.IGNORECASE):
+        return "not_attended"
+    if re.search(r"\b(?:просроч\w*|истек\w*)\b.{0,50}\bпровер\w*\s+знани\w*", query, re.IGNORECASE):
+        return "expired"
+    if re.search(r"\bпрошел\w*\s+провер\w*\s+знани\w*|\bсдал\w*\s+провер\w*\s+знани\w*", query, re.IGNORECASE):
+        return "passed"
+    return None
+
+
+def detect_knowledge_testing_action(user_query: str) -> Optional[str]:
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if not query:
+        return None
+    if re.search(r"\bчто\s+делать\b|\bдальнейш\w*\s+действ\w*|\bпорядок\w*\s+действ\w*", query, re.IGNORECASE):
+        return "further_actions"
+    if re.search(r"\bповторн\w*\s+провер\w*|\bпересдач\w*|\bповторн\w*\s+сдать\b", query, re.IGNORECASE):
+        return "repeat_test"
+    if re.search(r"\bобучен\w*|\bподготов\w*|\bстажиров\w*", query, re.IGNORECASE):
+        return "training"
+    if re.search(r"\bдопуск\w*\s+к\s+работ\w*", query, re.IGNORECASE):
+        return "admission"
+    if re.search(r"\bотстран\w*|\bприостанов\w*|\bне\s+допуск\w*", query, re.IGNORECASE):
+        return "suspension"
+    if re.search(r"\bкто\s+провод\w*|\bкто\s+ответствен\w*|\bкомисс\w*", query, re.IGNORECASE):
+        return "responsible_person"
+    if re.search(r"\bсрок\w*|\bкогда\b|\bв\s+течение\b", query, re.IGNORECASE):
+        return "deadline"
+    return None
 
 # ============================================================
 # СПЕЦИАЛЬНЫЕ КАТЕГОРИИ РАБОТНИКОВ
