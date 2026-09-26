@@ -265,11 +265,55 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
   if (role === "assistant" && sources.length) {
     const list = document.createElement("div");
     list.className = "source-list";
-    addSourceSummary(list, sources, rag);
+
+    const sourceToggle = document.createElement("button");
+    sourceToggle.type = "button";
+    sourceToggle.className = "source-toggle";
+    sourceToggle.setAttribute("aria-expanded", "false");
+
+    const sourceToggleText = document.createElement("span");
+    sourceToggleText.className = "source-toggle-text";
+
+    const sourceToggleIcon = document.createElement("span");
+    sourceToggleIcon.className = "source-toggle-icon";
+    sourceToggleIcon.textContent = "⌄";
+
+    sourceToggle.appendChild(sourceToggleText);
+    sourceToggle.appendChild(sourceToggleIcon);
+
+    const sourceContent = document.createElement("div");
+    sourceContent.className = "source-content";
+    sourceContent.hidden = true;
+
+    addSourceSummary(sourceContent, sources, rag);
+
     const heading = document.createElement("div");
     heading.className = "source-heading";
     heading.textContent = "Использованные источники";
-    list.appendChild(heading);
+    sourceContent.appendChild(heading);
+
+    const sourceCards = document.createElement("div");
+    sourceCards.className = "source-cards";
+    sourceContent.appendChild(sourceCards);
+
+    const updateSourceToggle = (expanded) => {
+      sourceToggle.setAttribute("aria-expanded", String(expanded));
+      sourceToggle.classList.toggle("expanded", expanded);
+      sourceToggleIcon.textContent = expanded ? "⌃" : "⌄";
+      sourceToggleText.textContent = expanded
+        ? "Скрыть источники"
+        : "Показать источники (" + sources.length + ")";
+    };
+
+    sourceToggle.addEventListener("click", () => {
+      const expanded = sourceToggle.getAttribute("aria-expanded") === "true";
+      sourceContent.hidden = expanded;
+      updateSourceToggle(!expanded);
+    });
+
+    updateSourceToggle(false);
+    list.appendChild(sourceToggle);
+    list.appendChild(sourceContent);
 
     sources.forEach((src, index) => {
       const item = document.createElement("article");
