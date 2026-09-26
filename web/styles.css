@@ -173,6 +173,65 @@ button { cursor: pointer; }
 .answer-list li { margin: 5px 0; }
 
 .source-list { margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); }
+
+.source-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 9px 11px;
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.source-toggle:hover {
+  border-color: #b2ccff;
+  background: var(--accent-soft);
+}
+
+.source-toggle-text {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.source-toggle-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.source-toggle.expanded .source-toggle-icon {
+  background: var(--accent-soft);
+}
+
+.source-content {
+  margin-top: 9px;
+}
+
+.source-content[hidden] {
+  display: none;
+}
+
+.source-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
 .source-summary {
   display: flex;
   align-items: center;
@@ -218,12 +277,10 @@ button { cursor: pointer; }
 }
 .source-card {
   padding: 11px 12px;
-  margin-top: 7px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-soft);
 }
-.source-card:first-of-type { margin-top: 0; }
 .source-card-top,
 .source-card-bottom {
   display: flex;
