@@ -172,6 +172,32 @@ def _keyword_score(
 # СПЕЦИАЛЬНЫЙ SCORE ДЛЯ ЮРИДИЧЕСКОЙ ТЕМЫ
 # ============================================================
 
+
+def _knowledge_testing_relevance_score(
+    chunk: Dict[str, Any],
+    user_query: str = "",
+) -> float:
+    document = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {content}"
+    score = 0.0
+    if "проверка знаний" in text or "проверки знаний" in text:
+        score += 0.90
+    if any(marker in text for marker in ("требований охраны труда", "требования охраны труда", "охране труда")):
+        score += 0.30
+    if any(marker in text for marker in ("неудовлетворительн", "не прошел", "не сдал", "повторн", "переподготов")):
+        score += 0.35
+    if any(marker in text for marker in ("комисси", "председател", "допуск к самостоятельной работе")):
+        score += 0.20
+    q = str(user_query or "").lower()
+    if any(marker in q for marker in ("не прош", "не сдал", "неудовлетвор")):
+        if any(marker in content for marker in ("неудовлетвор", "не прошел", "не сдал", "повтор")):
+            score += 0.55
+    if any(marker in q for marker in ("дальнейш", "что делать", "порядок")):
+        if any(marker in content for marker in ("порядок", "повтор", "допуск", "обучен", "отстран")):
+            score += 0.40
+    return min(score, 2.50)
+
 def _topic_relevance_score(
     chunk: Dict[str, Any],
     topic: str,
@@ -215,6 +241,29 @@ def _topic_relevance_score(
 
         if "175" in document_name:
             score += 0.80
+
+
+    elif topic == "knowledge_testing":
+        if db_topic == "knowledge_testing":
+            score += 1.20
+        markers = [
+            "проверка знаний", "проверки знаний", "результат проверки знаний",
+            "неудовлетворительн", "повторная проверка",
+            "комиссия по проверке знаний", "допуск к самостоятельной работе",
+        ]
+        matches = sum(1 for marker in markers if marker in content)
+        score += min(matches * 0.42, 1.80)
+        if "охране труда" in document_name:
+            score += 0.25
+        if any(marker in document_name for marker in ("обуч", "провер", "инструк")):
+            score += 0.25
+        q = str(chunk.get("_user_query_for_scoring") or "")
+        if any(marker in q for marker in ("не прош", "не сдал", "неудовлетвор")):
+            if any(marker in content for marker in ("неудовлетвор", "не прошел", "не сдал", "повтор")):
+                score += 0.90
+        if "дальнейш" in q or "что делать" in q:
+            if any(marker in content for marker in ("порядок", "повтор", "допуск", "обучен", "отстран")):
+                score += 0.60
 
     elif topic == "ppe_nonprovision":
         if db_topic == "ppe_nonprovision":
@@ -1831,6 +1880,9 @@ def _legal_relevance_score(
     exact_score = _exact_match_score(chunk, user_query, topic)
 
     briefing_mode_bonus = 0.0
+    knowledge_testing_bonus = 0.0
+    if topic == "knowledge_testing":
+        knowledge_testing_bonus = min(_knowledge_testing_relevance_score(chunk, user_query), 1.80)
     if topic == "occupational_briefing":
         mode = (
             "target"
@@ -1916,6 +1968,7 @@ def _legal_relevance_score(
         + intent_score * 0.05
         + primary_score * 0.10
         + briefing_mode_bonus
+        + knowledge_testing_bonus
         + labor_code_bonus
         + special_category_bonus
         + repeated_bonus
@@ -2169,6 +2222,28 @@ def _select_legal_diverse_chunks(
         if point_key is not None:
             points_seen.add(point_key)
         return True
+
+
+    if topic == "knowledge_testing":
+        knowledge_pool = [
+            chunk for chunk in ranked_chunks
+            if _knowledge_testing_relevance_score(
+                chunk, str(chunk.get("_user_query_for_scoring") or "")
+            ) >= 0.70
+        ]
+        knowledge_pool.sort(
+            key=lambda chunk: (
+                _knowledge_testing_relevance_score(
+                    chunk, str(chunk.get("_user_query_for_scoring") or "")
+                ),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for chunk in knowledge_pool:
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= min(4, limit):
+                    return selected
 
     if accident_mode == "worker_did_not_report":
         # Для этого intent финальный отбор идёт из узкого targeted-пула.
@@ -2707,7 +2782,7 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
@@ -2719,6 +2794,7 @@ async def retrieve_context(
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
             _safe_float(chunk.get("_briefing_mode_bonus")),
             _safe_float(chunk.get("_special_category_bonus")),
+            _safe_float(_knowledge_testing_relevance_score(chunk, user_query) if topic == "knowledge_testing" else 0.0),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
