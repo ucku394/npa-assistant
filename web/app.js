@@ -6,6 +6,9 @@ const statusEl = document.getElementById("status");
 const hero = document.getElementById("hero");
 const counter = document.getElementById("counter");
 const newChat = document.getElementById("newChat");
+const historyPanel = document.getElementById("historyPanel");
+const historyList = document.getElementById("historyList");
+const clearHistoryButton = document.getElementById("clearHistory");
 
 const STORAGE_KEY = "npa-assistant-web-history-v1";
 let history = loadHistory();
@@ -38,7 +41,63 @@ function clearChat() {
   setStatus("Готов");
   question.value = "";
   updateCounter();
+  renderHistory();
   question.focus();
+}
+
+function renderHistory() {
+  if (!historyPanel || !historyList) return;
+
+  historyList.innerHTML = "";
+  if (!history.length) {
+    historyPanel.classList.remove("has-history");
+    return;
+  }
+
+  historyPanel.classList.add("has-history");
+
+  history.slice().reverse().forEach((turn, reverseIndex) => {
+    const index = history.length - 1 - reverseIndex;
+    const item = document.createElement("div");
+    item.className = "history-item";
+
+    const body = document.createElement("div");
+    body.className = "history-body";
+
+    const text = document.createElement("div");
+    text.className = "history-question";
+    text.textContent = turn.user || "Без вопроса";
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const date = turn.time ? new Date(turn.time) : null;
+    meta.textContent = date && !Number.isNaN(date.getTime())
+      ? date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "Ранее";
+    if (turn.sources && turn.sources.length) {
+      meta.textContent += " · " + turn.sources.length + " " +
+        (turn.sources.length === 1 ? "источник" : "источника");
+    }
+
+    body.appendChild(text);
+    body.appendChild(meta);
+
+    const repeat = document.createElement("button");
+    repeat.type = "button";
+    repeat.className = "history-repeat";
+    repeat.textContent = "Повторить";
+    repeat.title = "Повторить этот вопрос";
+    repeat.addEventListener("click", () => {
+      question.value = turn.user || "";
+      updateCounter();
+      question.focus();
+      question.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    item.appendChild(body);
+    item.appendChild(repeat);
+    historyList.appendChild(item);
+  });
 }
 
 function escapeHtml(value) {
@@ -243,6 +302,7 @@ function saveTurn(userText, answer, sources, success = true) {
   });
   history = history.slice(-40);
   saveHistory();
+  renderHistory();
 }
 
 function restoreHistory() {
@@ -364,7 +424,10 @@ document.querySelectorAll("[data-question]").forEach(button => {
   button.addEventListener("click", () => ask(button.dataset.question));
 });
 
+clearHistoryButton?.addEventListener("click", clearChat);
+
 updateCounter();
+renderHistory();
 restoreHistory();
 checkHealth();
 question.focus();
