@@ -287,12 +287,20 @@ function addMessage(role, text, sources = [], meta = "", rag = null, citationTex
       const citationNumber = Number(citation.dataset.citation || 0);
       if (!citationNumber) return;
 
+      const source = sources[citationNumber - 1] || {};
       const sourceContent = bubble.querySelector(".source-content");
       const sourceCards = bubble.querySelectorAll(".source-card");
       const target = sourceCards[citationNumber - 1];
       const toggle = bubble.querySelector(".source-toggle");
 
-      if (sourceContent && target) {
+      if (!target) return;
+
+      const existingPopover = bubble.querySelector(".citation-popover");
+      const sameCitation = existingPopover &&
+        existingPopover.dataset.citation === String(citationNumber);
+
+      if (sameCitation) {
+        existingPopover.remove();
         sourceContent.hidden = false;
         if (toggle) {
           toggle.setAttribute("aria-expanded", "true");
@@ -302,11 +310,41 @@ function addMessage(role, text, sources = [], meta = "", rag = null, citationTex
           if (toggleText) toggleText.textContent = "Скрыть источники";
           if (toggleIcon) toggleIcon.textContent = "⌃";
         }
-
         target.classList.add("source-card-highlight");
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         window.setTimeout(() => target.classList.remove("source-card-highlight"), 1800);
+        return;
       }
+
+      if (existingPopover) existingPopover.remove();
+
+      const popover = document.createElement("div");
+      popover.className = "citation-popover";
+      popover.dataset.citation = String(citationNumber);
+
+      const title = document.createElement("div");
+      title.className = "citation-popover-title";
+      title.textContent = "Источник " + citationNumber;
+      popover.appendChild(title);
+
+      const documentName = document.createElement("div");
+      documentName.className = "citation-popover-document";
+      documentName.textContent = source.document || "Нормативный источник";
+      popover.appendChild(documentName);
+
+      if (source.point) {
+        const point = document.createElement("div");
+        point.className = "citation-popover-point";
+        point.textContent = source.point;
+        popover.appendChild(point);
+      }
+
+      const hint = document.createElement("div");
+      hint.className = "citation-popover-hint";
+      hint.textContent = "Нажмите ещё раз, чтобы открыть источник";
+      popover.appendChild(hint);
+
+      citation.insertAdjacentElement("afterend", popover);
     });
 
     const list = document.createElement("div");
