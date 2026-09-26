@@ -2489,7 +2489,7 @@ def _select_legal_diverse_chunks(
 # ОСНОВНОЙ RAG
 # ============================================================
 
-async def retrieve_context(
+async def _retrieve_context_legacy(
     user_query: str,
     supabase,
 ) -> Dict[str, Any]:
@@ -2799,6 +2799,42 @@ async def retrieve_context(
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
     }
+
+
+
+async def retrieve_context(user_query: str, supabase) -> Dict[str, Any]:
+    """Backwards-compatible public entry point backed by RagPipeline."""
+    from rag_engine.pipeline import RagPipeline, RagPipelineDependencies
+
+    deps = RagPipelineDependencies(
+        detect_legal_domain=detect_legal_domain,
+        detect_topic=detect_topic,
+        extract_query_terms=_extract_query_terms,
+        detect_query_intents=detect_query_intents,
+        is_cross_reference_query=is_cross_reference_query,
+        detect_primary_intent=detect_primary_intent,
+        is_labor_code_query=_is_labor_code_query,
+        detect_special_category=detect_special_category,
+        minor_special_issue=_minor_special_issue,
+        build_query_profile=build_universal_query_profile,
+        build_search_queries=build_search_queries,
+        get_query_embeddings=get_query_embeddings,
+        search_chunks=_search_chunks,
+        merge_search_results=_merge_search_results,
+        get_targeted_chunks=_get_targeted_chunks,
+        legal_relevance_score=_legal_relevance_score,
+        select_legal_diverse_chunks=_select_legal_diverse_chunks,
+        accident_query_mode=_accident_query_mode,
+        build_source_id=build_source_id,
+        get_document_name=_get_document_name,
+        get_point_number=_get_point_number,
+        build_retrieved_text=_build_retrieved_text,
+        safe_float=_safe_float,
+        final_count=RAG_FINAL_COUNT,
+        candidate_count=RAG_CANDIDATE_COUNT,
+    )
+    return await RagPipeline(deps).retrieve(user_query, supabase)
+
 
 
 # ============================================================
