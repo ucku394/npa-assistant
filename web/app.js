@@ -224,23 +224,29 @@ function addMessage(role, text, sources = [], meta = "") {
     list.className = "source-list";
     list.innerHTML = '<div class="source-heading">Использованные источники</div>';
 
-    sources.forEach(src => {
-      const item = document.createElement("div");
-      item.className = "source";
+    sources.forEach((src, index) => {
+      const item = document.createElement("article");
+      item.className = "source-card";
 
-      const point = src.point ? '<div class="source-point">' + escapeHtml(src.point) + "</div>" : "";
-      const link = src.source_url
-        ? '<a class="source-link" href="' + escapeHtml(src.source_url) + '" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a>'
+      const documentName = escapeHtml(src.document || "Нормативный правовой акт");
+      const point = src.point
+        ? '<div class="source-point">' + escapeHtml(src.point) + "</div>"
         : "";
+      const sourceId = src.source_id
+        ? '<div class="source-id">' + escapeHtml(src.source_id) + "</div>"
+        : "";
+      const link = src.source_url
+        ? '<a class="source-link" href="' + escapeHtml(src.source_url) + '" target="_blank" rel="noopener noreferrer">Открыть первоисточник <span>↗</span></a>'
+        : '<span class="source-unavailable">Ссылка на первоисточник не указана</span>';
 
       item.innerHTML =
-        '<div class="source-icon">§</div>' +
-        '<div class="source-body">' +
-          '<div class="source-id">' + escapeHtml(src.source_id || "") + "</div>" +
-          '<div class="source-document">' + escapeHtml(src.document || "НПА") + "</div>" +
-          point +
-          link +
-        "</div>";
+        '<div class="source-card-top">' +
+          '<span class="source-number">Источник ' + (index + 1) + "</span>" +
+          sourceId +
+        "</div>" +
+        '<div class="source-document">' + documentName + "</div>" +
+        point +
+        '<div class="source-card-bottom">' + link + "</div>";
 
       list.appendChild(item);
     });
