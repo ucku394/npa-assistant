@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#175cd3">
   <meta name="description" content="Ассистент по охране труда, пожарной и промышленной безопасности Республики Беларусь">
   <title>Ассистент по ОТ и ПБ РБ</title>
   <link rel="stylesheet" href="/web/styles.css">
@@ -17,22 +18,26 @@
           <div class="brand-subtitle">Нормативный поиск по законодательству Республики Беларусь</div>
         </div>
       </div>
-      <div class="status" id="status"><span class="status-dot"></span> Готов</div>
+      <div class="top-actions">
+        <div class="status" id="status"><span class="status-dot"></span> Готов</div>
+        <button class="new-chat" id="newChat" type="button" title="Начать новый диалог">＋ Новый чат</button>
+      </div>
     </header>
 
     <main class="main">
       <section class="hero" id="hero">
         <div class="eyebrow">Охрана труда · Пожарная безопасность · Промышленная безопасность</div>
         <h1>Задайте вопрос по НПА Республики Беларусь</h1>
-        <p>Ассистент ищет релевантные фрагменты нормативных правовых актов и формирует ответ с указанием использованных источников.</p>
+        <p>Поиск по нормативным документам с указанием конкретных источников, использованных для ответа.</p>
       </section>
 
-      <section class="chat" id="chat" aria-live="polite"></section>
+      <section class="chat" id="chat" aria-live="polite" aria-label="Диалог"></section>
 
       <form class="composer" id="composer">
         <textarea id="question" maxlength="4000" rows="2" placeholder="Например: Имеет ли право работник отказаться от работы без СИЗ?" autocomplete="off"></textarea>
         <div class="composer-bottom">
-          <span class="hint">Enter — отправить · Shift+Enter — новая строка</span>
+          <span class="hint"><kbd>Enter</kbd> — отправить · <kbd>Shift</kbd> + <kbd>Enter</kbd> — новая строка</span>
+          <span class="counter" id="counter">0 / 4000</span>
           <button id="send" type="submit">Спросить <span>→</span></button>
         </div>
       </form>
@@ -44,7 +49,7 @@
       </div>
 
       <footer>
-        <span>Ответы основаны на найденных фрагментах НПА.</span>
+        <span>Ответы формируются по найденным фрагментам НПА Республики Беларусь.</span>
         <a href="/docs" target="_blank" rel="noreferrer">API / документация</a>
       </footer>
     </main>
