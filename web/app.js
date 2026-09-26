@@ -326,6 +326,10 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
       const sourceId = src.source_id
         ? '<div class="source-id">' + escapeHtml(src.source_id) + "</div>"
         : "";
+      const citationOrder = Number(src.citation_order || 0);
+      const citation = citationOrder > 0
+        ? '<span class="source-citation">Цитирование в ответе · ' + citationOrder + "</span>"
+        : "";
       const link = src.source_url
         ? '<a class="source-link" href="' + escapeHtml(src.source_url) + '" target="_blank" rel="noopener noreferrer">Открыть первоисточник <span>↗</span></a>'
         : '<span class="source-unavailable">Ссылка на первоисточник не указана</span>';
@@ -333,6 +337,7 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
       item.innerHTML =
         '<div class="source-card-top">' +
           '<span class="source-number">Источник ' + (index + 1) + "</span>" +
+          citation +
           sourceId +
         "</div>" +
         '<div class="source-document">' + documentName + "</div>" +
