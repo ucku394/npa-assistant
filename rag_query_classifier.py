@@ -134,12 +134,20 @@ def detect_topic(user_query: str) -> str:
 
     # Проверка знаний по охране труда — отдельная тема.
     knowledge_testing_patterns = [
+        # Базовая конструкция покрывает падежи: «проверка/проверку/проверке знаний».
         r"\bпровер\w*\s+знани\w*\b",
+        # Явные сценарии состояния/результата.
         r"\bне\s+прошел\w*\b.{0,80}\bпровер\w*\s+знани\w*",
         r"\bне\s+сдал\w*\b.{0,80}\bпровер\w*\s+знани\w*",
         r"\bнеудовлетворительн\w*\s+результат\w*.{0,80}\bпровер\w*\s+знани\w*",
         r"\bповторн\w*\s+провер\w*\s+знани\w*",
         r"\bкомисс\w*\s+по\s+провер\w*\s+знани\w*",
+        # Кто/когда/сроки могут быть сформулированы как отдельный вопрос.
+        r"\bкто\s+(?:провод\w*|осуществля\w*|организ\w*|отвеча\w*|назнача\w*).{0,80}\bпровер\w*\s+знани\w*",
+        r"\bкогда\s+провод\w*.{0,80}\bпровер\w*\s+знани\w*",
+        r"\bсрок\w*\s+(?:проведен\w*|провер\w*).{0,80}\bзнани\w*",
+        r"\bпериодичност\w*.{0,80}\bпровер\w*\s+знани\w*",
+        r"\bчерез\s+какой\s+срок\w*.{0,80}\bпровер\w*\s+знани\w*",
     ]
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in knowledge_testing_patterns):
         return "knowledge_testing"
@@ -302,9 +310,19 @@ def detect_knowledge_testing_action(user_query: str) -> Optional[str]:
         return "admission"
     if re.search(r"\bотстран\w*|\bприостанов\w*|\bне\s+допуск\w*", query, re.IGNORECASE):
         return "suspension"
-    if re.search(r"\bкто\s+провод\w*|\bкто\s+ответствен\w*|\bкомисс\w*", query, re.IGNORECASE):
+    if re.search(
+        r"\bкто\s+(?:провод\w*|ответствен\w*|организ\w*|назнача\w*)"
+        r"|\bкомисс\w*\s+по\s+провер\w*\s+знани\w*",
+        query,
+        re.IGNORECASE,
+    ):
         return "responsible_person"
-    if re.search(r"\bсрок\w*|\bкогда\b|\bв\s+течение\b", query, re.IGNORECASE):
+    if re.search(
+        r"\bсрок\w*|\bкогда\b|\bпериодичност\w*|"
+        r"\bчерез\s+какой\s+срок\w*|\bв\s+течение\b",
+        query,
+        re.IGNORECASE,
+    ):
         return "deadline"
     return None
 
