@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ассистент по охране труда, пожарной и промышленной безопасности Республики Беларусь">
+  <title>Ассистент по ОТ и ПБ РБ</title>
+  <link rel="stylesheet" href="/web/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">ОТ</div>
+        <div>
+          <div class="brand-title">Ассистент по ОТ и ПБ РБ</div>
+          <div class="brand-subtitle">Нормативный поиск по законодательству Республики Беларусь</div>
+        </div>
+      </div>
+      <div class="status" id="status"><span class="status-dot"></span> Готов</div>
+    </header>
+
+    <main class="main">
+      <section class="hero" id="hero">
+        <div class="eyebrow">Охрана труда · Пожарная безопасность · Промышленная безопасность</div>
+        <h1>Задайте вопрос по НПА Республики Беларусь</h1>
+        <p>Ассистент ищет релевантные фрагменты нормативных правовых актов и формирует ответ с указанием использованных источников.</p>
+      </section>
+
+      <section class="chat" id="chat" aria-live="polite"></section>
+
+      <form class="composer" id="composer">
+        <textarea id="question" maxlength="4000" rows="2" placeholder="Например: Имеет ли право работник отказаться от работы без СИЗ?" autocomplete="off"></textarea>
+        <div class="composer-bottom">
+          <span class="hint">Enter — отправить · Shift+Enter — новая строка</span>
+          <button id="send" type="submit">Спросить <span>→</span></button>
+        </div>
+      </form>
+
+      <div class="examples" id="examples">
+        <button type="button" data-question="Имеет ли право работник отказаться от работы без СИЗ?">Отказ от работы без СИЗ</button>
+        <button type="button" data-question="Какой инструктаж проводится при перерыве в работе более шести месяцев?">Инструктаж после перерыва</button>
+        <button type="button" data-question="Сколько разрешено поднимать мужчинам?">Подъем тяжестей мужчинами</button>
+      </div>
+
+      <footer>
+        <span>Ответы основаны на найденных фрагментах НПА.</span>
+        <a href="/docs" target="_blank" rel="noreferrer">API / документация</a>
+      </footer>
+    </main>
+  </div>
+  <script src="/web/app.js"></script>
+</body>
+</html>
