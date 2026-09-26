@@ -53,21 +53,35 @@ class ChatService:
         return result
 
     @staticmethod
-    def _build_sources(chunks: List[Dict[str, Any]], used_ids: List[str]) -> List[Dict[str, str]]:
+    def _build_sources(chunks: List[Dict[str, Any]], used_ids: List[str]) -> List[Dict[str, Any]]:
+        """Build sources in the same order in which the AI cited them.
+
+        This keeps the web UI's source numbering meaningful: Source 1 is the
+        first validated SOURCE_ID mentioned by the model, not merely the first
+        chunk returned by RAG.
+        """
         if not chunks or not used_ids:
             return []
 
-        used = {str(x).strip() for x in used_ids if x}
-        sources: List[Dict[str, str]] = []
-        seen = set()
-
+        chunk_by_source_id: Dict[str, Dict[str, Any]] = {}
         for index, chunk in enumerate(chunks, start=1):
             source_id = chunk.get("_source_id") or build_source_id(chunk, index)
             if not source_id:
                 continue
-
             source_id = str(source_id).strip()
-            if source_id not in used:
+            chunk["_source_id"] = source_id
+            chunk_by_source_id.setdefault(source_id, chunk)
+
+        sources: List[Dict[str, Any]] = []
+        seen = set()
+
+        for citation_order, raw_source_id in enumerate(used_ids, start=1):
+            source_id = str(raw_source_id or "").strip()
+            if not source_id or source_id in seen:
+                continue
+
+            chunk = chunk_by_source_id.get(source_id)
+            if not chunk:
                 continue
 
             document = (
@@ -89,18 +103,9 @@ class ChatService:
                 or chunk.get("section")
                 or ""
             )
+            source_url = chunk.get("source_url") or chunk.get("url") or ""
 
-            source_url = (
-                chunk.get("source_url")
-                or chunk.get("url")
-                or ""
-            )
-
-            item_key = (
-                source_id,
-                str(document).strip(),
-                str(point).strip(),
-            )
+            item_key = (source_id, str(document).strip(), str(point).strip())
             if item_key in seen:
                 continue
             seen.add(item_key)
@@ -111,6 +116,7 @@ class ChatService:
                     "document": str(document).strip(),
                     "point": str(point).strip(),
                     "source_url": str(source_url).strip(),
+                    "citation_order": citation_order,
                 }
             )
 
