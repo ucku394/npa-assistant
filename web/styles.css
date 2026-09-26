@@ -126,6 +126,45 @@ button { cursor: pointer; }
 
 .meta { margin-top: 9px; color: var(--muted); font-size: 11px; }
 
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 13px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.message-action {
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  transition: .15s ease;
+}
+
+.message-action:hover {
+  color: var(--accent);
+  border-color: #b2ccff;
+  background: var(--accent-soft);
+}
+
+.message-action.copied {
+  color: var(--success);
+  border-color: #a6f4c5;
+}
+
+.retry-action {
+  color: var(--accent);
+}
+
+.error-message .bubble {
+  border-color: #fecdca;
+}
+
 .composer {
   position: sticky;
   bottom: 12px;
