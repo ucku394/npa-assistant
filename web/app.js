@@ -106,8 +106,15 @@ function escapeHtml(value) {
   }[ch]));
 }
 
-function renderAnswer(text) {
-  const safe = escapeHtml(text || "Ответ не получен.");
+function renderAnswer(text, citationCount = 0) {
+  let safe = escapeHtml(text || "Ответ не получен.");
+  if (citationCount > 0) {
+    safe = safe.replace(/\[(\d+)\]/g, (match, number) => {
+      const n = Number(number);
+      if (n < 1 || n > citationCount) return match;
+      return '<button type="button" class="answer-citation" data-citation="' + n + '" aria-label="Открыть источник ' + n + '">' + n + '</button>';
+    });
+  }
   const lines = safe.split("\n");
   const html = [];
   let listItems = [];
@@ -147,6 +154,7 @@ function plainText(value) {
   return String(value ?? "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[SOURCE:[^\]]+\]/g, "")
+    .replace(/\[(\d+)\]/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -220,7 +228,7 @@ function addSourceSummary(container, sources, rag = null) {
   container.appendChild(summary);
 }
 
-function addMessage(role, text, sources = [], meta = "", rag = null) {
+function addMessage(role, text, sources = [], meta = "", rag = null, citationText = null) {
   const wrap = document.createElement("div");
   wrap.className = "message " + role;
 
@@ -228,7 +236,7 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
   bubble.className = "bubble";
 
   if (role === "assistant") {
-    bubble.innerHTML = renderAnswer(text);
+    bubble.innerHTML = renderAnswer(citationText || text, sources.length);
   } else {
     bubble.textContent = text;
   }
@@ -263,6 +271,35 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
   }
 
   if (role === "assistant" && sources.length) {
+    bubble.addEventListener("click", event => {
+      const citation = event.target.closest(".answer-citation");
+      if (!citation) return;
+
+      const citationNumber = Number(citation.dataset.citation || 0);
+      if (!citationNumber) return;
+
+      const sourceContent = bubble.querySelector(".source-content");
+      const sourceCards = bubble.querySelectorAll(".source-card");
+      const target = sourceCards[citationNumber - 1];
+      const toggle = bubble.querySelector(".source-toggle");
+
+      if (sourceContent && target) {
+        sourceContent.hidden = false;
+        if (toggle) {
+          toggle.setAttribute("aria-expanded", "true");
+          toggle.classList.add("expanded");
+          const toggleText = toggle.querySelector(".source-toggle-text");
+          const toggleIcon = toggle.querySelector(".source-toggle-icon");
+          if (toggleText) toggleText.textContent = "Скрыть источники";
+          if (toggleIcon) toggleIcon.textContent = "⌃";
+        }
+
+        target.classList.add("source-card-highlight");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.setTimeout(() => target.classList.remove("source-card-highlight"), 1800);
+      }
+    });
+
     const list = document.createElement("div");
     list.className = "source-list";
 
@@ -442,10 +479,11 @@ function updateCounter() {
   counter.textContent = question.value.length + " / 4000";
 }
 
-function saveTurn(userText, answer, sources, success = true, rag = null) {
+function saveTurn(userText, answer, sources, success = true, rag = null, answerWithCitations = null) {
   history.push({
     user: userText,
     answer,
+    answerWithCitations: answerWithCitations || answer,
     sources: sources || [],
     success,
     rag: rag || null,
@@ -467,7 +505,8 @@ function restoreHistory() {
       turn.answer,
       turn.sources || [],
       turn.success === false ? "Ответ сформирован без достаточного нормативного контекста." : "",
-      turn.rag || null
+      turn.rag || null,
+      turn.answerWithCitations || turn.answer || ""
     );
   });
 }
@@ -521,9 +560,10 @@ async function ask(text) {
       answer,
       sources,
       data.success ? "" : "Недостаточно релевантного нормативного контекста.",
-      data.rag || null
+      data.rag || null,
+      data.answer_with_citations || answer
     );
-    saveTurn(value, answer, sources, Boolean(data.success), data.rag || null);
+    saveTurn(value, answer, sources, Boolean(data.success), data.rag || null, data.answer_with_citations || answer);
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
     removeSearchProgress();
