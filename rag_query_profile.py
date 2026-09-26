@@ -3,6 +3,8 @@
 import re
 from typing import Any, Dict
 
+from rag_query_classifier import detect_knowledge_testing_state, detect_knowledge_testing_action
+
 def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
     """Детерминированно извлекает юридическую структуру вопроса."""
     query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
@@ -213,6 +215,31 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "обязательный медицинский осмотр",
             "предварительный медицинский осмотр",
             "периодический медицинский осмотр",
+        ])
+
+
+    # Отдельный профиль проверки знаний. Не смешиваем его с инструктажами.
+    if re.search(
+        r"\bпровер\w*\s+знани\w*\b|"
+        r"\bне\s+(?:прош(?:ел|ла|ли)|сдал\w*)\b.{0,80}\bпровер\w*\s+знани\w*|"
+        r"\bнеудовлетворительн\w*\s+результат\w*.{0,80}\bзнани\w*",
+        query,
+        re.IGNORECASE,
+    ):
+        profile.update({
+            "subject": "employee",
+            "event": "knowledge_testing",
+            "action": detect_knowledge_testing_action(query),
+            "object": "knowledge_test",
+            "action_state": detect_knowledge_testing_state(query),
+        })
+        profile["legal_phrases"].extend([
+            "проверка знаний требований охраны труда",
+            "результаты проверки знаний требований охраны труда",
+            "неудовлетворительные результаты проверки знаний",
+            "дальнейшие действия при непрохождении проверки знаний",
+            "повторная проверка знаний требований охраны труда",
+            "допуск к самостоятельной работе после проверки знаний",
         ])
 
     if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
