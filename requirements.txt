@@ -10,3 +10,5 @@ sentence-transformers
 torch
 numpy
 python-docx
+fastapi
+uvicorn[standard]
