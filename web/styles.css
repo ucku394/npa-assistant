@@ -1,0 +1,123 @@
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --text: #172033;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --accent: #175cd3;
+  --accent-dark: #124aa9;
+  --accent-soft: #eff4ff;
+  --success: #12b76a;
+  --shadow: 0 12px 36px rgba(16, 24, 40, .08);
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top left, #eef4ff 0, transparent 34%), var(--bg);
+}
+
+button, textarea { font: inherit; }
+
+.app-shell { min-height: 100vh; }
+
+.topbar {
+  height: 76px;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,.88);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--accent); color: white; font-weight: 800; font-size: 13px;
+}
+.brand-title { font-weight: 750; letter-spacing: -.02em; }
+.brand-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.status {
+  color: var(--muted); font-size: 13px;
+  display: flex; align-items: center; gap: 7px;
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+}
+
+.main { width: min(900px, calc(100% - 32px)); margin: 0 auto; padding: 70px 0 28px; }
+
+.hero { text-align: center; max-width: 720px; margin: 0 auto 34px; }
+.eyebrow { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.hero h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.08; letter-spacing: -.04em; margin: 14px 0; }
+.hero p { color: var(--muted); font-size: 16px; line-height: 1.6; margin: 0; }
+
+.chat { display: flex; flex-direction: column; gap: 16px; margin-bottom: 18px; }
+.message { display: flex; }
+.message.user { justify-content: flex-end; }
+.bubble {
+  max-width: 82%;
+  padding: 15px 17px;
+  border-radius: 18px;
+  line-height: 1.58;
+  white-space: pre-wrap;
+}
+.user .bubble { background: var(--accent); color: white; border-bottom-right-radius: 5px; }
+.assistant .bubble { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-bottom-left-radius: 5px; }
+.meta { margin-top: 9px; color: var(--muted); font-size: 12px; }
+.source-list { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.source { padding: 8px 0; font-size: 12px; }
+.source-id { color: var(--accent); font-weight: 700; }
+.source-point { color: var(--muted); }
+
+.composer {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 14px;
+}
+textarea {
+  display: block; width: 100%; resize: none; border: 0; outline: 0;
+  color: var(--text); background: transparent; font-size: 16px; line-height: 1.5;
+  min-height: 56px;
+}
+.composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hint { color: var(--muted); font-size: 12px; }
+button { cursor: pointer; }
+#send {
+  border: 0; border-radius: 12px; background: var(--accent); color: white;
+  padding: 10px 16px; font-weight: 700;
+}
+#send:hover { background: var(--accent-dark); }
+#send:disabled { opacity: .6; cursor: wait; }
+
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.examples button {
+  border: 1px solid var(--line); background: rgba(255,255,255,.7);
+  color: var(--text); border-radius: 999px; padding: 8px 12px; font-size: 12px;
+}
+.examples button:hover { border-color: #b2ccff; background: var(--accent-soft); color: var(--accent); }
+
+.typing { color: var(--muted); font-size: 13px; }
+footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 42px; color: var(--muted); font-size: 11px; }
+footer a { color: var(--accent); text-decoration: none; }
+
+@media (max-width: 640px) {
+  .topbar { height: auto; min-height: 68px; padding: 12px 16px; }
+  .brand-subtitle { display: none; }
+  .status { font-size: 11px; }
+  .main { width: min(100% - 20px, 900px); padding-top: 42px; }
+  .hero { margin-bottom: 26px; }
+  .bubble { max-width: 92%; }
+  .hint { display: none; }
+  footer { flex-direction: column; margin-top: 28px; }
+}
