@@ -90,7 +90,17 @@ class ChatService:
                 or ""
             )
 
-            item_key = (source_id, str(document).strip(), str(point).strip())
+            source_url = (
+                chunk.get("source_url")
+                or chunk.get("url")
+                or ""
+            )
+
+            item_key = (
+                source_id,
+                str(document).strip(),
+                str(point).strip(),
+            )
             if item_key in seen:
                 continue
             seen.add(item_key)
@@ -100,6 +110,7 @@ class ChatService:
                     "source_id": source_id,
                     "document": str(document).strip(),
                     "point": str(point).strip(),
+                    "source_url": str(source_url).strip(),
                 }
             )
 
