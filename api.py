@@ -77,6 +77,7 @@ class SourceItem(BaseModel):
     document: str
     point: str = ""
     source_url: str = ""
+    citation_order: int = 0
 
 
 class RagMeta(BaseModel):
