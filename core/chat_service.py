@@ -122,6 +122,47 @@ class ChatService:
         return sources
 
     @staticmethod
+    def _build_citation_answer(
+        answer: str,
+        sources: List[Dict[str, Any]],
+    ) -> str:
+        """Replace validated SOURCE markers with compact [1], [2] citations."""
+        result = str(answer or "")
+        order_by_source_id = {
+            str(source.get("source_id")).strip(): int(source.get("citation_order", index))
+            for index, source in enumerate(sources, start=1)
+            if source.get("source_id")
+        }
+
+        def replace_marker(match):
+            source_id = match.group(1).strip()
+            order = order_by_source_id.get(source_id)
+            return f"[{order}]" if order else ""
+
+        result = re.sub(
+            r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]",
+            replace_marker,
+            result,
+        )
+
+        for source_id, order in sorted(
+            order_by_source_id.items(),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        ):
+            result = re.sub(
+                rf"(?<![A-Za-zА-Яа-яЁё0-9_]){re.escape(source_id)}"
+                rf"(?![A-Za-zА-Яа-яЁё0-9_])",
+                f"[{order}]",
+                result,
+            )
+
+        result = re.sub(r"[ \t]+([,.;:])", r"\1", result)
+        result = re.sub(r"[ \t]+\n", "\n", result)
+        result = re.sub(r"\n{3,}", "\n\n", result)
+        return result.strip()
+
+    @staticmethod
     def _remove_source_markers(answer: str, valid_ids: List[str]) -> str:
         answer = str(answer or "")
 
@@ -220,6 +261,7 @@ class ChatService:
             "error": None,
             "question": question,
             "answer": answer,
+            "answer_with_citations": self._build_citation_answer(answer=answer, sources=sources),
             "sources": sources,
             "rag": rag_meta,
         }
