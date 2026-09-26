@@ -76,6 +76,7 @@ class SourceItem(BaseModel):
     source_id: str
     document: str
     point: str = ""
+    source_url: str = ""
 
 
 class RagMeta(BaseModel):
