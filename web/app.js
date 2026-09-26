@@ -339,7 +339,7 @@ function addMessage(role, text, sources = [], meta = "", rag = null) {
         point +
         '<div class="source-card-bottom">' + link + "</div>";
 
-      list.appendChild(item);
+      sourceCards.appendChild(item);
     });
 
     bubble.appendChild(list);
