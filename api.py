@@ -43,7 +43,18 @@ def _cors_origins() -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()] or ["*"]
 
 
-WEB_DIR = Path(__file__).resolve().parent / "web"\n\n\napp.mount("/web", StaticFiles(directory=WEB_DIR), name="web")\n\n\n@app.get("/", include_in_schema=False)\nasync def index():\n    return FileResponse(WEB_DIR / "index.html")\n\n\napp.add_middleware(
+WEB_DIR = Path(__file__).resolve().parent / "web"
+
+
+app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    return FileResponse(WEB_DIR / "index.html")
+
+
+app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
     allow_credentials=False,
