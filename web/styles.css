@@ -295,6 +295,18 @@ button { cursor: pointer; }
   text-transform: uppercase;
   letter-spacing: .04em;
 }
+.source-citation {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
 .source-id {
   color: var(--muted);
   font-size: 9px;
