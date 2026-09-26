@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  python-syntax:
+  python-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,5 +14,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python sources
-        run: |
-          python -m compileall -q rag.py rag_engine eval
+        run: python -m compileall -q rag.py rag_engine eval tests
+      - name: Install test runner
+        run: python -m pip install pytest
+      - name: Run RAG unit tests
+        run: pytest -q tests/test_rag_pipeline.py
