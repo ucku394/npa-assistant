@@ -106,13 +106,22 @@ function escapeHtml(value) {
   }[ch]));
 }
 
-function renderAnswer(text, citationCount = 0) {
+function renderAnswer(text, citationCount = 0, sources = []) {
   let safe = escapeHtml(text || "Ответ не получен.");
   if (citationCount > 0) {
     safe = safe.replace(/\[(\d+)\]/g, (match, number) => {
       const n = Number(number);
       if (n < 1 || n > citationCount) return match;
-      return '<button type="button" class="answer-citation" data-citation="' + n + '" aria-label="Открыть источник ' + n + '">' + n + '</button>';
+
+      const source = sources[n - 1] || {};
+      const documentName = escapeHtml(source.document || "Нормативный источник");
+      const point = escapeHtml(source.point || "");
+      const shortTitle = point ? documentName + " · " + point : documentName;
+
+      return '<button type="button" class="answer-citation" data-citation="' + n +
+        '" aria-label="Источник ' + n + ': ' + documentName +
+        (point ? ', ' + point : '') +
+        '" title="' + shortTitle + '">[' + n + ']</button>';
     });
   }
   const lines = safe.split("\n");
@@ -236,7 +245,7 @@ function addMessage(role, text, sources = [], meta = "", rag = null, citationTex
   bubble.className = "bubble";
 
   if (role === "assistant") {
-    bubble.innerHTML = renderAnswer(citationText || text, sources.length);
+    bubble.innerHTML = renderAnswer(citationText || text, sources.length, sources);
   } else {
     bubble.textContent = text;
   }
