@@ -84,6 +84,40 @@ function formatInline(value) {
   return value.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
+function plainText(value) {
+  return String(value ?? "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\[SOURCE:[^\]]+\]/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+
+  if (button) {
+    const original = button.textContent;
+    button.textContent = "✓ Скопировано";
+    button.classList.add("copied");
+    window.setTimeout(() => {
+      button.textContent = original;
+      button.classList.remove("copied");
+    }, 1400);
+  }
+}
+
 function addMessage(role, text, sources = [], meta = "") {
   const wrap = document.createElement("div");
   wrap.className = "message " + role;
@@ -95,6 +129,35 @@ function addMessage(role, text, sources = [], meta = "") {
     bubble.innerHTML = renderAnswer(text);
   } else {
     bubble.textContent = text;
+  }
+
+  if (role === "assistant") {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const copyAnswer = document.createElement("button");
+    copyAnswer.type = "button";
+    copyAnswer.className = "message-action";
+    copyAnswer.textContent = "📋 Копировать ответ";
+    copyAnswer.addEventListener("click", () => copyText(plainText(text), copyAnswer));
+    actions.appendChild(copyAnswer);
+
+    if (sources.length) {
+      const copySource = document.createElement("button");
+      copySource.type = "button";
+      copySource.className = "message-action";
+      copySource.textContent = "📑 Копировать нормативную ссылку";
+      const reference = sources.map(src => {
+        const documentName = plainText(src.document || "НПА");
+        const point = plainText(src.point || "");
+        const url = plainText(src.source_url || "");
+        return [documentName, point].filter(Boolean).join(" — ") + (url ? "\n" + url : "");
+      }).join("\n\n");
+      copySource.addEventListener("click", () => copyText(reference, copySource));
+      actions.appendChild(copySource);
+    }
+
+    bubble.appendChild(actions);
   }
 
   if (role === "assistant" && sources.length) {
@@ -252,7 +315,28 @@ async function ask(text) {
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
     removeTyping();
-    addMessage("assistant", "Не удалось получить ответ: " + (error.message || "неизвестная ошибка"));
+    const errorText = "Не удалось получить ответ. Попробуйте повторить запрос.";
+    const wrap = document.createElement("div");
+    wrap.className = "message assistant error-message";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = errorText;
+
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "message-action retry-action";
+    retry.textContent = "↻ Повторить";
+    retry.addEventListener("click", () => {
+      wrap.remove();
+      ask(value);
+    });
+    actions.appendChild(retry);
+    bubble.appendChild(actions);
+    wrap.appendChild(bubble);
+    chat.appendChild(wrap);
+    wrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
     setStatus("Ошибка", "error");
   } finally {
     send.disabled = false;
