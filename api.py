@@ -6,9 +6,12 @@ RAG, prompt, AI fallback and SOURCE_ID validation pipeline.
 
 import logging
 import os
+from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -40,7 +43,7 @@ def _cors_origins() -> List[str]:
     return [item.strip() for item in raw.split(",") if item.strip()] or ["*"]
 
 
-app.add_middleware(
+WEB_DIR = Path(__file__).resolve().parent / "web"\n\n\napp.mount("/web", StaticFiles(directory=WEB_DIR), name="web")\n\n\n@app.get("/", include_in_schema=False)\nasync def index():\n    return FileResponse(WEB_DIR / "index.html")\n\n\napp.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
     allow_credentials=False,
