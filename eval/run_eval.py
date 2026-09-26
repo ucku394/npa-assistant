@@ -41,11 +41,14 @@ async def main():
     parser.add_argument("--json", dest="json_path")
     args = parser.parse_args()
 
-    from supabase_client import get_supabase_client
+    from supabase import create_client
+    from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
     cases = [c for c in CASES if not args.tag or any(t in args.tag for t in c.tags)]
     cases = cases[:max(0, args.limit)]
 
-    supabase = get_supabase_client()
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     results = []
     for index, case in enumerate(cases, 1):
         item = await run_case(case, supabase)
