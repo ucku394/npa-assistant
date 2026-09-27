@@ -1,0 +1,16 @@
+name: Temporary RAG tests
+on:
+  push:
+    branches:
+      - feature/knowledge-testing-rag
+
+jobs:
+  rag-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip pytest
+      - run: python -m pytest -q tests/test_knowledge_testing_rag.py tests/test_legal_relevance.py
