@@ -2817,6 +2817,107 @@ async def retrieve_context(
         _safe_float(evidence.get("legal_match")),
     )
 
+    # Second retrieval pass: only when the first pass did not produce
+    # sufficient legal evidence. This keeps normal traffic cheap while
+    # giving ambiguous/weak queries a deterministic legal recovery path.
+    if not evidence.get("sufficient"):
+        second_pass_queries = build_second_pass_queries(
+            user_query,
+            topic,
+            query_profile,
+        )
+        second_pass_queries = [
+            query for query in second_pass_queries
+            if query and query not in valid_queries
+        ][:4]
+
+        if second_pass_queries:
+            logger.info(
+                "RAG | second_pass | queries=%s",
+                second_pass_queries,
+            )
+            second_vectors = await asyncio.to_thread(
+                get_query_embeddings,
+                second_pass_queries,
+            )
+
+            second_pairs = [
+                (query, vector)
+                for query, vector in zip(second_pass_queries, second_vectors)
+                if vector and len(vector) == 384
+            ]
+
+            second_groups = await asyncio.gather(
+                *[
+                    _run_search(vector, query)
+                    for query, vector in second_pairs
+                ],
+                return_exceptions=True,
+            )
+
+            second_clean_groups = []
+            for index, result in enumerate(second_groups):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "RAG | second_pass search failed | query=%s | error=%s",
+                        second_pairs[index][0],
+                        result,
+                    )
+                    second_clean_groups.append([])
+                else:
+                    second_clean_groups.append(result or [])
+
+            if second_clean_groups:
+                second_merged = _merge_search_results(
+                    second_clean_groups,
+                    ["second_pass"] * len(second_clean_groups),
+                )
+                candidate_chunks = _merge_search_results(
+                    [candidate_chunks, second_merged],
+                    ["first_pass", "second_pass"],
+                )
+
+                for chunk in candidate_chunks:
+                    chunk["_user_query_for_scoring"] = user_query
+                    chunk["_combined_score"] = _legal_relevance_score(
+                        chunk,
+                        query_terms,
+                        topic,
+                        intents,
+                        cross_reference,
+                        primary_intent=primary_intent,
+                        labor_code_query=labor_code_query,
+                        user_query=user_query,
+                        special_category=special_category,
+                        special_issue=special_issue,
+                        query_profile=query_profile,
+                    )
+
+                candidate_chunks = [
+                    chunk for chunk in candidate_chunks
+                    if not chunk.get("_legal_hard_negative")
+                ]
+                ranked_chunks = sorted(
+                    candidate_chunks,
+                    key=lambda chunk: chunk.get("_combined_score", 0.0),
+                    reverse=True,
+                )
+                evidence = evidence_gate(
+                    ranked_chunks,
+                    topic,
+                    query_profile,
+                )
+                candidate_count = len(candidate_chunks)
+
+                logger.info(
+                    "RAG | second_pass_result | candidates=%s | sufficient=%s | reason=%s | best_score=%.4f | legal_match=%.4f",
+                    candidate_count,
+                    evidence.get("sufficient"),
+                    evidence.get("reason"),
+                    _safe_float(evidence.get("best_score")),
+                    _safe_float(evidence.get("legal_match")),
+                )
+
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
             "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | legal=%.4f | legal_match=%.4f | forbidden=%s | doc=%s | point=%s",
