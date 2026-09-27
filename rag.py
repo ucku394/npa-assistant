@@ -2946,6 +2946,7 @@ async def retrieve_context(
                         special_category=special_category,
                         special_issue=special_issue,
                         query_profile=query_profile,
+                        query_plan=query_plan,
                     )
 
                 candidate_chunks = [
