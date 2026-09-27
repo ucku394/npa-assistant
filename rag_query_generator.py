@@ -56,6 +56,7 @@ def build_knowledge_testing_search_queries(
         queries.extend([
             "сроки проверки знаний требований охраны труда",
             "периодичность проверки знаний требований охраны труда",
+            "повторная проверка знаний требований охраны труда сроки порядок",
         ])
 
     queries.extend(profile.get("legal_phrases") or [])
