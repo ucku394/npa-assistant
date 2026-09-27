@@ -6,12 +6,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_002",
@@ -20,12 +24,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_003",
@@ -34,12 +42,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_004",
@@ -48,12 +60,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_005",
@@ -62,12 +78,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_006",
@@ -76,12 +96,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_007",
@@ -90,12 +114,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_008",
@@ -104,12 +132,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_009",
@@ -118,12 +150,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_010",
@@ -132,12 +168,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_011",
@@ -146,12 +186,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_012",
@@ -160,12 +204,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_013",
@@ -174,12 +222,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_014",
@@ -188,12 +240,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_015",
@@ -202,12 +258,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_016",
@@ -216,12 +276,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_017",
@@ -230,12 +294,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_018",
@@ -244,12 +312,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_019",
@@ -258,12 +330,16 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "KNOW_020",
@@ -272,292 +348,376 @@
     "required_terms": [
       "проверка знаний"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__001",
+    "id": "PPE_001",
     "topic": "ppe_nonprovision",
     "question": "Что делать работнику, если ему не выдали СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__002",
+    "id": "PPE_002",
     "topic": "ppe_nonprovision",
     "question": "На предприятии возник вопрос: что делать работнику, если ему не выдали СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__003",
+    "id": "PPE_003",
     "topic": "ppe_nonprovision",
     "question": "Подскажите по охране труда: что делать работнику, если ему не выдали СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__004",
+    "id": "PPE_004",
     "topic": "ppe_nonprovision",
     "question": "Нужно определить по законодательству Республики Беларусь: что делать работнику, если ему не выдали СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__005",
+    "id": "PPE_005",
     "topic": "ppe_nonprovision",
     "question": "Имеет ли работник право отказаться от работы без СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__006",
+    "id": "PPE_006",
     "topic": "ppe_nonprovision",
     "question": "На предприятии возник вопрос: имеет ли работник право отказаться от работы без СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__007",
+    "id": "PPE_007",
     "topic": "ppe_nonprovision",
     "question": "Подскажите по охране труда: имеет ли работник право отказаться от работы без СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__008",
+    "id": "PPE_008",
     "topic": "ppe_nonprovision",
     "question": "Нужно определить по законодательству Республики Беларусь: имеет ли работник право отказаться от работы без СИЗ?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__009",
+    "id": "PPE_009",
     "topic": "ppe_nonprovision",
     "question": "Кто обязан обеспечить работников средствами индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__010",
+    "id": "PPE_010",
     "topic": "ppe_nonprovision",
     "question": "На предприятии возник вопрос: кто обязан обеспечить работников средствами индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__011",
+    "id": "PPE_011",
     "topic": "ppe_nonprovision",
     "question": "Подскажите по охране труда: кто обязан обеспечить работников средствами индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__012",
+    "id": "PPE_012",
     "topic": "ppe_nonprovision",
     "question": "Нужно определить по законодательству Республики Беларусь: кто обязан обеспечить работников средствами индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__013",
+    "id": "PPE_013",
     "topic": "ppe_nonprovision",
     "question": "Что делать при неисправных средствах индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__014",
+    "id": "PPE_014",
     "topic": "ppe_nonprovision",
     "question": "На предприятии возник вопрос: что делать при неисправных средствах индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__015",
+    "id": "PPE_015",
     "topic": "ppe_nonprovision",
     "question": "Подскажите по охране труда: что делать при неисправных средствах индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__016",
+    "id": "PPE_016",
     "topic": "ppe_nonprovision",
     "question": "Нужно определить по законодательству Республики Беларусь: что делать при неисправных средствах индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__017",
+    "id": "PPE_017",
     "topic": "ppe_nonprovision",
     "question": "Как оформить выдачу средств индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__018",
+    "id": "PPE_018",
     "topic": "ppe_nonprovision",
     "question": "На предприятии возник вопрос: как оформить выдачу средств индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__019",
+    "id": "PPE_019",
     "topic": "ppe_nonprovision",
     "question": "Подскажите по охране труда: как оформить выдачу средств индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "PPE__020",
+    "id": "PPE_020",
     "topic": "ppe_nonprovision",
     "question": "Нужно определить по законодательству Республики Беларусь: как оформить выдачу средств индивидуальной защиты?",
     "required_terms": [
       "сиз"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_209",
+      "NPA_356-Z"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_001",
@@ -566,12 +726,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_002",
@@ -580,12 +743,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_003",
@@ -594,12 +760,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_004",
@@ -608,12 +777,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_005",
@@ -622,12 +794,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_006",
@@ -636,12 +811,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_007",
@@ -650,12 +828,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_008",
@@ -664,12 +845,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_009",
@@ -678,12 +862,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_010",
@@ -692,12 +879,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_011",
@@ -706,12 +896,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_012",
@@ -720,12 +913,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_013",
@@ -734,12 +930,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_014",
@@ -748,12 +947,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_015",
@@ -762,12 +964,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_016",
@@ -776,12 +981,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_017",
@@ -790,12 +998,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_018",
@@ -804,12 +1015,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_019",
@@ -818,12 +1032,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "MEDI_020",
@@ -832,12 +1049,15 @@
     "required_terms": [
       "медицинский осмотр"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_74"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_001",
@@ -846,12 +1066,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_002",
@@ -860,12 +1084,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_003",
@@ -874,12 +1102,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_004",
@@ -888,12 +1120,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_005",
@@ -902,12 +1138,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_006",
@@ -916,12 +1156,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_007",
@@ -930,12 +1174,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_008",
@@ -944,12 +1192,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_009",
@@ -958,12 +1210,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_010",
@@ -972,12 +1228,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_011",
@@ -986,12 +1246,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_012",
@@ -1000,12 +1264,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_013",
@@ -1014,12 +1282,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_014",
@@ -1028,12 +1300,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_015",
@@ -1042,12 +1318,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_016",
@@ -1056,12 +1336,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_017",
@@ -1070,12 +1354,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_018",
@@ -1084,12 +1372,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_019",
@@ -1098,12 +1390,16 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "WORK_020",
@@ -1112,572 +1408,696 @@
     "required_terms": [
       "аттестация"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_253",
+      "NPA_35"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_001",
+    "id": "BRIEF_001",
     "topic": "occupational_briefing",
     "question": "Кто проводит вводный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_002",
+    "id": "BRIEF_002",
     "topic": "occupational_briefing",
     "question": "На предприятии возник вопрос: кто проводит вводный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_003",
+    "id": "BRIEF_003",
     "topic": "occupational_briefing",
     "question": "Подскажите по охране труда: кто проводит вводный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_004",
+    "id": "BRIEF_004",
     "topic": "occupational_briefing",
     "question": "Нужно определить по законодательству Республики Беларусь: кто проводит вводный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_005",
+    "id": "BRIEF_005",
     "topic": "occupational_briefing",
     "question": "Когда проводится вводный инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_006",
+    "id": "BRIEF_006",
     "topic": "occupational_briefing",
     "question": "На предприятии возник вопрос: когда проводится вводный инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_007",
+    "id": "BRIEF_007",
     "topic": "occupational_briefing",
     "question": "Подскажите по охране труда: когда проводится вводный инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_008",
+    "id": "BRIEF_008",
     "topic": "occupational_briefing",
     "question": "Нужно определить по законодательству Республики Беларусь: когда проводится вводный инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_009",
+    "id": "BRIEF_009",
     "topic": "occupational_briefing",
     "question": "Кто проводит первичный инструктаж на рабочем месте?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_010",
+    "id": "BRIEF_010",
     "topic": "occupational_briefing",
     "question": "На предприятии возник вопрос: кто проводит первичный инструктаж на рабочем месте?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_011",
+    "id": "BRIEF_011",
     "topic": "occupational_briefing",
     "question": "Подскажите по охране труда: кто проводит первичный инструктаж на рабочем месте?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_012",
+    "id": "BRIEF_012",
     "topic": "occupational_briefing",
     "question": "Нужно определить по законодательству Республики Беларусь: кто проводит первичный инструктаж на рабочем месте?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_013",
+    "id": "BRIEF_013",
     "topic": "occupational_briefing",
     "question": "Когда проводится повторный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_014",
+    "id": "BRIEF_014",
     "topic": "occupational_briefing",
     "question": "На предприятии возник вопрос: когда проводится повторный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_015",
+    "id": "BRIEF_015",
     "topic": "occupational_briefing",
     "question": "Подскажите по охране труда: когда проводится повторный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_016",
+    "id": "BRIEF_016",
     "topic": "occupational_briefing",
     "question": "Нужно определить по законодательству Республики Беларусь: когда проводится повторный инструктаж по охране труда?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_017",
+    "id": "BRIEF_017",
     "topic": "occupational_briefing",
     "question": "Когда проводится целевой инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_018",
+    "id": "BRIEF_018",
     "topic": "occupational_briefing",
     "question": "На предприятии возник вопрос: когда проводится целевой инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_019",
+    "id": "BRIEF_019",
     "topic": "occupational_briefing",
     "question": "Подскажите по охране труда: когда проводится целевой инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_020",
+    "id": "BRIEF_020",
     "topic": "occupational_briefing",
     "question": "Нужно определить по законодательству Республики Беларусь: когда проводится целевой инструктаж?",
     "required_terms": [
       "инструктаж"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_001",
+    "id": "TRAIN_001",
     "topic": "occupational_training",
     "question": "Какова продолжительность стажировки на рабочем месте?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_002",
+    "id": "TRAIN_002",
     "topic": "occupational_training",
     "question": "На предприятии возник вопрос: какова продолжительность стажировки на рабочем месте?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_003",
+    "id": "TRAIN_003",
     "topic": "occupational_training",
     "question": "Подскажите по охране труда: какова продолжительность стажировки на рабочем месте?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_004",
+    "id": "TRAIN_004",
     "topic": "occupational_training",
     "question": "Нужно определить по законодательству Республики Беларусь: какова продолжительность стажировки на рабочем месте?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_005",
+    "id": "TRAIN_005",
     "topic": "occupational_training",
     "question": "Кому устанавливается стажировка по охране труда?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_006",
+    "id": "TRAIN_006",
     "topic": "occupational_training",
     "question": "На предприятии возник вопрос: кому устанавливается стажировка по охране труда?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_007",
+    "id": "TRAIN_007",
     "topic": "occupational_training",
     "question": "Подскажите по охране труда: кому устанавливается стажировка по охране труда?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_008",
+    "id": "TRAIN_008",
     "topic": "occupational_training",
     "question": "Нужно определить по законодательству Республики Беларусь: кому устанавливается стажировка по охране труда?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_009",
+    "id": "TRAIN_009",
     "topic": "occupational_training",
     "question": "Кто руководит стажировкой работника?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_010",
+    "id": "TRAIN_010",
     "topic": "occupational_training",
     "question": "На предприятии возник вопрос: кто руководит стажировкой работника?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_011",
+    "id": "TRAIN_011",
     "topic": "occupational_training",
     "question": "Подскажите по охране труда: кто руководит стажировкой работника?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_012",
+    "id": "TRAIN_012",
     "topic": "occupational_training",
     "question": "Нужно определить по законодательству Республики Беларусь: кто руководит стажировкой работника?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_013",
+    "id": "TRAIN_013",
     "topic": "occupational_training",
     "question": "Можно ли допустить работника без стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_014",
+    "id": "TRAIN_014",
     "topic": "occupational_training",
     "question": "На предприятии возник вопрос: можно ли допустить работника без стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_015",
+    "id": "TRAIN_015",
     "topic": "occupational_training",
     "question": "Подскажите по охране труда: можно ли допустить работника без стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_016",
+    "id": "TRAIN_016",
     "topic": "occupational_training",
     "question": "Нужно определить по законодательству Республики Беларусь: можно ли допустить работника без стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_017",
+    "id": "TRAIN_017",
     "topic": "occupational_training",
     "question": "Как оформить допуск к самостоятельной работе после стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_018",
+    "id": "TRAIN_018",
     "topic": "occupational_training",
     "question": "На предприятии возник вопрос: как оформить допуск к самостоятельной работе после стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_019",
+    "id": "TRAIN_019",
     "topic": "occupational_training",
     "question": "Подскажите по охране труда: как оформить допуск к самостоятельной работе после стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_020",
+    "id": "TRAIN_020",
     "topic": "occupational_training",
     "question": "Нужно определить по законодательству Республики Беларусь: как оформить допуск к самостоятельной работе после стажировки?",
     "required_terms": [
       "стажировка"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_001",
@@ -1686,12 +2106,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_002",
@@ -1700,12 +2123,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_003",
@@ -1714,12 +2140,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_004",
@@ -1728,12 +2157,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_005",
@@ -1742,12 +2174,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_006",
@@ -1756,12 +2191,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_007",
@@ -1770,12 +2208,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_008",
@@ -1784,12 +2225,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_009",
@@ -1798,12 +2242,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_010",
@@ -1812,12 +2259,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_011",
@@ -1826,12 +2276,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_012",
@@ -1840,12 +2293,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_013",
@@ -1854,12 +2310,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_014",
@@ -1868,12 +2327,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_015",
@@ -1882,12 +2344,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_016",
@@ -1896,12 +2361,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_017",
@@ -1910,12 +2378,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_018",
@@ -1924,12 +2395,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_019",
@@ -1938,12 +2412,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ACCI_020",
@@ -1952,12 +2429,15 @@
     "required_terms": [
       "несчастный случай"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_001",
@@ -1966,12 +2446,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_002",
@@ -1980,12 +2464,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_003",
@@ -1994,12 +2482,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_004",
@@ -2008,12 +2500,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_005",
@@ -2022,12 +2518,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_006",
@@ -2036,12 +2536,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_007",
@@ -2050,12 +2554,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_008",
@@ -2064,12 +2572,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_009",
@@ -2078,12 +2590,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_010",
@@ -2092,12 +2608,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_011",
@@ -2106,12 +2626,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_012",
@@ -2120,12 +2644,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_013",
@@ -2134,12 +2662,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_014",
@@ -2148,12 +2680,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_015",
@@ -2162,12 +2698,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_016",
@@ -2176,12 +2716,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_017",
@@ -2190,12 +2734,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_018",
@@ -2204,12 +2752,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_019",
@@ -2218,12 +2770,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "INDU_020",
@@ -2232,12 +2788,16 @@
     "required_terms": [
       "промышленной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_354-Z",
+      "NPA_31"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
     ],
-    "expected_domain": "industrial_safety"
+    "expected_domain": "industrial_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_001",
@@ -2246,12 +2806,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_002",
@@ -2260,12 +2824,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_003",
@@ -2274,12 +2842,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_004",
@@ -2288,12 +2860,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_005",
@@ -2302,12 +2878,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_006",
@@ -2316,12 +2896,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_007",
@@ -2330,12 +2914,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_008",
@@ -2344,12 +2932,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_009",
@@ -2358,12 +2950,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_010",
@@ -2372,12 +2968,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_011",
@@ -2386,12 +2986,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_012",
@@ -2400,12 +3004,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_013",
@@ -2414,12 +3022,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_014",
@@ -2428,12 +3040,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_015",
@@ -2442,12 +3058,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_016",
@@ -2456,12 +3076,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_017",
@@ -2470,12 +3094,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_018",
@@ -2484,12 +3112,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_019",
@@ -2498,12 +3130,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "FIRE_020",
@@ -2512,12 +3148,16 @@
     "required_terms": [
       "пожарной безопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_82",
+      "NPA_2403-XII"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
     ],
-    "expected_domain": "fire_safety"
+    "expected_domain": "fire_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_001",
@@ -2531,7 +3171,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_002",
@@ -2545,7 +3186,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_003",
@@ -2559,7 +3201,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_004",
@@ -2573,7 +3216,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_005",
@@ -2587,7 +3231,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_006",
@@ -2601,7 +3246,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_007",
@@ -2615,7 +3261,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_008",
@@ -2629,7 +3276,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_009",
@@ -2643,7 +3291,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_010",
@@ -2657,7 +3306,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_011",
@@ -2671,7 +3321,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_012",
@@ -2685,7 +3336,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_013",
@@ -2699,7 +3351,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_014",
@@ -2713,7 +3366,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_015",
@@ -2727,7 +3381,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_016",
@@ -2741,7 +3396,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_017",
@@ -2755,7 +3411,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_018",
@@ -2769,7 +3426,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_019",
@@ -2783,7 +3441,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "ELEC_020",
@@ -2797,7 +3456,8 @@
     "acceptable_topics": [
       "electrical_safety"
     ],
-    "expected_domain": "electrical_safety"
+    "expected_domain": "electrical_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_001",
@@ -2806,12 +3466,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_002",
@@ -2820,12 +3484,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_003",
@@ -2834,12 +3502,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_004",
@@ -2848,12 +3520,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_005",
@@ -2862,12 +3538,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_006",
@@ -2876,12 +3556,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_007",
@@ -2890,12 +3574,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_008",
@@ -2904,12 +3592,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_009",
@@ -2918,12 +3610,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_010",
@@ -2932,12 +3628,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_011",
@@ -2946,12 +3646,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_012",
@@ -2960,12 +3664,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_013",
@@ -2974,12 +3682,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_014",
@@ -2988,12 +3700,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_015",
@@ -3002,12 +3718,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_016",
@@ -3016,12 +3736,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_017",
@@ -3030,12 +3754,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_018",
@@ -3044,12 +3772,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_019",
@@ -3058,12 +3790,16 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
     "id": "SANI_020",
@@ -3072,291 +3808,375 @@
     "required_terms": [
       "санитар"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
     ],
-    "expected_domain": "sanitary"
+    "expected_domain": "sanitary",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_001",
+    "id": "OHS_001",
     "topic": "occupational_safety",
     "question": "Какие основные обязанности работодателя в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_002",
+    "id": "OHS_002",
     "topic": "occupational_safety",
     "question": "На предприятии возник вопрос: какие основные обязанности работодателя в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_003",
+    "id": "OHS_003",
     "topic": "occupational_safety",
     "question": "Подскажите по охране труда: какие основные обязанности работодателя в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_004",
+    "id": "OHS_004",
     "topic": "occupational_safety",
     "question": "Нужно определить по законодательству Республики Беларусь: какие основные обязанности работодателя в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_005",
+    "id": "OHS_005",
     "topic": "occupational_safety",
     "question": "Какие права имеет работник в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_006",
+    "id": "OHS_006",
     "topic": "occupational_safety",
     "question": "На предприятии возник вопрос: какие права имеет работник в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_007",
+    "id": "OHS_007",
     "topic": "occupational_safety",
     "question": "Подскажите по охране труда: какие права имеет работник в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_008",
+    "id": "OHS_008",
     "topic": "occupational_safety",
     "question": "Нужно определить по законодательству Республики Беларусь: какие права имеет работник в области охраны труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_009",
+    "id": "OHS_009",
     "topic": "occupational_safety",
     "question": "Кто отвечает за охрану труда в организации?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_010",
+    "id": "OHS_010",
     "topic": "occupational_safety",
     "question": "На предприятии возник вопрос: кто отвечает за охрану труда в организации?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_011",
+    "id": "OHS_011",
     "topic": "occupational_safety",
     "question": "Подскажите по охране труда: кто отвечает за охрану труда в организации?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_012",
+    "id": "OHS_012",
     "topic": "occupational_safety",
     "question": "Нужно определить по законодательству Республики Беларусь: кто отвечает за охрану труда в организации?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_013",
+    "id": "OHS_013",
     "topic": "occupational_safety",
     "question": "Как организовать систему управления охраной труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_014",
+    "id": "OHS_014",
     "topic": "occupational_safety",
     "question": "На предприятии возник вопрос: как организовать систему управления охраной труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_015",
+    "id": "OHS_015",
     "topic": "occupational_safety",
     "question": "Подскажите по охране труда: как организовать систему управления охраной труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_016",
+    "id": "OHS_016",
     "topic": "occupational_safety",
     "question": "Нужно определить по законодательству Республики Беларусь: как организовать систему управления охраной труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_017",
+    "id": "OHS_017",
     "topic": "occupational_safety",
     "question": "Какие требования к инструкциям по охране труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_018",
+    "id": "OHS_018",
     "topic": "occupational_safety",
     "question": "На предприятии возник вопрос: какие требования к инструкциям по охране труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_019",
+    "id": "OHS_019",
     "topic": "occupational_safety",
     "question": "Подскажите по охране труда: какие требования к инструкциям по охране труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   },
   {
-    "id": "OCCU_020",
+    "id": "OHS_020",
     "topic": "occupational_safety",
     "question": "Нужно определить по законодательству Республики Беларусь: какие требования к инструкциям по охране труда?",
     "required_terms": [
       "охраны труда"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_356-Z",
+      "NPA_176"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
     ],
-    "expected_domain": "occupational_safety"
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
   }
 ]
