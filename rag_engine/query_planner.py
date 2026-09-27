@@ -1,0 +1,250 @@
+"""Query Planner 2.0 for the Belarus OHS/PB legal RAG.
+
+The planner is deliberately thin: existing classifiers/profiles/query generators remain
+the source of truth for individual signals. This module composes those signals into
+one explicit retrieval plan so rag.py does not have to know how a query was built.
+
+Pipeline:
+    question -> understanding -> query plan -> hybrid retrieval -> rerank -> evidence gate
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from rag_query_classifier import (
+    detect_legal_domain,
+    detect_topic,
+    detect_special_category,
+    _minor_special_issue,
+    detect_query_intents,
+    detect_primary_intent,
+    _is_labor_code_query,
+    is_cross_reference_query,
+)
+from rag_query_profile import build_universal_query_profile
+from rag_query_generator import build_search_queries
+from rag_engine.legal_relevance import legal_policy
+
+
+def _unique(values: List[str]) -> List[str]:
+    result: List[str] = []
+    seen = set()
+    for value in values:
+        text = str(value or "").strip()
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            result.append(text)
+    return result
+
+
+def _build_negative_concepts(
+    topic: str,
+    profile: Dict[str, Any],
+) -> List[str]:
+    policy = legal_policy(topic)
+    negatives = list(policy.get("forbidden") or [])
+
+    qualifiers = set(profile.get("qualifiers") or [])
+    if topic == "knowledge_testing":
+        # Semantic similarity around "повторная" can pull КоАП material about
+        # repeated offences. Make this exclusion explicit in the plan.
+        negatives.extend([
+            "административное правонарушение",
+            "административная ответственность",
+            "повторное правонарушение",
+        ])
+
+    if topic == "occupational_briefing":
+        if profile.get("question_type") == "kind":
+            negatives.extend([
+                "кто проводит вводный инструктаж",
+                "специалист по охране труда проводит",
+            ])
+        elif profile.get("question_type") == "who":
+            negatives.extend([
+                "виды инструктажей",
+                "целевой инструктаж разовые работы",
+            ])
+
+    if "refusal_due_to_no_ppe" in qualifiers:
+        negatives.extend([
+            "выдача сиз сама по себе",
+            "срок носки сиз без вопроса о праве отказаться",
+        ])
+
+    return _unique(negatives)
+
+
+def _build_source_constraints(
+    domain: str,
+    topic: str,
+    profile: Dict[str, Any],
+    labor_code_query: bool,
+) -> Dict[str, Any]:
+    constraints: Dict[str, Any] = {
+        "legal_domain": domain,
+        "topic": topic,
+        "preferred_documents": [],
+        "preferred_terms": [],
+        "forbidden_terms": list(legal_policy(topic).get("forbidden") or []),
+    }
+
+    if labor_code_query:
+        constraints["preferred_documents"].append("Трудовой кодекс Республики Беларусь")
+
+    preferred_documents = {
+        "knowledge_testing": [
+            "проверка знаний",
+            "обучение по охране труда",
+            "охрана труда",
+        ],
+        "occupational_briefing": [
+            "Инструкция № 175",
+            "инструктаж по охране труда",
+        ],
+        "ppe_nonprovision": [
+            "СИЗ",
+            "№ 209",
+            "средства индивидуальной защиты",
+        ],
+        "medical_examinations": [
+            "медицинские осмотры",
+            "№ 74",
+        ],
+        "workplace_attestation": [
+            "№ 253",
+            "аттестация рабочих мест",
+        ],
+        "accident_investigation": [
+            "расследование несчастных случаев",
+            "№ 30",
+        ],
+    }
+    constraints["preferred_documents"].extend(
+        preferred_documents.get(topic, [])
+    )
+
+    constraints["preferred_terms"] = list(profile.get("legal_phrases") or [])
+    constraints["preferred_documents"] = _unique(
+        constraints["preferred_documents"]
+    )
+    constraints["preferred_terms"] = _unique(constraints["preferred_terms"])
+    constraints["forbidden_terms"] = _unique(constraints["forbidden_terms"])
+    return constraints
+
+
+def _assign_query_role(
+    query: str,
+    index: int,
+    original: str,
+    profile: Dict[str, Any],
+) -> str:
+    if index == 0 and query.strip().lower() == original.strip().lower():
+        return "exact"
+
+    legal_phrases = {
+        str(value).strip().lower()
+        for value in (profile.get("legal_phrases") or [])
+        if str(value).strip()
+    }
+    if query.strip().lower() in legal_phrases:
+        return "legal"
+
+    query_lower = query.lower()
+    if any(
+        marker in query_lower
+        for marker in (
+            "трудовой кодекс",
+            "статья ",
+            "пункт ",
+            "постановления ",
+            "инструкция №",
+            "приказ ",
+        )
+    ):
+        return "document"
+
+    return "semantic"
+
+
+def build_query_plan(user_query: str) -> Dict[str, Any]:
+    """Build a deterministic retrieval plan from one user question."""
+
+    original = str(user_query or "").strip()
+    domain = detect_legal_domain(original)
+    topic = detect_topic(original)
+    intents = detect_query_intents(original)
+    primary_intent = detect_primary_intent(intents, original)
+    cross_reference = is_cross_reference_query(intents)
+    labor_code_query = _is_labor_code_query(original)
+    special_category = detect_special_category(original)
+    special_issue = (
+        _minor_special_issue(original)
+        if special_category == "minor"
+        else None
+    )
+    profile = build_universal_query_profile(original)
+
+    search_queries = build_search_queries(
+        original,
+        topic,
+        domain,
+        intents,
+    )
+
+    query_roles = [
+        _assign_query_role(query, index, original, profile)
+        for index, query in enumerate(search_queries)
+    ]
+
+    negative_concepts = _build_negative_concepts(topic, profile)
+    source_constraints = _build_source_constraints(
+        domain,
+        topic,
+        profile,
+        labor_code_query,
+    )
+
+    return {
+        "original": original,
+        "domain": domain,
+        "topic": topic,
+        "intents": intents,
+        "primary_intent": primary_intent,
+        "question_type": profile.get("question_type"),
+        "subject": profile.get("subject"),
+        "event": profile.get("event"),
+        "action": profile.get("action"),
+        "action_state": profile.get("action_state"),
+        "profile": profile,
+        "search_queries": search_queries,
+        "query_roles": query_roles,
+        "negative_concepts": negative_concepts,
+        "source_constraints": source_constraints,
+        "special_category": special_category,
+        "special_issue": special_issue,
+        "cross_reference": cross_reference,
+        "labor_code_query": labor_code_query,
+    }
+
+
+def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
+    """Return only safe, compact diagnostics for production logs."""
+
+    return {
+        "domain": plan.get("domain"),
+        "topic": plan.get("topic"),
+        "question_type": plan.get("question_type"),
+        "event": plan.get("event"),
+        "action": plan.get("action"),
+        "action_state": plan.get("action_state"),
+        "primary_intent": plan.get("primary_intent"),
+        "query_count": len(plan.get("search_queries") or []),
+        "query_roles": plan.get("query_roles") or [],
+        "negative_count": len(plan.get("negative_concepts") or []),
+        "preferred_documents": (
+            plan.get("source_constraints", {}).get("preferred_documents") or []
+        ),
+    }
