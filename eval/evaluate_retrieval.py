@@ -51,6 +51,7 @@ def allowed_domains(expected_domain: str) -> set[str]:
 def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     chunks = list(result.get("chunks") or [])
     gold = list(case.get("gold_source_ids") or [])
+    gold_chunks = set(str(value) for value in (case.get("gold_chunk_ids") or []))
 
     source_ids = [
         build_source_id(chunk, index)
@@ -88,6 +89,14 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any
 
     evidence = result.get("evidence") or {}
 
+    chunk_ids = [str(chunk.get("id") or "").strip() for chunk in chunks]
+    chunk_ranks = [
+        index
+        for index, chunk_id in enumerate(chunk_ids, start=1)
+        if chunk_id and chunk_id in gold_chunks
+    ]
+    first_chunk_rank = chunk_ranks[0] if chunk_ranks else None
+
     first_rank = ranks[0] if ranks else None
     return {
         "id": case["id"],
@@ -98,6 +107,18 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any
         "hit_at_5": any(rank <= 5 for rank in ranks),
         "hit_at_10": any(rank <= 10 for rank in ranks),
         "mrr": (1.0 / first_rank) if first_rank else 0.0,
+        "chunk_recall_at_5": (
+            any(rank <= 5 for rank in chunk_ranks)
+            if gold_chunks else None
+        ),
+        "chunk_recall_at_10": (
+            any(rank <= 10 for rank in chunk_ranks)
+            if gold_chunks else None
+        ),
+        "chunk_mrr": (
+            (1.0 / first_chunk_rank)
+            if first_chunk_rank else 0.0
+        ) if gold_chunks else None,
         "precision_at_5": (
             sum(source_matches(source_ids[i], gold) for i in range(min(5, len(source_ids))))
             / min(5, len(source_ids))
@@ -142,6 +163,8 @@ async def run() -> dict[str, Any]:
 
     valid = [row for row in rows if "error" not in row]
     total = len(valid) or 1
+    chunk_labeled = [row for row in valid if row.get("chunk_mrr") is not None]
+    chunk_total = len(chunk_labeled) or 1
 
     def mean(key: str) -> float:
         return round(sum(float(row[key]) for row in valid) / total, 4)
@@ -158,6 +181,19 @@ async def run() -> dict[str, Any]:
         "recall_at_10": mean("hit_at_10"),
         "mrr": mean("mrr"),
         "precision_at_5": mean("precision_at_5"),
+        "chunk_labeled_cases": len(chunk_labeled),
+        "chunk_recall_at_5": (
+            round(sum(float(row["chunk_recall_at_5"]) for row in chunk_labeled) / chunk_total, 4)
+            if chunk_labeled else None
+        ),
+        "chunk_recall_at_10": (
+            round(sum(float(row["chunk_recall_at_10"]) for row in chunk_labeled) / chunk_total, 4)
+            if chunk_labeled else None
+        ),
+        "chunk_mrr": (
+            round(sum(float(row["chunk_mrr"]) for row in chunk_labeled) / chunk_total, 4)
+            if chunk_labeled else None
+        ),
         "wrong_domain_rate_at_10": mean("wrong_domain_at_10"),
         "forbidden_source_rate_at_10": mean("forbidden_source_at_10"),
         "evidence_sufficiency_rate": mean("evidence_sufficient"),
