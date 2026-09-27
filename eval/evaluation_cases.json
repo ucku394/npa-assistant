@@ -10,7 +10,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_002",
@@ -23,7 +24,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_003",
@@ -36,7 +38,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_004",
@@ -49,7 +52,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_005",
@@ -62,7 +66,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_006",
@@ -75,7 +80,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_007",
@@ -88,7 +94,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_008",
@@ -101,7 +108,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_009",
@@ -114,7 +122,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_010",
@@ -127,7 +136,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_011",
@@ -140,7 +150,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_012",
@@ -153,7 +164,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_013",
@@ -166,7 +178,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_014",
@@ -179,7 +192,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_015",
@@ -192,7 +206,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_016",
@@ -205,7 +220,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_017",
@@ -218,7 +234,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_018",
@@ -231,7 +248,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_019",
@@ -244,7 +262,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "KNOW_020",
@@ -257,7 +276,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "knowledge_testing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__001",
@@ -270,7 +290,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__002",
@@ -283,7 +304,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__003",
@@ -296,7 +318,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__004",
@@ -309,7 +332,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__005",
@@ -322,7 +346,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__006",
@@ -335,7 +360,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__007",
@@ -348,7 +374,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__008",
@@ -361,7 +388,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__009",
@@ -374,7 +402,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__010",
@@ -387,7 +416,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__011",
@@ -400,7 +430,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__012",
@@ -413,7 +444,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__013",
@@ -426,7 +458,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__014",
@@ -439,7 +472,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__015",
@@ -452,7 +486,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__016",
@@ -465,7 +500,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__017",
@@ -478,7 +514,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__018",
@@ -491,7 +528,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__019",
@@ -504,7 +542,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "PPE__020",
@@ -517,7 +556,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "ppe_nonprovision"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_001",
@@ -530,7 +570,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_002",
@@ -543,7 +584,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_003",
@@ -556,7 +598,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_004",
@@ -569,7 +612,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_005",
@@ -582,7 +626,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_006",
@@ -595,7 +640,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_007",
@@ -608,7 +654,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_008",
@@ -621,7 +668,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_009",
@@ -634,7 +682,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_010",
@@ -647,7 +696,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_011",
@@ -660,7 +710,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_012",
@@ -673,7 +724,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_013",
@@ -686,7 +738,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_014",
@@ -699,7 +752,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_015",
@@ -712,7 +766,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_016",
@@ -725,7 +780,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_017",
@@ -738,7 +794,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_018",
@@ -751,7 +808,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_019",
@@ -764,7 +822,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "MEDI_020",
@@ -777,7 +836,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "medical_examinations"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_001",
@@ -790,7 +850,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_002",
@@ -803,7 +864,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_003",
@@ -816,7 +878,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_004",
@@ -829,7 +892,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_005",
@@ -842,7 +906,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_006",
@@ -855,7 +920,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_007",
@@ -868,7 +934,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_008",
@@ -881,7 +948,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_009",
@@ -894,7 +962,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_010",
@@ -907,7 +976,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_011",
@@ -920,7 +990,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_012",
@@ -933,7 +1004,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_013",
@@ -946,7 +1018,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_014",
@@ -959,7 +1032,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_015",
@@ -972,7 +1046,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_016",
@@ -985,7 +1060,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_017",
@@ -998,7 +1074,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_018",
@@ -1011,7 +1088,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_019",
@@ -1024,7 +1102,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "WORK_020",
@@ -1037,7 +1116,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "workplace_attestation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_001",
@@ -1050,7 +1130,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_002",
@@ -1063,7 +1144,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_003",
@@ -1076,7 +1158,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_004",
@@ -1089,7 +1172,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_005",
@@ -1102,7 +1186,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_006",
@@ -1115,7 +1200,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_007",
@@ -1128,7 +1214,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_008",
@@ -1141,7 +1228,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_009",
@@ -1154,7 +1242,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_010",
@@ -1167,7 +1256,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_011",
@@ -1180,7 +1270,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_012",
@@ -1193,7 +1284,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_013",
@@ -1206,7 +1298,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_014",
@@ -1219,7 +1312,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_015",
@@ -1232,7 +1326,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_016",
@@ -1245,7 +1340,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_017",
@@ -1258,7 +1354,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_018",
@@ -1271,7 +1368,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_019",
@@ -1284,7 +1382,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_020",
@@ -1297,7 +1396,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_briefing"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_001",
@@ -1310,7 +1410,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_002",
@@ -1323,7 +1424,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_003",
@@ -1336,7 +1438,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_004",
@@ -1349,7 +1452,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_005",
@@ -1362,7 +1466,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_006",
@@ -1375,7 +1480,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_007",
@@ -1388,7 +1494,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_008",
@@ -1401,7 +1508,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_009",
@@ -1414,7 +1522,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_010",
@@ -1427,7 +1536,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_011",
@@ -1440,7 +1550,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_012",
@@ -1453,7 +1564,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_013",
@@ -1466,7 +1578,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_014",
@@ -1479,7 +1592,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_015",
@@ -1492,7 +1606,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_016",
@@ -1505,7 +1620,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_017",
@@ -1518,7 +1634,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_018",
@@ -1531,7 +1648,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_019",
@@ -1544,7 +1662,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_020",
@@ -1557,7 +1676,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_training"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_001",
@@ -1570,7 +1690,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_002",
@@ -1583,7 +1704,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_003",
@@ -1596,7 +1718,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_004",
@@ -1609,7 +1732,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_005",
@@ -1622,7 +1746,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_006",
@@ -1635,7 +1760,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_007",
@@ -1648,7 +1774,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_008",
@@ -1661,7 +1788,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_009",
@@ -1674,7 +1802,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_010",
@@ -1687,7 +1816,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_011",
@@ -1700,7 +1830,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_012",
@@ -1713,7 +1844,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_013",
@@ -1726,7 +1858,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_014",
@@ -1739,7 +1872,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_015",
@@ -1752,7 +1886,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_016",
@@ -1765,7 +1900,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_017",
@@ -1778,7 +1914,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_018",
@@ -1791,7 +1928,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_019",
@@ -1804,7 +1942,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "ACCI_020",
@@ -1817,7 +1956,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "accident_investigation"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "INDU_001",
@@ -1830,7 +1970,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_002",
@@ -1843,7 +1984,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_003",
@@ -1856,7 +1998,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_004",
@@ -1869,7 +2012,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_005",
@@ -1882,7 +2026,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_006",
@@ -1895,7 +2040,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_007",
@@ -1908,7 +2054,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_008",
@@ -1921,7 +2068,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_009",
@@ -1934,7 +2082,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_010",
@@ -1947,7 +2096,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_011",
@@ -1960,7 +2110,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_012",
@@ -1973,7 +2124,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_013",
@@ -1986,7 +2138,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_014",
@@ -1999,7 +2152,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_015",
@@ -2012,7 +2166,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_016",
@@ -2025,7 +2180,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_017",
@@ -2038,7 +2194,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_018",
@@ -2051,7 +2208,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_019",
@@ -2064,7 +2222,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "INDU_020",
@@ -2077,7 +2236,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "industrial_safety"
-    ]
+    ],
+    "expected_domain": "industrial_safety"
   },
   {
     "id": "FIRE_001",
@@ -2090,7 +2250,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_002",
@@ -2103,7 +2264,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_003",
@@ -2116,7 +2278,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_004",
@@ -2129,7 +2292,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_005",
@@ -2142,7 +2306,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_006",
@@ -2155,7 +2320,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_007",
@@ -2168,7 +2334,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_008",
@@ -2181,7 +2348,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_009",
@@ -2194,7 +2362,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_010",
@@ -2207,7 +2376,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_011",
@@ -2220,7 +2390,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_012",
@@ -2233,7 +2404,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_013",
@@ -2246,7 +2418,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_014",
@@ -2259,7 +2432,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_015",
@@ -2272,7 +2446,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_016",
@@ -2285,7 +2460,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_017",
@@ -2298,7 +2474,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_018",
@@ -2311,7 +2488,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_019",
@@ -2324,7 +2502,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "FIRE_020",
@@ -2337,7 +2516,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "fire_safety"
-    ]
+    ],
+    "expected_domain": "fire_safety"
   },
   {
     "id": "ELEC_001",
@@ -2350,7 +2530,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_002",
@@ -2363,7 +2544,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_003",
@@ -2376,7 +2558,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_004",
@@ -2389,7 +2572,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_005",
@@ -2402,7 +2586,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_006",
@@ -2415,7 +2600,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_007",
@@ -2428,7 +2614,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_008",
@@ -2441,7 +2628,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_009",
@@ -2454,7 +2642,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_010",
@@ -2467,7 +2656,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_011",
@@ -2480,7 +2670,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_012",
@@ -2493,7 +2684,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_013",
@@ -2506,7 +2698,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_014",
@@ -2519,7 +2712,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_015",
@@ -2532,7 +2726,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_016",
@@ -2545,7 +2740,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_017",
@@ -2558,7 +2754,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_018",
@@ -2571,7 +2768,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_019",
@@ -2584,7 +2782,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "ELEC_020",
@@ -2597,7 +2796,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
-    ]
+    ],
+    "expected_domain": "electrical_safety"
   },
   {
     "id": "SANI_001",
@@ -2610,7 +2810,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_002",
@@ -2623,7 +2824,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_003",
@@ -2636,7 +2838,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_004",
@@ -2649,7 +2852,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_005",
@@ -2662,7 +2866,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_006",
@@ -2675,7 +2880,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_007",
@@ -2688,7 +2894,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_008",
@@ -2701,7 +2908,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_009",
@@ -2714,7 +2922,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_010",
@@ -2727,7 +2936,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_011",
@@ -2740,7 +2950,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_012",
@@ -2753,7 +2964,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_013",
@@ -2766,7 +2978,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_014",
@@ -2779,7 +2992,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_015",
@@ -2792,7 +3006,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_016",
@@ -2805,7 +3020,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_017",
@@ -2818,7 +3034,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_018",
@@ -2831,7 +3048,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_019",
@@ -2844,7 +3062,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "SANI_020",
@@ -2857,7 +3076,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "sanitary"
-    ]
+    ],
+    "expected_domain": "sanitary"
   },
   {
     "id": "OCCU_001",
@@ -2870,7 +3090,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_002",
@@ -2883,7 +3104,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_003",
@@ -2896,7 +3118,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_004",
@@ -2909,7 +3132,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_005",
@@ -2922,7 +3146,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_006",
@@ -2935,7 +3160,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_007",
@@ -2948,7 +3174,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_008",
@@ -2961,7 +3188,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_009",
@@ -2974,7 +3202,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_010",
@@ -2987,7 +3216,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_011",
@@ -3000,7 +3230,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_012",
@@ -3013,7 +3244,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_013",
@@ -3026,7 +3258,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_014",
@@ -3039,7 +3272,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_015",
@@ -3052,7 +3286,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_016",
@@ -3065,7 +3300,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_017",
@@ -3078,7 +3314,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_018",
@@ -3091,7 +3328,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_019",
@@ -3104,7 +3342,8 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   },
   {
     "id": "OCCU_020",
@@ -3117,6 +3356,7 @@
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "occupational_safety"
-    ]
+    ],
+    "expected_domain": "occupational_safety"
   }
 ]
