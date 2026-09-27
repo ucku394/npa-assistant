@@ -302,6 +302,15 @@ def detect_knowledge_testing_action(user_query: str) -> Optional[str]:
         return None
     if re.search(r"\bчто\s+делать\b|\bдальнейш\w*\s+действ\w*|\bпорядок\w*\s+действ\w*", query, re.IGNORECASE):
         return "further_actions"
+    # При вопросе о сроке/периодичности слово «повторная» не должно
+    # переводить запрос в repeat_test: здесь нужен именно deadline.
+    if re.search(
+        r"\bсрок\w*|\bкогда\b|\bпериодичност\w*|"
+        r"\bчерез\s+какой\s+срок\w*|\bв\s+течение\b",
+        query,
+        re.IGNORECASE,
+    ):
+        return "deadline"
     if re.search(r"\bповторн\w*\s+провер\w*|\bпересдач\w*|\bповторн\w*\s+сдать\b", query, re.IGNORECASE):
         return "repeat_test"
     if re.search(r"\bобучен\w*|\bподготов\w*|\bстажиров\w*", query, re.IGNORECASE):
