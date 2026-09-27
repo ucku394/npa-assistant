@@ -7,6 +7,7 @@ from typing import Any
 from rag_query_classifier import detect_topic, detect_legal_domain
 from rag_query_generator import build_search_queries
 from rag_query_profile import build_universal_query_profile
+from rag_engine.query_planner import build_query_plan
 
 ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / "evaluation_cases.json"
@@ -22,10 +23,11 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     by_topic = defaultdict(lambda: {"total": 0, "topic_ok": 0, "domain_ok": 0, "legal_ok": 0})
     for case in cases:
         q = case["question"]
-        topic = detect_topic(q)
-        domain = detect_legal_domain(q)
-        profile = build_universal_query_profile(q)
-        queries = build_search_queries(q, topic, "occupational_safety", [])
+        plan = build_query_plan(q)
+        topic = plan["topic"]
+        domain = plan["domain"]
+        profile = plan["profile"]
+        queries = plan["search_queries"]
         query_text = "\n".join(queries).lower()
         acceptable = set(case.get("acceptable_topics") or [case["topic"]])
         topic_pass = topic in acceptable
@@ -49,7 +51,10 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
                 "id": case["id"], "question": q,
                 "expected_topic": case["topic"], "predicted_topic": topic,
                 "expected_domain": case.get("expected_domain"), "predicted_domain": domain,
-                "question_type": profile.get("question_type"), "queries": queries,
+                "question_type": profile.get("question_type"),
+                "query_roles": plan.get("query_roles"),
+                "negative_concepts": plan.get("negative_concepts"),
+                "queries": queries,
             })
     for bucket in by_topic.values():
         bucket["topic_accuracy"] = round(bucket["topic_ok"] / bucket["total"], 4)
