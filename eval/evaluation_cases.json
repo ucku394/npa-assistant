@@ -3166,7 +3166,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3181,7 +3184,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3196,7 +3202,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3211,7 +3220,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3226,7 +3238,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3241,7 +3256,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3256,7 +3274,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3271,7 +3292,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3286,7 +3310,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3301,7 +3328,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3316,7 +3346,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3331,7 +3364,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3346,7 +3382,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3361,7 +3400,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3376,7 +3418,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3391,7 +3436,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3406,7 +3454,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3421,7 +3472,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3436,7 +3490,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
@@ -3451,7 +3508,10 @@
     "required_terms": [
       "электробезопасности"
     ],
-    "gold_source_ids": [],
+    "gold_source_ids": [
+      "NPA_53",
+      "NPA_78"
+    ],
     "gold_chunk_ids": [],
     "acceptable_topics": [
       "electrical_safety"
