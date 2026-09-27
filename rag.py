@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from embedding import get_query_embeddings
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_universal_search_queries, build_search_queries
+from rag_engine.query_planner import build_query_plan, plan_summary
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
 from rag_engine.legal_relevance import (
     legal_relevance_adjustment,
@@ -2588,27 +2589,30 @@ async def retrieve_context(
 ) -> Dict[str, Any]:
     logger.info("RAG | query=%s", user_query)
 
-    legal_domain = detect_legal_domain(user_query)
-    topic = detect_topic(user_query)
-    query_terms = _extract_query_terms(user_query)
-    intents = detect_query_intents(user_query)
-    cross_reference = is_cross_reference_query(intents)
-    primary_intent = detect_primary_intent(intents, user_query)
-    labor_code_query = _is_labor_code_query(user_query)
-    special_category = detect_special_category(user_query)
-    special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
-    query_profile = build_universal_query_profile(user_query)
+    # Query Planner 2.0 is the single orchestration point for query
+    # understanding and retrieval planning. Individual classifiers and
+    # generators remain reusable, but rag.py no longer assembles them ad hoc.
+    query_plan = build_query_plan(user_query)
 
-    search_queries = build_search_queries(
-        user_query,
-        topic,
-        legal_domain,
-        intents,
-    )
+    legal_domain = query_plan["domain"]
+    topic = query_plan["topic"]
+    query_terms = _extract_query_terms(user_query)
+    intents = query_plan["intents"]
+    cross_reference = query_plan["cross_reference"]
+    primary_intent = query_plan["primary_intent"]
+    labor_code_query = query_plan["labor_code_query"]
+    special_category = query_plan["special_category"]
+    special_issue = query_plan["special_issue"]
+    query_profile = query_plan["profile"]
+    search_queries = query_plan["search_queries"]
 
     logger.info(
         "RAG | query_input | %r",
         user_query,
+    )
+    logger.info(
+        "RAG | query_plan | %s",
+        plan_summary(query_plan),
     )
     logger.info(
         "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s",
@@ -2717,7 +2721,9 @@ async def retrieve_context(
         clean_groups.append(result or [])
 
     query_roles = [
-        "main" if index == 0 else "expanded"
+        query_plan["query_roles"][index]
+        if index < len(query_plan["query_roles"])
+        else "semantic"
         for index in range(len(clean_groups))
     ]
 
@@ -3013,6 +3019,7 @@ async def retrieve_context(
         "topic": topic,
         "intents": intents,
         "query_profile": query_profile,
+        "query_plan": query_plan,
         "evidence": evidence,
         "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
