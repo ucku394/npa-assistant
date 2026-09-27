@@ -22,19 +22,23 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     by_topic = defaultdict(lambda: {"total": 0, "topic_ok": 0, "domain_ok": 0, "legal_ok": 0})
     for case in cases:
         q = case["question"]
-        topic = detect_topic(q)\n        domain = detect_legal_domain(q)
+        topic = detect_topic(q)
+        domain = detect_legal_domain(q)
         profile = build_universal_query_profile(q)
         queries = build_search_queries(q, topic, "occupational_safety", [])
         query_text = "\n".join(queries).lower()
         acceptable = set(case.get("acceptable_topics") or [case["topic"]])
-        topic_pass = topic in acceptable\n        domain_pass = domain == case.get("expected_domain", "occupational_safety")
+        topic_pass = topic in acceptable
+        domain_pass = domain == case.get("expected_domain", "occupational_safety")
         required = case.get("required_terms", [])
         legal_pass = not required or any(term.lower() in query_text for term in required)
         bucket = by_topic[case["topic"]]
         bucket["total"] += 1
-        bucket["topic_ok"] += int(topic_pass)\n        bucket["domain_ok"] += int(domain_pass)
+        bucket["topic_ok"] += int(topic_pass)
+        bucket["domain_ok"] += int(domain_pass)
         bucket["legal_ok"] += int(legal_pass)
-        topic_ok += int(topic_pass)\n        domain_ok += int(domain_pass)
+        topic_ok += int(topic_pass)
+        domain_ok += int(domain_pass)
         legal_ok += int(legal_pass)
         if case["topic"] == "knowledge_testing" and "вводный инструктаж" in query_text:
             knowledge_leak += 1
@@ -43,15 +47,18 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         if not (topic_pass and domain_pass and legal_pass):
             failures.append({
                 "id": case["id"], "question": q,
-                "expected_topic": case["topic"], "predicted_topic": topic,\n                "expected_domain": case.get("expected_domain"), "predicted_domain": domain,
+                "expected_topic": case["topic"], "predicted_topic": topic,
+                "expected_domain": case.get("expected_domain"), "predicted_domain": domain,
                 "question_type": profile.get("question_type"), "queries": queries,
             })
     for bucket in by_topic.values():
-        bucket["topic_accuracy"] = round(bucket["topic_ok"] / bucket["total"], 4)\n        bucket["domain_accuracy"] = round(bucket["domain_ok"] / bucket["total"], 4)
+        bucket["topic_accuracy"] = round(bucket["topic_ok"] / bucket["total"], 4)
+        bucket["domain_accuracy"] = round(bucket["domain_ok"] / bucket["total"], 4)
         bucket["legal_query_coverage"] = round(bucket["legal_ok"] / bucket["total"], 4)
     return {
         "total": len(cases),
-        "topic_accuracy": round(topic_ok / total, 4),\n        "domain_accuracy": round(domain_ok / total, 4),
+        "topic_accuracy": round(topic_ok / total, 4),
+        "domain_accuracy": round(domain_ok / total, 4),
         "legal_query_coverage": round(legal_ok / total, 4),
         "by_topic": dict(sorted(by_topic.items())),
         "knowledge_testing_briefing_leak_rate": round(knowledge_leak / total, 4),
