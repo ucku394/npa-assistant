@@ -1867,6 +1867,48 @@ def _universal_query_relevance_score(
     return max(0.0, min(score, 1.0))
 
 
+def _query_plan_relevance_score(
+    chunk: Dict[str, Any],
+    query_plan: Optional[Dict[str, Any]],
+) -> float:
+    """Score explicit planner constraints without replacing semantic relevance."""
+    if not query_plan:
+        return 0.0
+
+    document = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {content}"
+
+    constraints = query_plan.get("source_constraints") or {}
+    preferred_documents = [
+        str(value).lower()
+        for value in (constraints.get("preferred_documents") or [])
+    ]
+    preferred_terms = [
+        str(value).lower()
+        for value in (constraints.get("preferred_terms") or [])
+    ]
+    negative_concepts = [
+        str(value).lower()
+        for value in (query_plan.get("negative_concepts") or [])
+    ]
+
+    score = 0.0
+    score += min(
+        sum(1 for marker in preferred_documents if marker and marker in document) * 0.10,
+        0.30,
+    )
+    score += min(
+        sum(1 for marker in preferred_terms if marker and marker in text) * 0.06,
+        0.24,
+    )
+    score -= min(
+        sum(1 for marker in negative_concepts if marker and marker in text) * 0.25,
+        0.75,
+    )
+    return max(-0.75, min(score, 0.50))
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -1879,6 +1921,7 @@ def _legal_relevance_score(
     special_category: Optional[str] = None,
     special_issue: Optional[str] = None,
     query_profile: Optional[Dict[str, Any]] = None,
+    query_plan: Optional[Dict[str, Any]] = None,
 ) -> float:
     semantic = _safe_float(chunk.get("_best_similarity", _semantic_score(chunk)))
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
@@ -1976,11 +2019,15 @@ def _legal_relevance_score(
     )
     chunk["_universal_score"] = universal_score
 
+    planner_score = _query_plan_relevance_score(chunk, query_plan)
+    chunk["_query_plan_score"] = planner_score
+
     return (
         semantic * 0.28
         + hybrid_score * 0.12
         + exact_score * 0.16
         + universal_score * 0.22
+        + planner_score * 0.08
         + keyword * keyword_weight
         + topic_score * topic_weight
         + intent_score * 0.05
@@ -2796,6 +2843,7 @@ async def retrieve_context(
             special_category=special_category,
             special_issue=special_issue,
             query_profile=query_profile,
+            query_plan=query_plan,
         )
 
     # Explicit wrong-domain legal matches are removed before final ranking.
@@ -2927,12 +2975,13 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | legal=%.4f | legal_match=%.4f | forbidden=%s | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | planner=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | legal=%.4f | legal_match=%.4f | forbidden=%s | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
             _safe_float(_exact_match_score(chunk, user_query, topic)),
             _safe_float(chunk.get("_universal_score")),
+            _safe_float(chunk.get("_query_plan_score")),
             _safe_float(chunk.get("_constraint_scope_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
