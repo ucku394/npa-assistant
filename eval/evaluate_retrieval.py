@@ -122,6 +122,8 @@ async def run() -> dict[str, Any]:
 
     supabase = create_client(url, key)
     cases = load_cases()
+    limit = int(os.getenv("RAG_EVAL_LIMIT", "240"))
+    cases = cases[:limit]
     rows: list[dict[str, Any]] = []
 
     for index, case in enumerate(cases, start=1):
