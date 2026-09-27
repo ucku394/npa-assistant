@@ -2799,8 +2799,9 @@ async def retrieve_context(
         if not chunk.get("_legal_hard_negative")
     ]
 
-    if clean_candidate_chunks:
-        candidate_chunks = clean_candidate_chunks
+    # If every candidate is a legal hard-negative, keep the set empty so the
+    # evidence gate triggers recovery search instead of returning the wrong law.
+    candidate_chunks = clean_candidate_chunks
 
     ranked_chunks = sorted(
         candidate_chunks,
