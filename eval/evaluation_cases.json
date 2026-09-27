@@ -11,14 +11,14 @@
       "NPA_356-Z"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P44",
-      "NPA_356-Z_P25"
+      "af0e0459-5b65-424d-837e-6f134c0122bd",
+      "91513d74-2bac-49ca-8a71-8b92cc462ec5"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_002",
@@ -32,14 +32,14 @@
       "NPA_356-Z"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P44",
-      "NPA_356-Z_P25"
+      "af0e0459-5b65-424d-837e-6f134c0122bd",
+      "91513d74-2bac-49ca-8a71-8b92cc462ec5"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_003",
@@ -53,14 +53,14 @@
       "NPA_356-Z"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P44",
-      "NPA_356-Z_P25"
+      "af0e0459-5b65-424d-837e-6f134c0122bd",
+      "91513d74-2bac-49ca-8a71-8b92cc462ec5"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_004",
@@ -74,14 +74,14 @@
       "NPA_356-Z"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P44",
-      "NPA_356-Z_P25"
+      "af0e0459-5b65-424d-837e-6f134c0122bd",
+      "91513d74-2bac-49ca-8a71-8b92cc462ec5"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_005",
@@ -94,14 +94,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P51",
-      "NPA_175_P53"
+      "a4b7cbd3-0bd3-4e4b-9c0c-15c8e601157d",
+      "73b39e6e-534a-4eb7-955c-7d2ee51453ed"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_006",
@@ -114,14 +114,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P51",
-      "NPA_175_P53"
+      "a4b7cbd3-0bd3-4e4b-9c0c-15c8e601157d",
+      "73b39e6e-534a-4eb7-955c-7d2ee51453ed"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_007",
@@ -134,14 +134,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P51",
-      "NPA_175_P53"
+      "a4b7cbd3-0bd3-4e4b-9c0c-15c8e601157d",
+      "73b39e6e-534a-4eb7-955c-7d2ee51453ed"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_008",
@@ -154,14 +154,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P51",
-      "NPA_175_P53"
+      "a4b7cbd3-0bd3-4e4b-9c0c-15c8e601157d",
+      "73b39e6e-534a-4eb7-955c-7d2ee51453ed"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_009",
@@ -174,13 +174,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_010",
@@ -193,13 +193,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_011",
@@ -212,13 +212,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_012",
@@ -231,13 +231,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_013",
@@ -250,14 +250,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P43",
-      "NPA_175_P44"
+      "bc449f47-f4c9-4026-a598-bcbe8f0eae74",
+      "af0e0459-5b65-424d-837e-6f134c0122bd"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_014",
@@ -270,14 +270,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P43",
-      "NPA_175_P44"
+      "bc449f47-f4c9-4026-a598-bcbe8f0eae74",
+      "af0e0459-5b65-424d-837e-6f134c0122bd"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_015",
@@ -290,14 +290,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P43",
-      "NPA_175_P44"
+      "bc449f47-f4c9-4026-a598-bcbe8f0eae74",
+      "af0e0459-5b65-424d-837e-6f134c0122bd"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_016",
@@ -310,14 +310,14 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P43",
-      "NPA_175_P44"
+      "bc449f47-f4c9-4026-a598-bcbe8f0eae74",
+      "af0e0459-5b65-424d-837e-6f134c0122bd"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_017",
@@ -330,13 +330,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_018",
@@ -349,13 +349,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_019",
@@ -368,13 +368,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "KNOW_020",
@@ -387,13 +387,13 @@
       "NPA_175"
     ],
     "gold_chunk_ids": [
-      "NPA_175_P54"
+      "7af4bc03-922f-4bee-a744-74a2bd4edcf9"
     ],
     "acceptable_topics": [
       "knowledge_testing"
     ],
     "expected_domain": "occupational_safety",
-    "gold_source_policy": "document-level curated baseline; exact chunk gold manually verified for knowledge-testing cases"
+    "gold_source_policy": "document-level curated baseline; exact chunk UUIDs manually verified for knowledge-testing cases"
   },
   {
     "id": "PPE_001",
