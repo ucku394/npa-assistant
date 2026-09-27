@@ -1,0 +1,3122 @@
+[
+  {
+    "id": "KNOW_001",
+    "topic": "knowledge_testing",
+    "question": "Кто проводит проверку знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_002",
+    "topic": "knowledge_testing",
+    "question": "На предприятии возник вопрос: кто проводит проверку знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_003",
+    "topic": "knowledge_testing",
+    "question": "Подскажите по охране труда: кто проводит проверку знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_004",
+    "topic": "knowledge_testing",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проводит проверку знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_005",
+    "topic": "knowledge_testing",
+    "question": "Какова периодичность проверки знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_006",
+    "topic": "knowledge_testing",
+    "question": "На предприятии возник вопрос: какова периодичность проверки знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_007",
+    "topic": "knowledge_testing",
+    "question": "Подскажите по охране труда: какова периодичность проверки знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_008",
+    "topic": "knowledge_testing",
+    "question": "Нужно определить по законодательству Республики Беларусь: какова периодичность проверки знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_009",
+    "topic": "knowledge_testing",
+    "question": "Что делать, если работник не прошел проверку знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_010",
+    "topic": "knowledge_testing",
+    "question": "На предприятии возник вопрос: что делать, если работник не прошел проверку знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_011",
+    "topic": "knowledge_testing",
+    "question": "Подскажите по охране труда: что делать, если работник не прошел проверку знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_012",
+    "topic": "knowledge_testing",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать, если работник не прошел проверку знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_013",
+    "topic": "knowledge_testing",
+    "question": "Кто входит в комиссию по проверке знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_014",
+    "topic": "knowledge_testing",
+    "question": "На предприятии возник вопрос: кто входит в комиссию по проверке знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_015",
+    "topic": "knowledge_testing",
+    "question": "Подскажите по охране труда: кто входит в комиссию по проверке знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_016",
+    "topic": "knowledge_testing",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто входит в комиссию по проверке знаний требований охраны труда?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_017",
+    "topic": "knowledge_testing",
+    "question": "Через какой срок проводится повторная проверка знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_018",
+    "topic": "knowledge_testing",
+    "question": "На предприятии возник вопрос: через какой срок проводится повторная проверка знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_019",
+    "topic": "knowledge_testing",
+    "question": "Подскажите по охране труда: через какой срок проводится повторная проверка знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "KNOW_020",
+    "topic": "knowledge_testing",
+    "question": "Нужно определить по законодательству Республики Беларусь: через какой срок проводится повторная проверка знаний?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "knowledge_testing"
+    ]
+  },
+  {
+    "id": "PPE__001",
+    "topic": "ppe_nonprovision",
+    "question": "Что делать работнику, если ему не выдали СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__002",
+    "topic": "ppe_nonprovision",
+    "question": "На предприятии возник вопрос: что делать работнику, если ему не выдали СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__003",
+    "topic": "ppe_nonprovision",
+    "question": "Подскажите по охране труда: что делать работнику, если ему не выдали СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__004",
+    "topic": "ppe_nonprovision",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать работнику, если ему не выдали СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__005",
+    "topic": "ppe_nonprovision",
+    "question": "Имеет ли работник право отказаться от работы без СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__006",
+    "topic": "ppe_nonprovision",
+    "question": "На предприятии возник вопрос: имеет ли работник право отказаться от работы без СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__007",
+    "topic": "ppe_nonprovision",
+    "question": "Подскажите по охране труда: имеет ли работник право отказаться от работы без СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__008",
+    "topic": "ppe_nonprovision",
+    "question": "Нужно определить по законодательству Республики Беларусь: имеет ли работник право отказаться от работы без СИЗ?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__009",
+    "topic": "ppe_nonprovision",
+    "question": "Кто обязан обеспечить работников средствами индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__010",
+    "topic": "ppe_nonprovision",
+    "question": "На предприятии возник вопрос: кто обязан обеспечить работников средствами индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__011",
+    "topic": "ppe_nonprovision",
+    "question": "Подскажите по охране труда: кто обязан обеспечить работников средствами индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__012",
+    "topic": "ppe_nonprovision",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто обязан обеспечить работников средствами индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__013",
+    "topic": "ppe_nonprovision",
+    "question": "Что делать при неисправных средствах индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__014",
+    "topic": "ppe_nonprovision",
+    "question": "На предприятии возник вопрос: что делать при неисправных средствах индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__015",
+    "topic": "ppe_nonprovision",
+    "question": "Подскажите по охране труда: что делать при неисправных средствах индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__016",
+    "topic": "ppe_nonprovision",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать при неисправных средствах индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__017",
+    "topic": "ppe_nonprovision",
+    "question": "Как оформить выдачу средств индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__018",
+    "topic": "ppe_nonprovision",
+    "question": "На предприятии возник вопрос: как оформить выдачу средств индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__019",
+    "topic": "ppe_nonprovision",
+    "question": "Подскажите по охране труда: как оформить выдачу средств индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "PPE__020",
+    "topic": "ppe_nonprovision",
+    "question": "Нужно определить по законодательству Республики Беларусь: как оформить выдачу средств индивидуальной защиты?",
+    "required_terms": [
+      "сиз"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "ppe_nonprovision"
+    ]
+  },
+  {
+    "id": "MEDI_001",
+    "topic": "medical_examinations",
+    "question": "Кому проводится предварительный медицинский осмотр при приеме на работу?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_002",
+    "topic": "medical_examinations",
+    "question": "На предприятии возник вопрос: кому проводится предварительный медицинский осмотр при приеме на работу?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_003",
+    "topic": "medical_examinations",
+    "question": "Подскажите по охране труда: кому проводится предварительный медицинский осмотр при приеме на работу?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_004",
+    "topic": "medical_examinations",
+    "question": "Нужно определить по законодательству Республики Беларусь: кому проводится предварительный медицинский осмотр при приеме на работу?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_005",
+    "topic": "medical_examinations",
+    "question": "Когда работник должен пройти периодический медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_006",
+    "topic": "medical_examinations",
+    "question": "На предприятии возник вопрос: когда работник должен пройти периодический медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_007",
+    "topic": "medical_examinations",
+    "question": "Подскажите по охране труда: когда работник должен пройти периодический медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_008",
+    "topic": "medical_examinations",
+    "question": "Нужно определить по законодательству Республики Беларусь: когда работник должен пройти периодический медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_009",
+    "topic": "medical_examinations",
+    "question": "Кто направляет работника на медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_010",
+    "topic": "medical_examinations",
+    "question": "На предприятии возник вопрос: кто направляет работника на медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_011",
+    "topic": "medical_examinations",
+    "question": "Подскажите по охране труда: кто направляет работника на медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_012",
+    "topic": "medical_examinations",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто направляет работника на медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_013",
+    "topic": "medical_examinations",
+    "question": "Можно ли допустить работника без обязательного медосмотра?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_014",
+    "topic": "medical_examinations",
+    "question": "На предприятии возник вопрос: можно ли допустить работника без обязательного медосмотра?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_015",
+    "topic": "medical_examinations",
+    "question": "Подскажите по охране труда: можно ли допустить работника без обязательного медосмотра?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_016",
+    "topic": "medical_examinations",
+    "question": "Нужно определить по законодательству Республики Беларусь: можно ли допустить работника без обязательного медосмотра?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_017",
+    "topic": "medical_examinations",
+    "question": "Что делать, если работник не прошел медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_018",
+    "topic": "medical_examinations",
+    "question": "На предприятии возник вопрос: что делать, если работник не прошел медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_019",
+    "topic": "medical_examinations",
+    "question": "Подскажите по охране труда: что делать, если работник не прошел медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "MEDI_020",
+    "topic": "medical_examinations",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать, если работник не прошел медицинский осмотр?",
+    "required_terms": [
+      "медицинский осмотр"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "medical_examinations"
+    ]
+  },
+  {
+    "id": "WORK_001",
+    "topic": "workplace_attestation",
+    "question": "Когда проводится аттестация рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_002",
+    "topic": "workplace_attestation",
+    "question": "На предприятии возник вопрос: когда проводится аттестация рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_003",
+    "topic": "workplace_attestation",
+    "question": "Подскажите по охране труда: когда проводится аттестация рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_004",
+    "topic": "workplace_attestation",
+    "question": "Нужно определить по законодательству Республики Беларусь: когда проводится аттестация рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_005",
+    "topic": "workplace_attestation",
+    "question": "Какова периодичность аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_006",
+    "topic": "workplace_attestation",
+    "question": "На предприятии возник вопрос: какова периодичность аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_007",
+    "topic": "workplace_attestation",
+    "question": "Подскажите по охране труда: какова периодичность аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_008",
+    "topic": "workplace_attestation",
+    "question": "Нужно определить по законодательству Республики Беларусь: какова периодичность аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_009",
+    "topic": "workplace_attestation",
+    "question": "Кто проводит аттестацию рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_010",
+    "topic": "workplace_attestation",
+    "question": "На предприятии возник вопрос: кто проводит аттестацию рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_011",
+    "topic": "workplace_attestation",
+    "question": "Подскажите по охране труда: кто проводит аттестацию рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_012",
+    "topic": "workplace_attestation",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проводит аттестацию рабочих мест по условиям труда?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_013",
+    "topic": "workplace_attestation",
+    "question": "Как оформляются результаты аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_014",
+    "topic": "workplace_attestation",
+    "question": "На предприятии возник вопрос: как оформляются результаты аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_015",
+    "topic": "workplace_attestation",
+    "question": "Подскажите по охране труда: как оформляются результаты аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_016",
+    "topic": "workplace_attestation",
+    "question": "Нужно определить по законодательству Республики Беларусь: как оформляются результаты аттестации рабочих мест?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_017",
+    "topic": "workplace_attestation",
+    "question": "Можно ли установить дополнительный отпуск по результатам аттестации?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_018",
+    "topic": "workplace_attestation",
+    "question": "На предприятии возник вопрос: можно ли установить дополнительный отпуск по результатам аттестации?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_019",
+    "topic": "workplace_attestation",
+    "question": "Подскажите по охране труда: можно ли установить дополнительный отпуск по результатам аттестации?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "WORK_020",
+    "topic": "workplace_attestation",
+    "question": "Нужно определить по законодательству Республики Беларусь: можно ли установить дополнительный отпуск по результатам аттестации?",
+    "required_terms": [
+      "аттестация"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "workplace_attestation"
+    ]
+  },
+  {
+    "id": "OCCU_001",
+    "topic": "occupational_briefing",
+    "question": "Кто проводит вводный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_002",
+    "topic": "occupational_briefing",
+    "question": "На предприятии возник вопрос: кто проводит вводный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_003",
+    "topic": "occupational_briefing",
+    "question": "Подскажите по охране труда: кто проводит вводный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_004",
+    "topic": "occupational_briefing",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проводит вводный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_005",
+    "topic": "occupational_briefing",
+    "question": "Когда проводится вводный инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_006",
+    "topic": "occupational_briefing",
+    "question": "На предприятии возник вопрос: когда проводится вводный инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_007",
+    "topic": "occupational_briefing",
+    "question": "Подскажите по охране труда: когда проводится вводный инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_008",
+    "topic": "occupational_briefing",
+    "question": "Нужно определить по законодательству Республики Беларусь: когда проводится вводный инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_009",
+    "topic": "occupational_briefing",
+    "question": "Кто проводит первичный инструктаж на рабочем месте?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_010",
+    "topic": "occupational_briefing",
+    "question": "На предприятии возник вопрос: кто проводит первичный инструктаж на рабочем месте?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_011",
+    "topic": "occupational_briefing",
+    "question": "Подскажите по охране труда: кто проводит первичный инструктаж на рабочем месте?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_012",
+    "topic": "occupational_briefing",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проводит первичный инструктаж на рабочем месте?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_013",
+    "topic": "occupational_briefing",
+    "question": "Когда проводится повторный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_014",
+    "topic": "occupational_briefing",
+    "question": "На предприятии возник вопрос: когда проводится повторный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_015",
+    "topic": "occupational_briefing",
+    "question": "Подскажите по охране труда: когда проводится повторный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_016",
+    "topic": "occupational_briefing",
+    "question": "Нужно определить по законодательству Республики Беларусь: когда проводится повторный инструктаж по охране труда?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_017",
+    "topic": "occupational_briefing",
+    "question": "Когда проводится целевой инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_018",
+    "topic": "occupational_briefing",
+    "question": "На предприятии возник вопрос: когда проводится целевой инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_019",
+    "topic": "occupational_briefing",
+    "question": "Подскажите по охране труда: когда проводится целевой инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_020",
+    "topic": "occupational_briefing",
+    "question": "Нужно определить по законодательству Республики Беларусь: когда проводится целевой инструктаж?",
+    "required_terms": [
+      "инструктаж"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_briefing"
+    ]
+  },
+  {
+    "id": "OCCU_001",
+    "topic": "occupational_training",
+    "question": "Какова продолжительность стажировки на рабочем месте?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_002",
+    "topic": "occupational_training",
+    "question": "На предприятии возник вопрос: какова продолжительность стажировки на рабочем месте?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_003",
+    "topic": "occupational_training",
+    "question": "Подскажите по охране труда: какова продолжительность стажировки на рабочем месте?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_004",
+    "topic": "occupational_training",
+    "question": "Нужно определить по законодательству Республики Беларусь: какова продолжительность стажировки на рабочем месте?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_005",
+    "topic": "occupational_training",
+    "question": "Кому устанавливается стажировка по охране труда?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_006",
+    "topic": "occupational_training",
+    "question": "На предприятии возник вопрос: кому устанавливается стажировка по охране труда?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_007",
+    "topic": "occupational_training",
+    "question": "Подскажите по охране труда: кому устанавливается стажировка по охране труда?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_008",
+    "topic": "occupational_training",
+    "question": "Нужно определить по законодательству Республики Беларусь: кому устанавливается стажировка по охране труда?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_009",
+    "topic": "occupational_training",
+    "question": "Кто руководит стажировкой работника?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_010",
+    "topic": "occupational_training",
+    "question": "На предприятии возник вопрос: кто руководит стажировкой работника?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_011",
+    "topic": "occupational_training",
+    "question": "Подскажите по охране труда: кто руководит стажировкой работника?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_012",
+    "topic": "occupational_training",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто руководит стажировкой работника?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_013",
+    "topic": "occupational_training",
+    "question": "Можно ли допустить работника без стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_014",
+    "topic": "occupational_training",
+    "question": "На предприятии возник вопрос: можно ли допустить работника без стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_015",
+    "topic": "occupational_training",
+    "question": "Подскажите по охране труда: можно ли допустить работника без стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_016",
+    "topic": "occupational_training",
+    "question": "Нужно определить по законодательству Республики Беларусь: можно ли допустить работника без стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_017",
+    "topic": "occupational_training",
+    "question": "Как оформить допуск к самостоятельной работе после стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_018",
+    "topic": "occupational_training",
+    "question": "На предприятии возник вопрос: как оформить допуск к самостоятельной работе после стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_019",
+    "topic": "occupational_training",
+    "question": "Подскажите по охране труда: как оформить допуск к самостоятельной работе после стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "OCCU_020",
+    "topic": "occupational_training",
+    "question": "Нужно определить по законодательству Республики Беларусь: как оформить допуск к самостоятельной работе после стажировки?",
+    "required_terms": [
+      "стажировка"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_training"
+    ]
+  },
+  {
+    "id": "ACCI_001",
+    "topic": "accident_investigation",
+    "question": "Что делать работодателю после несчастного случая на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_002",
+    "topic": "accident_investigation",
+    "question": "На предприятии возник вопрос: что делать работодателю после несчастного случая на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_003",
+    "topic": "accident_investigation",
+    "question": "Подскажите по охране труда: что делать работодателю после несчастного случая на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_004",
+    "topic": "accident_investigation",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать работодателю после несчастного случая на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_005",
+    "topic": "accident_investigation",
+    "question": "Кому работник должен сообщить о несчастном случае?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_006",
+    "topic": "accident_investigation",
+    "question": "На предприятии возник вопрос: кому работник должен сообщить о несчастном случае?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_007",
+    "topic": "accident_investigation",
+    "question": "Подскажите по охране труда: кому работник должен сообщить о несчастном случае?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_008",
+    "topic": "accident_investigation",
+    "question": "Нужно определить по законодательству Республики Беларусь: кому работник должен сообщить о несчастном случае?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_009",
+    "topic": "accident_investigation",
+    "question": "Кто расследует несчастный случай на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_010",
+    "topic": "accident_investigation",
+    "question": "На предприятии возник вопрос: кто расследует несчастный случай на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_011",
+    "topic": "accident_investigation",
+    "question": "Подскажите по охране труда: кто расследует несчастный случай на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_012",
+    "topic": "accident_investigation",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто расследует несчастный случай на производстве?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_013",
+    "topic": "accident_investigation",
+    "question": "Как оформляется акт Н-1?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_014",
+    "topic": "accident_investigation",
+    "question": "На предприятии возник вопрос: как оформляется акт Н-1?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_015",
+    "topic": "accident_investigation",
+    "question": "Подскажите по охране труда: как оформляется акт Н-1?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_016",
+    "topic": "accident_investigation",
+    "question": "Нужно определить по законодательству Республики Беларусь: как оформляется акт Н-1?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_017",
+    "topic": "accident_investigation",
+    "question": "В какой срок расследуется несчастный случай?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_018",
+    "topic": "accident_investigation",
+    "question": "На предприятии возник вопрос: в какой срок расследуется несчастный случай?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_019",
+    "topic": "accident_investigation",
+    "question": "Подскажите по охране труда: в какой срок расследуется несчастный случай?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "ACCI_020",
+    "topic": "accident_investigation",
+    "question": "Нужно определить по законодательству Республики Беларусь: в какой срок расследуется несчастный случай?",
+    "required_terms": [
+      "несчастный случай"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ]
+  },
+  {
+    "id": "INDU_001",
+    "topic": "industrial_safety",
+    "question": "Что такое опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_002",
+    "topic": "industrial_safety",
+    "question": "На предприятии возник вопрос: что такое опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_003",
+    "topic": "industrial_safety",
+    "question": "Подскажите по охране труда: что такое опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_004",
+    "topic": "industrial_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: что такое опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_005",
+    "topic": "industrial_safety",
+    "question": "Кто осуществляет производственный контроль на ОПО?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_006",
+    "topic": "industrial_safety",
+    "question": "На предприятии возник вопрос: кто осуществляет производственный контроль на ОПО?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_007",
+    "topic": "industrial_safety",
+    "question": "Подскажите по охране труда: кто осуществляет производственный контроль на ОПО?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_008",
+    "topic": "industrial_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто осуществляет производственный контроль на ОПО?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_009",
+    "topic": "industrial_safety",
+    "question": "Нужна ли экспертиза промышленной безопасности?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_010",
+    "topic": "industrial_safety",
+    "question": "На предприятии возник вопрос: нужна ли экспертиза промышленной безопасности?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_011",
+    "topic": "industrial_safety",
+    "question": "Подскажите по охране труда: нужна ли экспертиза промышленной безопасности?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_012",
+    "topic": "industrial_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: нужна ли экспертиза промышленной безопасности?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_013",
+    "topic": "industrial_safety",
+    "question": "Как зарегистрировать опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_014",
+    "topic": "industrial_safety",
+    "question": "На предприятии возник вопрос: как зарегистрировать опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_015",
+    "topic": "industrial_safety",
+    "question": "Подскажите по охране труда: как зарегистрировать опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_016",
+    "topic": "industrial_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: как зарегистрировать опасный производственный объект?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_017",
+    "topic": "industrial_safety",
+    "question": "Что делать при аварии на опасном производственном объекте?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_018",
+    "topic": "industrial_safety",
+    "question": "На предприятии возник вопрос: что делать при аварии на опасном производственном объекте?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_019",
+    "topic": "industrial_safety",
+    "question": "Подскажите по охране труда: что делать при аварии на опасном производственном объекте?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "INDU_020",
+    "topic": "industrial_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать при аварии на опасном производственном объекте?",
+    "required_terms": [
+      "промышленной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ]
+  },
+  {
+    "id": "FIRE_001",
+    "topic": "fire_safety",
+    "question": "Кто отвечает за пожарную безопасность на предприятии?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_002",
+    "topic": "fire_safety",
+    "question": "На предприятии возник вопрос: кто отвечает за пожарную безопасность на предприятии?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_003",
+    "topic": "fire_safety",
+    "question": "Подскажите по охране труда: кто отвечает за пожарную безопасность на предприятии?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_004",
+    "topic": "fire_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто отвечает за пожарную безопасность на предприятии?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_005",
+    "topic": "fire_safety",
+    "question": "Как часто проверяются огнетушители?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_006",
+    "topic": "fire_safety",
+    "question": "На предприятии возник вопрос: как часто проверяются огнетушители?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_007",
+    "topic": "fire_safety",
+    "question": "Подскажите по охране труда: как часто проверяются огнетушители?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_008",
+    "topic": "fire_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: как часто проверяются огнетушители?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_009",
+    "topic": "fire_safety",
+    "question": "Кто проводит противопожарный инструктаж?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_010",
+    "topic": "fire_safety",
+    "question": "На предприятии возник вопрос: кто проводит противопожарный инструктаж?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_011",
+    "topic": "fire_safety",
+    "question": "Подскажите по охране труда: кто проводит противопожарный инструктаж?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_012",
+    "topic": "fire_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проводит противопожарный инструктаж?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_013",
+    "topic": "fire_safety",
+    "question": "Что делать при обнаружении пожара?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_014",
+    "topic": "fire_safety",
+    "question": "На предприятии возник вопрос: что делать при обнаружении пожара?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_015",
+    "topic": "fire_safety",
+    "question": "Подскажите по охране труда: что делать при обнаружении пожара?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_016",
+    "topic": "fire_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: что делать при обнаружении пожара?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_017",
+    "topic": "fire_safety",
+    "question": "Можно ли загромождать эвакуационные выходы?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_018",
+    "topic": "fire_safety",
+    "question": "На предприятии возник вопрос: можно ли загромождать эвакуационные выходы?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_019",
+    "topic": "fire_safety",
+    "question": "Подскажите по охране труда: можно ли загромождать эвакуационные выходы?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "FIRE_020",
+    "topic": "fire_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: можно ли загромождать эвакуационные выходы?",
+    "required_terms": [
+      "пожарной безопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ]
+  },
+  {
+    "id": "ELEC_001",
+    "topic": "electrical_safety",
+    "question": "Кому присваивается группа по электробезопасности?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_002",
+    "topic": "electrical_safety",
+    "question": "На предприятии возник вопрос: кому присваивается группа по электробезопасности?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_003",
+    "topic": "electrical_safety",
+    "question": "Подскажите по охране труда: кому присваивается группа по электробезопасности?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_004",
+    "topic": "electrical_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кому присваивается группа по электробезопасности?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_005",
+    "topic": "electrical_safety",
+    "question": "Кто проверяет знания электротехнического персонала?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_006",
+    "topic": "electrical_safety",
+    "question": "На предприятии возник вопрос: кто проверяет знания электротехнического персонала?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_007",
+    "topic": "electrical_safety",
+    "question": "Подскажите по охране труда: кто проверяет знания электротехнического персонала?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_008",
+    "topic": "electrical_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто проверяет знания электротехнического персонала?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_009",
+    "topic": "electrical_safety",
+    "question": "Кто допускается к работе в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_010",
+    "topic": "electrical_safety",
+    "question": "На предприятии возник вопрос: кто допускается к работе в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_011",
+    "topic": "electrical_safety",
+    "question": "Подскажите по охране труда: кто допускается к работе в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_012",
+    "topic": "electrical_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто допускается к работе в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_013",
+    "topic": "electrical_safety",
+    "question": "Кто назначает ответственного за электрохозяйство?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_014",
+    "topic": "electrical_safety",
+    "question": "На предприятии возник вопрос: кто назначает ответственного за электрохозяйство?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_015",
+    "topic": "electrical_safety",
+    "question": "Подскажите по охране труда: кто назначает ответственного за электрохозяйство?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_016",
+    "topic": "electrical_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто назначает ответственного за электрохозяйство?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_017",
+    "topic": "electrical_safety",
+    "question": "Какие средства защиты применяются в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_018",
+    "topic": "electrical_safety",
+    "question": "На предприятии возник вопрос: какие средства защиты применяются в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_019",
+    "topic": "electrical_safety",
+    "question": "Подскажите по охране труда: какие средства защиты применяются в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "ELEC_020",
+    "topic": "electrical_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие средства защиты применяются в электроустановках?",
+    "required_terms": [
+      "электробезопасности"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ]
+  },
+  {
+    "id": "SANI_001",
+    "topic": "sanitary",
+    "question": "Какие требования к микроклимату на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_002",
+    "topic": "sanitary",
+    "question": "На предприятии возник вопрос: какие требования к микроклимату на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_003",
+    "topic": "sanitary",
+    "question": "Подскажите по охране труда: какие требования к микроклимату на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_004",
+    "topic": "sanitary",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие требования к микроклимату на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_005",
+    "topic": "sanitary",
+    "question": "Какая температура должна быть на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_006",
+    "topic": "sanitary",
+    "question": "На предприятии возник вопрос: какая температура должна быть на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_007",
+    "topic": "sanitary",
+    "question": "Подскажите по охране труда: какая температура должна быть на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_008",
+    "topic": "sanitary",
+    "question": "Нужно определить по законодательству Республики Беларусь: какая температура должна быть на рабочем месте?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_009",
+    "topic": "sanitary",
+    "question": "Какие санитарные требования предъявляются к производственным помещениям?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_010",
+    "topic": "sanitary",
+    "question": "На предприятии возник вопрос: какие санитарные требования предъявляются к производственным помещениям?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_011",
+    "topic": "sanitary",
+    "question": "Подскажите по охране труда: какие санитарные требования предъявляются к производственным помещениям?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_012",
+    "topic": "sanitary",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие санитарные требования предъявляются к производственным помещениям?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_013",
+    "topic": "sanitary",
+    "question": "Как контролируется микроклимат на предприятии?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_014",
+    "topic": "sanitary",
+    "question": "На предприятии возник вопрос: как контролируется микроклимат на предприятии?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_015",
+    "topic": "sanitary",
+    "question": "Подскажите по охране труда: как контролируется микроклимат на предприятии?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_016",
+    "topic": "sanitary",
+    "question": "Нужно определить по законодательству Республики Беларусь: как контролируется микроклимат на предприятии?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_017",
+    "topic": "sanitary",
+    "question": "Какие требования к вентиляции производственных помещений?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_018",
+    "topic": "sanitary",
+    "question": "На предприятии возник вопрос: какие требования к вентиляции производственных помещений?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_019",
+    "topic": "sanitary",
+    "question": "Подскажите по охране труда: какие требования к вентиляции производственных помещений?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "SANI_020",
+    "topic": "sanitary",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие требования к вентиляции производственных помещений?",
+    "required_terms": [
+      "санитар"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ]
+  },
+  {
+    "id": "OCCU_001",
+    "topic": "occupational_safety",
+    "question": "Какие основные обязанности работодателя в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_002",
+    "topic": "occupational_safety",
+    "question": "На предприятии возник вопрос: какие основные обязанности работодателя в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_003",
+    "topic": "occupational_safety",
+    "question": "Подскажите по охране труда: какие основные обязанности работодателя в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_004",
+    "topic": "occupational_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие основные обязанности работодателя в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_005",
+    "topic": "occupational_safety",
+    "question": "Какие права имеет работник в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_006",
+    "topic": "occupational_safety",
+    "question": "На предприятии возник вопрос: какие права имеет работник в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_007",
+    "topic": "occupational_safety",
+    "question": "Подскажите по охране труда: какие права имеет работник в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_008",
+    "topic": "occupational_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие права имеет работник в области охраны труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_009",
+    "topic": "occupational_safety",
+    "question": "Кто отвечает за охрану труда в организации?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_010",
+    "topic": "occupational_safety",
+    "question": "На предприятии возник вопрос: кто отвечает за охрану труда в организации?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_011",
+    "topic": "occupational_safety",
+    "question": "Подскажите по охране труда: кто отвечает за охрану труда в организации?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_012",
+    "topic": "occupational_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: кто отвечает за охрану труда в организации?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_013",
+    "topic": "occupational_safety",
+    "question": "Как организовать систему управления охраной труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_014",
+    "topic": "occupational_safety",
+    "question": "На предприятии возник вопрос: как организовать систему управления охраной труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_015",
+    "topic": "occupational_safety",
+    "question": "Подскажите по охране труда: как организовать систему управления охраной труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_016",
+    "topic": "occupational_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: как организовать систему управления охраной труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_017",
+    "topic": "occupational_safety",
+    "question": "Какие требования к инструкциям по охране труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_018",
+    "topic": "occupational_safety",
+    "question": "На предприятии возник вопрос: какие требования к инструкциям по охране труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_019",
+    "topic": "occupational_safety",
+    "question": "Подскажите по охране труда: какие требования к инструкциям по охране труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  },
+  {
+    "id": "OCCU_020",
+    "topic": "occupational_safety",
+    "question": "Нужно определить по законодательству Республики Беларусь: какие требования к инструкциям по охране труда?",
+    "required_terms": [
+      "охраны труда"
+    ],
+    "gold_source_ids": [],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ]
+  }
+]
