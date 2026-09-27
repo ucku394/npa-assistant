@@ -9,6 +9,11 @@ from embedding import get_query_embeddings
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_universal_search_queries, build_search_queries
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
+from rag_engine.legal_relevance import (
+    legal_relevance_adjustment,
+    evidence_gate,
+    build_second_pass_queries,
+)
 from rag_query_classifier import (
     detect_legal_domain,
     detect_topic,
@@ -1952,6 +1957,18 @@ def _legal_relevance_score(
     )
     chunk["_special_category_bonus"] = special_category_bonus
 
+    legal_adjustment = legal_relevance_adjustment(
+        chunk,
+        topic,
+        query_profile,
+    )
+    chunk["_legal_relevance_adjustment"] = legal_adjustment["score"]
+    chunk["_legal_required_hits"] = legal_adjustment["required_hits"]
+    chunk["_legal_context_hits"] = legal_adjustment["context_hits"]
+    chunk["_legal_forbidden_hits"] = legal_adjustment["forbidden_hits"]
+    chunk["_legal_match"] = legal_adjustment["legal_match"]
+    chunk["_legal_hard_negative"] = legal_adjustment["hard_negative"]
+
     universal_score = _universal_query_relevance_score(
         chunk,
         query_profile or build_universal_query_profile(user_query),
@@ -1972,6 +1989,7 @@ def _legal_relevance_score(
         + labor_code_bonus
         + special_category_bonus
         + repeated_bonus
+        + legal_adjustment["score"]
     )
 
 
@@ -2774,15 +2792,34 @@ async def retrieve_context(
             query_profile=query_profile,
         )
 
+    # Explicit wrong-domain legal matches are removed before final ranking.
+    # Semantic similarity must not outrank an explicit legal mismatch.
+    clean_candidate_chunks = [
+        chunk for chunk in candidate_chunks
+        if not chunk.get("_legal_hard_negative")
+    ]
+
+    if clean_candidate_chunks:
+        candidate_chunks = clean_candidate_chunks
+
     ranked_chunks = sorted(
         candidate_chunks,
         key=lambda chunk: chunk.get("_combined_score", 0.0),
         reverse=True,
     )
 
+    evidence = evidence_gate(ranked_chunks, topic, query_profile)
+    logger.info(
+        "RAG | evidence_gate | sufficient=%s | reason=%s | best_score=%.4f | legal_match=%.4f",
+        evidence.get("sufficient"),
+        evidence.get("reason"),
+        _safe_float(evidence.get("best_score")),
+        _safe_float(evidence.get("legal_match")),
+    )
+
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | legal=%.4f | legal_match=%.4f | forbidden=%s | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
@@ -2795,6 +2832,9 @@ async def retrieve_context(
             _safe_float(chunk.get("_briefing_mode_bonus")),
             _safe_float(chunk.get("_special_category_bonus")),
             _safe_float(_knowledge_testing_relevance_score(chunk, user_query) if topic == "knowledge_testing" else 0.0),
+            _safe_float(chunk.get("_legal_relevance_adjustment")),
+            _safe_float(chunk.get("_legal_match")),
+            _safe_float(chunk.get("_legal_forbidden_hits")),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
@@ -2871,6 +2911,7 @@ async def retrieve_context(
         "topic": topic,
         "intents": intents,
         "query_profile": query_profile,
+        "evidence": evidence,
         "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
