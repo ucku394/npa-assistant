@@ -240,6 +240,47 @@ def _refine_search_queries(original: str, generated: List[str], hierarchy: Dict[
         cleaned.append(query)
     return cleaned[:8]
 
+
+def _build_query_slots(original, generated, hierarchy, profile, source_constraints):
+    preferred = hierarchy_preferred_terms(hierarchy)
+    preferred_term = preferred[0] if preferred else ""
+    qtype = str(profile.get("question_type") or "general")
+    legal = [str(v).strip() for v in (profile.get("legal_phrases") or []) if str(v).strip()]
+    docs = [str(v).strip() for v in (source_constraints.get("preferred_documents") or []) if str(v).strip()]
+    slots = []
+    if original: slots.append({"role":"exact","query":original})
+    if preferred_term: slots.append({"role":"object","query":preferred_term})
+    if preferred_term:
+        if qtype == "who" and preferred_term.startswith("проверка "):
+            intent = "кто проводит проверку " + preferred_term[len("проверка "):]
+        else:
+            intent = (_query_type_prefixes(qtype, preferred_term) or [preferred_term])[0]
+        slots.append({"role":"intent","query":intent})
+    if legal: slots.append({"role":"legal","query":legal[0]})
+    if docs: slots.append({"role":"document","query":" ".join(_unique(docs[:2]))})
+    parts=[str(profile.get("event") or "").strip(),str(profile.get("action_state") or "").strip()]
+    parts=[p for p in parts if p]
+    if parts and preferred_term: slots.append({"role":"condition","query":" ".join(_unique(parts+[preferred_term]))})
+    synonym = " ".join(preferred[:2]) if len(preferred)>1 else (legal[1] if len(legal)>1 else "")
+    if synonym and synonym.lower()!=preferred_term.lower(): slots.append({"role":"synonym","query":synonym})
+    for q in generated:
+        q=str(q or "").strip()
+        if q: slots.append({"role":"recovery","query":q}); break
+    return slots
+
+
+def _select_query_slots(original, generated, hierarchy, profile, negatives, source_constraints):
+    candidates=_build_query_slots(original,generated,hierarchy,profile,source_constraints)+[{"role":"generated","query":str(q or "").strip()} for q in generated]
+    negatives=[str(v).strip().lower() for v in negatives if str(v).strip()]
+    queries=[]; roles=[]; seen=set()
+    for item in candidates:
+        q=str(item.get("query") or "").strip(); role=str(item.get("role") or "generated"); key=q.lower()
+        if not q or key in seen: continue
+        if role!="exact" and any(n in key for n in negatives): continue
+        seen.add(key); queries.append(q); roles.append(role)
+        if len(queries)>=8: break
+    return queries,roles
+
 def build_query_plan(user_query: str) -> Dict[str, Any]:
     """Build a deterministic retrieval plan from one user question."""
 
@@ -267,23 +308,13 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
     )
 
     negative_concepts = _build_negative_concepts(topic, profile)
-    search_queries = _refine_search_queries(
-        original, generated_search_queries, hierarchy, profile, negative_concepts
-    )
-
-    query_roles = [
-        _assign_query_role(query, index, original, profile)
-        for index, query in enumerate(search_queries)
-    ]
-
-    negative_concepts = _build_negative_concepts(topic, profile)
     source_constraints = _build_source_constraints(
         domain,
         topic,
         profile,
         labor_code_query,
     )
-    source_constraints["preferred_terms"] = _unique(
+    search_queries, query_roles = _select_query_slots(\n        original, generated_search_queries, hierarchy, profile, negative_concepts, source_constraints\n    )\n\n    source_constraints["preferred_terms"] = _unique(
         (source_constraints.get("preferred_terms") or [])
         + hierarchy_preferred_terms(hierarchy)
     )
@@ -306,7 +337,7 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
         "action_state": profile.get("action_state"),
         "profile": profile,
         "search_queries": search_queries,
-        "query_roles": query_roles,
+        "query_roles": query_roles,\n        "query_slots": [{"role": r, "query": q} for r, q in zip(query_roles, search_queries)],
         "negative_concepts": negative_concepts,
         "source_constraints": source_constraints,
         "special_category": special_category,
@@ -331,7 +362,7 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         "action_state": plan.get("action_state"),
         "primary_intent": plan.get("primary_intent"),
         "query_count": len(plan.get("search_queries") or []),
-        "query_roles": plan.get("query_roles") or [],
+        "query_roles": plan.get("query_roles") or [],\n        "query_slots": plan.get("query_slots") or [],
         "negative_count": len(plan.get("negative_concepts") or []),
         "preferred_documents": (
             plan.get("source_constraints", {}).get("preferred_documents") or []
