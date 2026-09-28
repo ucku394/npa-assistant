@@ -261,4 +261,9 @@ async def run() -> dict[str, Any]:
 
 if __name__ == "__main__":
     report = asyncio.run(run())
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    rendered = json.dumps(report, ensure_ascii=False, indent=2)
+    output_path = os.getenv("RAG_EVAL_OUTPUT")
+    if output_path:
+        Path(output_path).write_text(rendered + "\n", encoding="utf-8")
+        print(f"Evaluation report written to {output_path}")
+    print(rendered)
