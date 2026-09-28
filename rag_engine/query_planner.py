@@ -56,6 +56,14 @@ def _build_negative_concepts(
             "повторное правонарушение",
         ])
 
+    if topic == "accident_investigation" and "special_investigation" in qualifiers:
+        negatives.extend([
+            "обычное расследование несчастного случая",
+            "общий порядок расследования",
+            "акт н-1 без специального расследования",
+            "административное правонарушение",
+        ])
+
     if topic == "occupational_briefing":
         if profile.get("question_type") == "kind":
             negatives.extend([
