@@ -252,7 +252,44 @@ def detect_topic(user_query: str) -> str:
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in accident_patterns):
         return "accident_investigation"
 
+    scope_patterns = [
+        r"\bна\s+кого\s+(?:распространяется|действует|применяется)\b",
+        r"\bк\s+кому\s+(?:применяется|относится)\b",
+        r"\bсфера\s+действия\b",
+        r"\bобласть\s+действия\b",
+        r"\bв\s+отношении\s+кого\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in scope_patterns):
+        return "law_scope"
+
     return "general"
+
+
+def detect_scope_target(user_query: str) -> Optional[dict]:
+    """Извлекает явно названный НПА для вопросов о сфере действия."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if not query:
+        return None
+
+    if re.search(
+        r"\b356[-–—]з\b|\b356\s*[-–—]\s*з\b|закона?\s+.{0,80}об\s+охране\s+труда",
+        query,
+        re.IGNORECASE,
+    ):
+        return {
+            "document_key": "356-з",
+            "document_name": "Закон Республики Беларусь «Об охране труда»",
+            "article": "3",
+        }
+
+    if re.search(r"\bтрудов(?:ого|ым)\s+кодекс\w*\b|\bтрудовой\s+кодекс\b", query, re.IGNORECASE):
+        return {
+            "document_key": "трудовой кодекс",
+            "document_name": "Трудовой кодекс Республики Беларусь",
+            "article": None,
+        }
+
+    return None
 
 
 # ============================================================
