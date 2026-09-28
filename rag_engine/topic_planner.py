@@ -72,7 +72,7 @@ _RULES: Dict[str, Dict[str, List[Tuple[str, int]]]] = {
             (r"\bэлектротехнологическ\w*\s+персонал\w*", 10),
         ],
         "knowledge_testing": [
-            (r"\bпровер\w*\s+знани\w*.*\bэлектротехническ\w*", 10),
+            (r"\bпровер\w*\s+знани\w*.*\bэлектротехническ\w*", 14),
             (r"\bпровер\w*\s+знани\w*.*\bэлектроустановк\w*", 10),
         ],
         "admission": [
@@ -129,34 +129,33 @@ def _normalize(text: str) -> str:
 
 
 def build_topic_hierarchy(user_query: str, base_topic: str = "general") -> Dict[str, Any]:
-    """Возвращает иерархический смысловой маршрут запроса."""
+    """Возвращает иерархический смысловой маршрут запроса с cross-domain fallback."""
     query = _normalize(user_query)
     if not query:
-        return {
-            "domain": "general",
-            "topic": "general",
-            "subtopic": "general",
-            "legal_object": None,
-            "confidence": 0.0,
-            "signals": [],
-        }
+        return {"domain":"general","topic":"general","subtopic":"general","legal_object":None,"confidence":0.0,"signals":[]}
 
-    domain_rules = _RULES.get(base_topic, {})
-    candidates: List[Tuple[int, str, List[str]]] = []
+    if base_topic == "knowledge_testing":
+        domains_to_scan = ["electrical_safety", "occupational_safety"]
+    elif base_topic == "general":
+        domains_to_scan = list(_RULES.keys())
+    else:
+        domains_to_scan = [base_topic] if base_topic in _RULES else list(_RULES.keys())
 
-    for subtopic, rules in domain_rules.items():
-        score = 0
-        signals: List[str] = []
-        for pattern, weight in rules:
-            if re.search(pattern, query, re.IGNORECASE):
-                score += weight
-                signals.append(pattern)
-        if score:
-            candidates.append((score, subtopic, signals))
+    candidates: List[Tuple[int, str, str, List[str]]] = []
+    for domain_name in domains_to_scan:
+        for subtopic, rules in _RULES.get(domain_name, {}).items():
+            score = 0
+            signals: List[str] = []
+            for pattern, weight in rules:
+                if re.search(pattern, query, re.IGNORECASE):
+                    score += weight
+                    signals.append(pattern)
+            if score:
+                candidates.append((score, domain_name, subtopic, signals))
 
     if not candidates:
         return {
-            "domain": base_topic,
+            "domain": base_topic if base_topic != "general" else "general",
             "topic": base_topic,
             "subtopic": "general",
             "legal_object": None,
@@ -164,38 +163,38 @@ def build_topic_hierarchy(user_query: str, base_topic: str = "general") -> Dict[
             "signals": [],
         }
 
-    candidates.sort(key=lambda x: (-x[0], x[1] == "general"))
-    score, subtopic, signals = candidates[0]
+    candidates.sort(key=lambda x: (-x[0], x[1] == "general", x[2] == "general"))
+    score, inferred_domain, subtopic, signals = candidates[0]
 
     object_map = {
-        ("industrial_safety", "production_control"): "production_control",
-        ("industrial_safety", "expertise"): "industrial_safety_expertise",
-        ("industrial_safety", "registration"): "hazardous_production_facility",
-        ("industrial_safety", "accident"): "accident_at_hazardous_facility",
-        ("fire_safety", "fire_extinguishers"): "fire_extinguisher",
-        ("fire_safety", "evacuation"): "evacuation",
-        ("fire_safety", "fire_alarm"): "fire_detection_and_alarm",
-        ("fire_safety", "fire_briefing"): "fire_briefing",
-        ("electrical_safety", "qualification_group"): "electrical_safety_group",
-        ("electrical_safety", "electrical_personnel"): "electrical_personnel",
-        ("electrical_safety", "knowledge_testing"): "electrical_knowledge_testing",
-        ("electrical_safety", "admission"): "admission_to_electrical_work",
-        ("electrical_safety", "responsible_person"): "electrical_responsible_person",
-        ("electrical_safety", "protective_equipment"): "electrical_protective_equipment",
-        ("sanitary", "microclimate"): "microclimate",
-        ("sanitary", "ventilation"): "production_ventilation",
-        ("sanitary", "production_premises"): "production_premises_sanitary_requirements",
-        ("occupational_safety", "employer_duties"): "employer_ohs_duties",
-        ("occupational_safety", "employee_rights"): "employee_ohs_rights",
-        ("occupational_safety", "management_system"): "ohs_management_system",
-        ("occupational_safety", "instructions"): "ohs_instructions",
+        ("industrial_safety","production_control"): "production_control",
+        ("industrial_safety","expertise"): "industrial_safety_expertise",
+        ("industrial_safety","registration"): "hazardous_production_facility",
+        ("industrial_safety","accident"): "accident_at_hazardous_facility",
+        ("fire_safety","fire_extinguishers"): "fire_extinguisher",
+        ("fire_safety","evacuation"): "evacuation",
+        ("fire_safety","fire_alarm"): "fire_detection_and_alarm",
+        ("fire_safety","fire_briefing"): "fire_briefing",
+        ("electrical_safety","qualification_group"): "electrical_safety_group",
+        ("electrical_safety","electrical_personnel"): "electrical_personnel",
+        ("electrical_safety","knowledge_testing"): "electrical_knowledge_testing",
+        ("electrical_safety","admission"): "admission_to_electrical_work",
+        ("electrical_safety","responsible_person"): "electrical_responsible_person",
+        ("electrical_safety","protective_equipment"): "electrical_protective_equipment",
+        ("sanitary","microclimate"): "microclimate",
+        ("sanitary","ventilation"): "production_ventilation",
+        ("sanitary","production_premises"): "production_premises_sanitary_requirements",
+        ("occupational_safety","employer_duties"): "employer_ohs_duties",
+        ("occupational_safety","employee_rights"): "employee_ohs_rights",
+        ("occupational_safety","management_system"): "ohs_management_system",
+        ("occupational_safety","instructions"): "ohs_instructions",
     }
-
+    result_topic = base_topic if base_topic != "general" else inferred_domain
     return {
-        "domain": base_topic,
-        "topic": base_topic,
+        "domain": inferred_domain,
+        "topic": result_topic,
         "subtopic": subtopic,
-        "legal_object": object_map.get((base_topic, subtopic)),
+        "legal_object": object_map.get((inferred_domain, subtopic)),
         "confidence": min(1.0, 0.45 + score / 20.0),
         "signals": signals,
     }
