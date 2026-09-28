@@ -4348,5 +4348,82 @@
     ],
     "expected_domain": "occupational_safety",
     "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
+  },
+  {
+    "id": "HIER_001",
+    "topic": "electrical_safety",
+    "question": "Кто проверяет знания электротехнического персонала?",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [
+      "NPA_53"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ],
+    "expected_domain": "electrical_safety",
+    "expected_subtopic": "knowledge_testing",
+    "expected_legal_object": "electrical_knowledge_testing",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_002",
+    "topic": "fire_safety",
+    "question": "Как часто проверяются огнетушители?",
+    "required_terms": [
+      "огнетушители"
+    ],
+    "gold_source_ids": [
+      "NPA_82"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ],
+    "expected_domain": "fire_safety",
+    "expected_subtopic": "fire_extinguishers",
+    "expected_legal_object": "fire_extinguisher",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_003",
+    "topic": "sanitary",
+    "question": "Какая температура должна быть на рабочем месте?",
+    "required_terms": [
+      "температура"
+    ],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ],
+    "expected_domain": "sanitary",
+    "expected_subtopic": "microclimate",
+    "expected_legal_object": "microclimate",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_004",
+    "topic": "occupational_safety",
+    "question": "Кто назначает ответственного за электрохозяйство?",
+    "required_terms": [
+      "ответственный за электрохозяйство"
+    ],
+    "gold_source_ids": [
+      "NPA_53"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ],
+    "expected_domain": "electrical_safety",
+    "expected_subtopic": "responsible_person",
+    "expected_legal_object": "electrical_responsible_person",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
   }
 ]
