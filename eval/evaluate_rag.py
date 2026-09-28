@@ -24,6 +24,9 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     topic_ok = domain_ok = legal_ok = 0
     hierarchy_labeled = hierarchy_ok = subtopic_ok = legal_object_ok = 0
     knowledge_leak = briefing_leak = 0
+    hierarchy_subtopic_matrix = defaultdict(lambda: defaultdict(int))
+    hierarchy_legal_object_matrix = defaultdict(lambda: defaultdict(int))
+    hierarchy_errors = []
     failures = []
     by_topic = defaultdict(
         lambda: {
@@ -68,6 +71,25 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
             or predicted_legal_object == case["expected_legal_object"]
         )
         hierarchy_pass = subtopic_pass and legal_object_pass
+
+        if hierarchy_expected:
+            expected_sub = case.get("expected_subtopic", "<unlabeled>")
+            predicted_sub = predicted_subtopic or "<none>"
+            expected_obj = case.get("expected_legal_object", "<unlabeled>")
+            predicted_obj = predicted_legal_object or "<none>"
+            hierarchy_subtopic_matrix[expected_sub][predicted_sub] += 1
+            hierarchy_legal_object_matrix[expected_obj][predicted_obj] += 1
+            if not hierarchy_pass:
+                hierarchy_errors.append(
+                    {
+                        "id": case["id"],
+                        "question": q,
+                        "expected_subtopic": expected_sub,
+                        "predicted_subtopic": predicted_sub,
+                        "expected_legal_object": expected_obj,
+                        "predicted_legal_object": predicted_obj,
+                    }
+                )
 
         bucket = by_topic[case["topic"]]
         bucket["total"] += 1
@@ -156,6 +178,16 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "by_topic": dict(sorted(by_topic.items())),
         "knowledge_testing_briefing_leak_rate": round(knowledge_leak / total, 4),
         "briefing_knowledge_testing_leak_rate": round(briefing_leak / total, 4),
+        "hierarchy_subtopic_confusion_matrix": {
+            expected: dict(sorted(predicted.items()))
+            for expected, predicted in sorted(hierarchy_subtopic_matrix.items())
+        },
+        "hierarchy_legal_object_confusion_matrix": {
+            expected: dict(sorted(predicted.items()))
+            for expected, predicted in sorted(hierarchy_legal_object_matrix.items())
+        },
+        "hierarchy_error_count": len(hierarchy_errors),
+        "hierarchy_errors": hierarchy_errors,
         "failure_count": len(failures),
         "failures": failures,
     }
