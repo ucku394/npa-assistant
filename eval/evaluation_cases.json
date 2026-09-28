@@ -5269,5 +5269,235 @@
     "expected_subtopic": "instructions",
     "expected_legal_object": "ohs_instructions",
     "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_069",
+    "topic": "industrial_safety",
+    "question": "production_control",
+    "required_terms": [
+      "производственный контроль"
+    ],
+    "gold_source_ids": [
+      "NPA_354-Z"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ],
+    "expected_domain": "industrial_safety",
+    "expected_subtopic": "production_control",
+    "expected_legal_object": "Как часто проводится производственный контроль на ОПО?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_070",
+    "topic": "industrial_safety",
+    "question": "industrial_safety_expertise",
+    "required_terms": [
+      "экспертиза промышленной безопасности"
+    ],
+    "gold_source_ids": [
+      "NPA_354-Z"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "industrial_safety"
+    ],
+    "expected_domain": "industrial_safety",
+    "expected_subtopic": "expertise",
+    "expected_legal_object": "Кто проводит экспертизу промышленной безопасности?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_071",
+    "topic": "fire_safety",
+    "question": "evacuation",
+    "required_terms": [
+      "эвакуационные выходы"
+    ],
+    "gold_source_ids": [
+      "NPA_82"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ],
+    "expected_domain": "fire_safety",
+    "expected_subtopic": "evacuation",
+    "expected_legal_object": "Можно ли загромождать эвакуационные выходы?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_072",
+    "topic": "fire_safety",
+    "question": "fire_detection_and_alarm",
+    "required_terms": [
+      "пожарная сигнализация"
+    ],
+    "gold_source_ids": [
+      "NPA_82"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "fire_safety"
+    ],
+    "expected_domain": "fire_safety",
+    "expected_subtopic": "fire_alarm",
+    "expected_legal_object": "Как проверяется работоспособность пожарной сигнализации?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_073",
+    "topic": "electrical_safety",
+    "question": "electrical_safety_group",
+    "required_terms": [
+      "группа по электробезопасности"
+    ],
+    "gold_source_ids": [
+      "NPA_53"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ],
+    "expected_domain": "electrical_safety",
+    "expected_subtopic": "qualification_group",
+    "expected_legal_object": "Кому устанавливается группа по электробезопасности?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_074",
+    "topic": "electrical_safety",
+    "question": "electrical_knowledge_testing",
+    "required_terms": [
+      "проверка знаний"
+    ],
+    "gold_source_ids": [
+      "NPA_53"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ],
+    "expected_domain": "electrical_safety",
+    "expected_subtopic": "knowledge_testing",
+    "expected_legal_object": "Кто проводит проверку знаний электротехнического персонала?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_075",
+    "topic": "electrical_safety",
+    "question": "admission_to_electrical_work",
+    "required_terms": [
+      "допуск"
+    ],
+    "gold_source_ids": [
+      "NPA_53"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "electrical_safety"
+    ],
+    "expected_domain": "electrical_safety",
+    "expected_subtopic": "admission",
+    "expected_legal_object": "Кто оформляет допуск к работе в электроустановках?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_076",
+    "topic": "sanitary",
+    "question": "microclimate",
+    "required_terms": [
+      "микроклимат"
+    ],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ],
+    "expected_domain": "sanitary",
+    "expected_subtopic": "microclimate",
+    "expected_legal_object": "Как контролируются температура и влажность на рабочем месте?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_077",
+    "topic": "sanitary",
+    "question": "production_ventilation",
+    "required_terms": [
+      "вентиляция"
+    ],
+    "gold_source_ids": [
+      "NPA_42",
+      "NPA_66"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "sanitary"
+    ],
+    "expected_domain": "sanitary",
+    "expected_subtopic": "ventilation",
+    "expected_legal_object": "Как должна быть организована вентиляция производственного помещения?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_078",
+    "topic": "occupational_safety",
+    "question": "employer_ohs_duties",
+    "required_terms": [
+      "обязанности работодателя"
+    ],
+    "gold_source_ids": [
+      "NPA_356-Z"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ],
+    "expected_domain": "occupational_safety",
+    "expected_subtopic": "employer_duties",
+    "expected_legal_object": "Кто несет обязанности работодателя по обеспечению охраны труда?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_079",
+    "topic": "occupational_safety",
+    "question": "employee_ohs_rights",
+    "required_terms": [
+      "права работника"
+    ],
+    "gold_source_ids": [
+      "NPA_356-Z"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ],
+    "expected_domain": "occupational_safety",
+    "expected_subtopic": "employee_rights",
+    "expected_legal_object": "Имеет ли работник право требовать безопасные условия труда?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
+  },
+  {
+    "id": "HIER_080",
+    "topic": "occupational_safety",
+    "question": "ohs_instructions",
+    "required_terms": [
+      "инструкции по охране труда"
+    ],
+    "gold_source_ids": [
+      "NPA_175"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "occupational_safety"
+    ],
+    "expected_domain": "occupational_safety",
+    "expected_subtopic": "instructions",
+    "expected_legal_object": "Кто разрабатывает инструкции по охране труда?",
+    "gold_source_policy": "hierarchy regression case; document/chunk golds to be verified"
   }
 ]
