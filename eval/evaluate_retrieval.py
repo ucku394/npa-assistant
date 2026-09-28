@@ -58,6 +58,16 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any
         for index, chunk in enumerate(chunks, start=1)
     ]
 
+    slot_hits = defaultdict(bool)
+    slot_hit_ranks = {}
+    for rank, (chunk, source_id) in enumerate(zip(chunks, source_ids), start=1):
+        if not source_matches(source_id, gold):
+            continue
+        for role in (chunk.get("_query_roles") or []):
+            role = str(role or "").strip() or "unknown"
+            slot_hits[role] = True
+            slot_hit_ranks.setdefault(role, rank)
+
     ranks = [
         index
         for index, source_id in enumerate(source_ids, start=1)
@@ -130,6 +140,8 @@ def evaluate_case(case: dict[str, Any], result: dict[str, Any]) -> dict[str, Any
         "forbidden_source_count_at_10": forbidden_hits,
         "evidence_sufficient": bool(evidence.get("sufficient")),
         "evidence_reason": evidence.get("reason"),
+        "query_slot_hits": dict(slot_hits),
+        "query_slot_first_rank": slot_hit_ranks,
     }
 
 
@@ -173,6 +185,17 @@ async def run() -> dict[str, Any]:
     for row in valid:
         by_topic[row["topic"]].append(row)
 
+    slot_stats = {}
+    all_roles = sorted({role for row in valid for role in (row.get("query_slot_hits") or {})})
+    for role in all_roles:
+        hits = sum(bool((row.get("query_slot_hits") or {}).get(role)) for row in valid)
+        ranks = [float((row.get("query_slot_first_rank") or {})[role]) for row in valid if role in (row.get("query_slot_first_rank") or {})]
+        slot_stats[role] = {
+            "gold_hit_rate": round(hits / total, 4),
+            "mean_first_rank": round(sum(ranks) / len(ranks), 4) if ranks else None,
+            "cases_with_rank": len(ranks),
+        }
+
     report = {
         "total_cases": len(cases),
         "successful_cases": len(valid),
@@ -197,6 +220,7 @@ async def run() -> dict[str, Any]:
         "wrong_domain_rate_at_10": mean("wrong_domain_at_10"),
         "forbidden_source_rate_at_10": mean("forbidden_source_at_10"),
         "evidence_sufficiency_rate": mean("evidence_sufficient"),
+        "query_slot_effectiveness": slot_stats,
         "by_topic": {
             topic: {
                 "cases": len(items),
