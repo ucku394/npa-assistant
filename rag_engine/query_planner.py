@@ -246,10 +246,26 @@ def _build_query_slots(original, generated, hierarchy, profile, source_constrain
     preferred_term = preferred[0] if preferred else ""
     qtype = str(profile.get("question_type") or "general")
     legal = [str(v).strip() for v in (profile.get("legal_phrases") or []) if str(v).strip()]
+
+    # object = предмет регулирования, а не готовая нормативная фраза.
+    # Для проверки знаний электротехнического персонала это именно
+    # «электротехнический персонал», тогда как «проверка знаний ...»
+    # относится к legal/intent слотам.
+    object_term = preferred_term
+    object_markers = (
+        "проверка знаний ",
+        "периодичность ",
+        "инструктаж ",
+        "аттестация ",
+    )
+    for marker in object_markers:
+        if object_term.lower().startswith(marker):
+            object_term = object_term[len(marker):].strip()
+            break
     docs = [str(v).strip() for v in (source_constraints.get("preferred_documents") or []) if str(v).strip()]
     slots = []
     if original: slots.append({"role":"exact","query":original})
-    if preferred_term: slots.append({"role":"object","query":preferred_term})
+    if object_term: slots.append({"role":"object","query":object_term})
     if preferred_term:
         if qtype == "who" and preferred_term.startswith("проверка "):
             intent = "кто проводит проверку " + preferred_term[len("проверка "):]
