@@ -353,7 +353,7 @@ def build_search_queries(
     special_investigation_query = (
         topic == "accident_investigation"
         and bool(re.search(
-            r"\\bспециальн\\w*\\s+расследован\\w*\\b",
+            r"\bспециальн\w*\s+расследован\w*\b",
             original,
             re.IGNORECASE,
         ))
