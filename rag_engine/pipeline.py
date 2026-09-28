@@ -141,7 +141,7 @@ class RagPipeline:
             ranked, final_limit, topic, intents, cross_reference,
             primary_intent=primary_intent, labor_code_query=labor_code_query,
             special_category=special_category, special_issue=special_issue,
-            accident_mode=accident_mode, query_profile=query_profile,
+            accident_mode=accident_mode, query_profile=query_profile, user_query=query,
         )
 
         source_references = []
