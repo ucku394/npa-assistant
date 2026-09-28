@@ -1,6 +1,9 @@
 name: Live RAG Retrieval Evaluation
 
 on:
+  push:
+    branches:
+      - feature/knowledge-testing-rag
   workflow_dispatch:
     inputs:
       limit:
@@ -27,5 +30,17 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          RAG_EVAL_LIMIT: ${{ inputs.limit }}
-        run: python -m eval.evaluate_retrieval
+          RAG_EVAL_LIMIT: ${{ inputs.limit || '304' }}
+          RAG_EVAL_OUTPUT: retrieval_evaluation.json
+        run: |
+          python -m eval.evaluate_retrieval
+          echo "Evaluation report:"
+          cat retrieval_evaluation.json
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-retrieval-evaluation
+          path: retrieval_evaluation.json
+          if-no-files-found: warn
