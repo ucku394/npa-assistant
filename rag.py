@@ -1009,6 +1009,11 @@ def _targeted_accident_search(supabase, user_query: str = "") -> List[Dict[str, 
         return _targeted_accident_worker_not_report_search(supabase)
 
     queries = [
+        "point_num.ilike.%23%",
+        "content.ilike.%пяти рабочих дней%",
+        "content.ilike.%5 рабочих дней%",
+        "content.ilike.%срок расследования%",
+        "content.ilike.%расследование должно быть закончено%",
         "doc_name.ilike.%Правила%",
         "doc_name.ilike.%30%",
         "content.ilike.%группов%",
@@ -2047,6 +2052,37 @@ def _legal_chunk_role(
 
 
 
+def _accident_deadline_relevance_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """Узкий score для вопроса о сроке общего расследования НС."""
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+    score = 0.0
+    if "30" in document:
+        score += 0.20
+    if re.fullmatch(r"23(?:\\.0*)?", point):
+        score += 1.00
+    for marker, weight in (
+        ("пяти рабочих дней", 1.20),
+        ("5 рабочих дней", 1.10),
+        ("срок расследования", 0.70),
+        ("расследование должно быть закончено", 0.80),
+        ("расследование должно быть проведено", 0.60),
+        ("окончено в срок", 0.45),
+    ):
+        if marker in text:
+            score += weight
+    distractors = sum(marker in text for marker in (
+        "группов", "специальн", "акт н-1", "форма н-1", "вручение",
+        "прокуратур", "государственной инспекции труда", "уведом",
+    ))
+    score -= min(distractors * 0.18, 0.72)
+    return max(0.0, min(score, 3.00))
+
+
 def _accident_worker_not_report_relevance_score(
     chunk: Dict[str, Any],
 ) -> float:
@@ -2169,6 +2205,37 @@ def _select_legal_diverse_chunks(
         if point_key is not None:
             points_seen.add(point_key)
         return True
+
+    if accident_mode == "general" and topic == "accident_investigation":
+        query_text = " ".join(
+            str(chunk.get("_user_query_for_scoring") or "") for chunk in ranked_chunks[:1]
+        ).lower()
+        deadline_query = any(marker in query_text for marker in (
+            "в какой срок", "срок расследования", "срок должно быть проведено",
+            "за исключением специального расследования",
+        ))
+        if deadline_query:
+            deadline_pool = [
+                chunk for chunk in ranked_chunks
+                if _accident_deadline_relevance_score(chunk) >= 0.55
+            ]
+            deadline_pool.sort(
+                key=lambda chunk: (
+                    _accident_deadline_relevance_score(chunk),
+                    _safe_float(chunk.get("_combined_score")),
+                ),
+                reverse=True,
+            )
+            for chunk in deadline_pool:
+                if _add(chunk, max_per_document=4, max_per_point=1):
+                    if len(selected) >= limit:
+                        return selected
+            if selected:
+                for chunk in ranked_chunks:
+                    if len(selected) >= limit:
+                        break
+                    if _accident_deadline_relevance_score(chunk) >= 0.25:
+                        _add(chunk, max_per_document=4, max_per_point=1)
 
     if accident_mode == "worker_did_not_report":
         # Для этого intent финальный отбор идёт из узкого targeted-пула.
