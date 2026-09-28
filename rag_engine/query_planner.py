@@ -25,6 +25,7 @@ from rag_query_classifier import (
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_search_queries
 from rag_engine.legal_relevance import legal_policy
+from rag_engine.topic_planner import build_topic_hierarchy, hierarchy_preferred_terms
 
 
 def _unique(values: List[str]) -> List[str]:
@@ -194,6 +195,7 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
         else None
     )
     profile = build_universal_query_profile(original)
+    hierarchy = build_topic_hierarchy(original, topic)
 
     search_queries = build_search_queries(
         original,
@@ -214,11 +216,20 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
         profile,
         labor_code_query,
     )
+    source_constraints["preferred_terms"] = _unique(
+        (source_constraints.get("preferred_terms") or [])
+        + hierarchy_preferred_terms(hierarchy)
+    )
 
     return {
         "original": original,
         "domain": domain,
         "topic": topic,
+        "subtopic": hierarchy.get("subtopic"),
+        "legal_object": hierarchy.get("legal_object"),
+        "topic_confidence": hierarchy.get("confidence"),
+        "topic_signals": hierarchy.get("signals") or [],
+        "topic_hierarchy": hierarchy,
         "intents": intents,
         "primary_intent": primary_intent,
         "question_type": profile.get("question_type"),
@@ -244,6 +255,9 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "domain": plan.get("domain"),
         "topic": plan.get("topic"),
+        "subtopic": plan.get("subtopic"),
+        "legal_object": plan.get("legal_object"),
+        "topic_confidence": plan.get("topic_confidence"),
         "question_type": plan.get("question_type"),
         "event": plan.get("event"),
         "action": plan.get("action"),
