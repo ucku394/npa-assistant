@@ -1823,7 +1823,7 @@ def _universal_query_relevance_score(
 
         if target_document == "356-з":
             doc_hit = "356-з" in document or "356 з" in document
-            article_hit = bool(target_article and point == target_article)
+            article_hit = bool(target_article and point.rstrip(".") == target_article.rstrip("."))
             scope_phrase_hits = hits((
                 "сфера действия настоящего закона",
                 "применяется в отношении всех работодателей",
@@ -1837,6 +1837,26 @@ def _universal_query_relevance_score(
                 score += min(scope_phrase_hits * 0.22, 0.66)
             if chunk.get("_law_scope_targeted"):
                 score += 0.80
+
+        elif target_document == "правила по охране труда 53":
+            doc_hit = (
+                "правила по охране труда № 53" in document
+                or "правила по охране труда 53" in document
+            )
+            article_hit = bool(target_article and point.rstrip(".") == target_article.rstrip("."))
+            scope_phrase_hits = hits((
+                "распространяются на работодателей",
+                "независимо от их организационно-правовых форм и форм собственности",
+                "различные виды экономической деятельности",
+                "требования по охране труда",
+            ))
+            score += 0.75 if doc_hit else -0.45
+            if article_hit:
+                score += 1.00
+            if scope_phrase_hits:
+                score += min(scope_phrase_hits * 0.20, 0.80)
+            if chunk.get("_law_scope_targeted"):
+                score += 0.90
 
         elif target_document == "трудовой кодекс":
             if "трудовой кодекс" in document or "трудовои кодекс" in document:
@@ -2403,9 +2423,20 @@ def _select_legal_diverse_chunks(
 
             if target_document == "356-з":
                 if ("356-з" in text_lower or "356 з" in text_lower) and (
-                    _get_point_number(chunk) == "3"
+                    _get_point_number(chunk).rstrip(".") == "3"
                     or "сфера действия настоящего закона" in text_lower
                     or "применяется в отношении всех работодателей" in text_lower
+                ):
+                    scope_pool.append(chunk)
+            elif target_document == "правила по охране труда 53":
+                if (
+                    ("правила по охране труда № 53" in text_lower
+                     or "правила по охране труда 53" in text_lower)
+                    and (
+                        _get_point_number(chunk).rstrip(".") == "2"
+                        or "распространяются на работодателей" in text_lower
+                        or "организационно-правовых форм и форм собственности" in text_lower
+                    )
                 ):
                     scope_pool.append(chunk)
             elif target_document == "трудовой кодекс":
