@@ -8,8 +8,6 @@ on:
 jobs:
   python-quality:
     runs-on: ubuntu-latest
-    env:
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,5 +17,10 @@ jobs:
         run: python -m compileall -q rag.py rag_engine eval tests
       - name: Install test runner
         run: python -m pip install pytest
+      - name: Verify repository layout
+        run: |
+          test -f rag_engine/__init__.py
+          test -f rag_engine/pipeline.py
+          python -c "import os, sys; print(os.getcwd()); print(sys.path); import rag_engine; print(rag_engine.__file__)"
       - name: Run RAG unit tests
-        run: pytest -q tests/test_rag_pipeline.py
+        run: python -m pytest -q tests/test_rag_pipeline.py
