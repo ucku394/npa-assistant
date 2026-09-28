@@ -4277,76 +4277,76 @@
   },
   {
     "id": "ACCI_021",
-  "topic": "accident_investigation",
-  "question": "Какие категории несчастных случаев подлежат специальному расследованию?",
-  "required_terms": [
-    "специальному расследованию",
-    "несчастных случаев"
-  ],
-  "gold_source_ids": [
-    "NPA_30"
-  ],
-  "gold_chunk_ids": [],
-  "acceptable_topics": [
-    "accident_investigation"
-  ],
-  "expected_domain": "accident_investigation",
-  "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
-},
+    "topic": "accident_investigation",
+    "question": "Какие категории несчастных случаев подлежат специальному расследованию?",
+    "required_terms": [
+      "специальному расследованию",
+      "несчастных случаев"
+    ],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ],
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
+  },
   {
-  "id": "ACCI_022",
-  "topic": "accident_investigation",
-  "question": "Какие несчастные случаи расследуются в специальном порядке?",
-  "required_terms": [
-    "специальном порядке",
-    "несчастные случаи"
-  ],
-  "gold_source_ids": [
-    "NPA_30"
-  ],
-  "gold_chunk_ids": [],
-  "acceptable_topics": [
-    "accident_investigation"
-  ],
-  "expected_domain": "accident_investigation",
-  "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
-},
+    "id": "ACCI_022",
+    "topic": "accident_investigation",
+    "question": "Какие несчастные случаи расследуются в специальном порядке?",
+    "required_terms": [
+      "специальном порядке",
+      "несчастные случаи"
+    ],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ],
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
+  },
   {
-  "id": "ACCI_023",
-  "topic": "accident_investigation",
-  "question": "Кто составляет заключение по результатам специального расследования несчастного случая?",
-  "required_terms": [
-    "заключение",
-    "специального расследования"
-  ],
-  "gold_source_ids": [
-    "NPA_30"
-  ],
-  "gold_chunk_ids": [],
-  "acceptable_topics": [
-    "accident_investigation"
-  ],
-  "expected_domain": "accident_investigation",
-  "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
-},
+    "id": "ACCI_023",
+    "topic": "accident_investigation",
+    "question": "Кто составляет заключение по результатам специального расследования несчастного случая?",
+    "required_terms": [
+      "заключение",
+      "специального расследования"
+    ],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ],
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
+  },
   {
-  "id": "ACCI_024",
-  "topic": "accident_investigation",
-  "question": "Кто должен составить и подписать заключение после специального расследования?",
-  "required_terms": [
-    "составить",
-    "подписать",
-    "заключение",
-    "специального расследования"
-  ],
-  "gold_source_ids": [
-    "NPA_30"
-  ],
-  "gold_chunk_ids": [],
-  "acceptable_topics": [
-    "accident_investigation"
-  ],
-  "expected_domain": "accident_investigation",
-  "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
-}
+    "id": "ACCI_024",
+    "topic": "accident_investigation",
+    "question": "Кто должен составить и подписать заключение после специального расследования?",
+    "required_terms": [
+      "составить",
+      "подписать",
+      "заключение",
+      "специального расследования"
+    ],
+    "gold_source_ids": [
+      "NPA_30"
+    ],
+    "gold_chunk_ids": [],
+    "acceptable_topics": [
+      "accident_investigation"
+    ],
+    "expected_domain": "occupational_safety",
+    "gold_source_policy": "document-level curated baseline; chunk gold intentionally empty until manually verified"
+  }
 ]
