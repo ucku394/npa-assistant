@@ -300,6 +300,10 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
     profile = build_universal_query_profile(original)
     hierarchy = build_topic_hierarchy(original, topic)
 
+    if topic == "general" and hierarchy.get("topic") != "general":
+        topic = hierarchy["topic"]
+        domain = hierarchy["domain"]
+
     generated_search_queries = build_search_queries(
         original,
         topic,
