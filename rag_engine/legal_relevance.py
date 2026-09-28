@@ -99,6 +99,8 @@ _TOPIC_POLICIES: Dict[str, Dict[str, List[str]]] = {
             "несчастный случай",
             "несчастного случая",
             "расследование несчастного случая",
+            "специальное расследование",
+            "специального расследования",
         ],
         "required_context_any": [
             "производстве",
@@ -168,6 +170,21 @@ def legal_relevance_adjustment(
 
     text = _text(chunk)
     required_hits = _count_hits(text, policy["required_any"])
+
+    # Для вопросов именно о специальном расследовании общий фрагмент про
+    # расследование НС недостаточен: нужен явный маркер специального
+    # расследования.
+    special_investigation_query = bool(
+        topic == "accident_investigation"
+        and query_profile
+        and "special_investigation" in (query_profile.get("qualifiers") or [])
+    )
+    if special_investigation_query:
+        required_hits = _count_hits(
+            text,
+            ["специальное расследование", "специального расследования"],
+        )
+
     context_hits = _count_hits(text, policy["required_context_any"])
     forbidden_hits = _count_hits(text, policy["forbidden"])
 
