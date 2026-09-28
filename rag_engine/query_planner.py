@@ -262,6 +262,12 @@ def _build_query_slots(original, generated, hierarchy, profile, source_constrain
         if object_term.lower().startswith(marker):
             object_term = object_term[len(marker):].strip()
             break
+
+    # Canonicalize the legal subject for stable slot matching. The hierarchy
+    # currently exposes the phrase in genitive case ("персонала"), while the
+    # object slot should use the nominative legal subject ("персонал").
+    if object_term.lower() == "электротехнического персонала":
+        object_term = "электротехнический персонал"
     docs = [str(v).strip() for v in (source_constraints.get("preferred_documents") or []) if str(v).strip()]
     slots = []
     if original: slots.append({"role":"exact","query":original})
