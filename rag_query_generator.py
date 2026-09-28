@@ -1,9 +1,67 @@
 import re
 from typing import Any, Dict, List
 
-from rag_query_classifier import detect_special_category, _minor_special_issue, _is_labor_code_query, _is_target_briefing_query, _is_responsible_briefing_query
+from rag_query_classifier import detect_special_category, _minor_special_issue, _is_labor_code_query, _is_target_briefing_query, _is_responsible_briefing_query, detect_knowledge_testing_state, detect_knowledge_testing_action
 from rag_query_profile import build_universal_query_profile
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
+
+
+def build_knowledge_testing_search_queries(
+    original: str,
+    profile: Dict[str, Any],
+) -> List[str]:
+    """Специализированные поисковые запросы для проверки знаний."""
+    state = profile.get("action_state") or detect_knowledge_testing_state(original)
+    action = profile.get("action") or detect_knowledge_testing_action(original)
+
+    queries = [
+        original,
+        "проверка знаний требований охраны труда работника порядок проведения",
+        "результаты проверки знаний требований охраны труда работника",
+    ]
+
+    if state == "failed":
+        queries.extend([
+            "неудовлетворительные результаты проверки знаний требований охраны труда дальнейшие действия",
+            "работник не прошел проверку знаний требований охраны труда что делать",
+            "не сдал проверку знаний требований охраны труда повторная проверка",
+            "неудовлетворительный результат проверки знаний допуск к работе",
+        ])
+    elif state == "not_attended":
+        queries.extend([
+            "работник не явился на проверку знаний требований охраны труда дальнейшие действия",
+            "неявка на проверку знаний требований охраны труда порядок",
+        ])
+    elif state == "expired":
+        queries.extend([
+            "истек срок проверки знаний требований охраны труда действия работодателя",
+            "срок проверки знаний требований охраны труда истек допуск к работе",
+        ])
+
+    if action == "repeat_test":
+        queries.extend([
+            "повторная проверка знаний требований охраны труда сроки порядок",
+            "пересдача проверки знаний требований охраны труда работником",
+        ])
+    elif action == "training":
+        queries.append("обучение перед повторной проверкой знаний требований охраны труда")
+    elif action == "admission":
+        queries.append("допуск к самостоятельной работе после проверки знаний требований охраны труда")
+    elif action == "responsible_person":
+        queries.extend([
+            "кто проводит проверку знаний требований охраны труда комиссия",
+            "комиссия по проверке знаний требований охраны труда",
+        ])
+    elif action == "deadline":
+        queries.extend([
+            "сроки проверки знаний требований охраны труда",
+            "периодичность проверки знаний требований охраны труда",
+            "повторная проверка знаний требований охраны труда сроки порядок",
+        ])
+
+    queries.extend(profile.get("legal_phrases") or [])
+    return list(dict.fromkeys(q for q in queries if q))[:8]
+
 
 def build_universal_search_queries(profile: Dict[str, Any], original: str) -> List[str]:
     """Генерирует нормативные формулировки независимо от конкретной темы."""
@@ -109,7 +167,36 @@ def build_search_queries(
 ) -> List[str]:
     original = str(user_query or "").strip()
     universal_profile = build_universal_query_profile(original)
+
+    # Не используем общий fallback «нарушение обязанности...»: он
+    # размывает запросы о непрохождении проверки знаний.
+    if topic == "knowledge_testing":
+        return build_knowledge_testing_search_queries(original, universal_profile)
+
+    # Для специального расследования сначала ставим узкоспециализированные
+    # нормативные запросы. Иначе общий universal/topic retrieval может
+    # вытеснить их из итоговых 8 запросов.
+    special_investigation_query = (
+        topic == "accident_investigation"
+        and bool(re.search(
+            r"\bспециальн\w*\s+расследован\w*\b",
+            original,
+            re.IGNORECASE,
+        ))
+    )
+
     queries: List[str] = [original]
+
+    if special_investigation_query:
+        queries.extend([
+            "пункт 40 Правил № 30 специальному расследованию подлежат",
+            "групповые несчастные случаи два и более работающих специальное расследование",
+            "несчастный случай со смертельным исходом специальное расследование",
+            "несчастный случай с тяжелой производственной травмой специальное расследование",
+            "по результатам специального расследования государственным инспектором труда составляется и подписывается заключение",
+            "государственный инспектор труда Департамента заключение по результатам специального расследования",
+        ])
+
     queries.extend(build_universal_search_queries(universal_profile, original))
 
     # Для вопросов «какой/какому инструктаж» и «кто проводит инструктаж»
@@ -208,6 +295,22 @@ def build_search_queries(
 
     if topic == "accident_investigation":
         accident_mode = _accident_query_mode(original)
+
+        # Отдельный retrieval-режим для специального расследования.
+        # Общие запросы про расследование НС здесь недостаточны: нужны п. 40
+        # Правил № 30 и актуальные нормы о заключении государственного
+        # инспектора труда после изменений, действующих с 01.03.2026.
+        if "special_investigation" in (universal_profile.get("qualifiers") or []):
+            queries.extend([
+                f"специальное расследование несчастного случая {original}",
+                "пункт 40 Правил № 30 специальному расследованию подлежат",
+                "групповые несчастные случаи два и более работающих специальное расследование",
+                "несчастный случай со смертельным исходом специальное расследование",
+                "несчастный случай с тяжелой производственной травмой специальное расследование",
+                "пункт 60 Правил № 30 заключение государственным инспектором труда",
+                "по результатам специального расследования государственным инспектором труда составляется и подписывается заключение",
+                "государственный инспектор труда Департамента заключение по результатам специального расследования",
+            ])
 
         if accident_mode == "worker_did_not_report":
             queries.extend([

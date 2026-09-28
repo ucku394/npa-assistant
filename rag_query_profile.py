@@ -3,6 +3,8 @@
 import re
 from typing import Any, Dict
 
+from rag_query_classifier import detect_knowledge_testing_state, detect_knowledge_testing_action
+
 def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
     """Детерминированно извлекает юридическую структуру вопроса."""
     query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
@@ -32,7 +34,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
 
     qtypes = [
         ("what_to_do", [r"\bчто\s+делать\b", r"\bкак\s+(?:должен|следует)\s+действ", r"\bпорядок\s+действ"]),
-        ("frequency", [r"\bкак\s+часто\b", r"\bс\s+какой\s+периодичност", r"\bпериодичност\w*\b"]),
+        ("frequency", [r"\bкак\s+часто\b", r"\bс\s+какой\s+периодичност", r"\bпериодичност\w*\b", r"\bкогда\s+провод\w*\b"]),
         ("limit", [r"\bсколько\b.*\bкг\b", r"\bсколько\s+разрешено\b", r"\bпредельн\w*\s+норм", r"\bнорм\w*\s+(?:подъема|перемещения)"]),
         ("who", [r"^кто\b", r"\bкто\s+(?:провод|должен|обязан|назнач|ответствен)", r"\bкем\b", r"\bкакое\s+лицо\b"]),
         ("kind", [r"\bкакой\s+(?:вид\s+)?инструктаж", r"\bкакому\s+инструктаж", r"\bвид\w*\s+инструктаж"]),
@@ -215,6 +217,31 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "периодический медицинский осмотр",
         ])
 
+
+    # Отдельный профиль проверки знаний. Не смешиваем его с инструктажами.
+    if re.search(
+        r"\bпровер\w*\s+знани\w*\b|"
+        r"\bне\s+(?:прош(?:ел|ла|ли)|сдал\w*)\b.{0,80}\bпровер\w*\s+знани\w*|"
+        r"\bнеудовлетворительн\w*\s+результат\w*.{0,80}\bзнани\w*",
+        query,
+        re.IGNORECASE,
+    ):
+        profile.update({
+            "subject": "employee",
+            "event": "knowledge_testing",
+            "action": detect_knowledge_testing_action(query),
+            "object": "knowledge_test",
+            "action_state": detect_knowledge_testing_state(query),
+        })
+        profile["legal_phrases"].extend([
+            "проверка знаний требований охраны труда",
+            "результаты проверки знаний требований охраны труда",
+            "неудовлетворительные результаты проверки знаний",
+            "дальнейшие действия при непрохождении проверки знаний",
+            "повторная проверка знаний требований охраны труда",
+            "допуск к самостоятельной работе после проверки знаний",
+        ])
+
     if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
         profile["event"] = "occupational_briefing"
         profile["object"] = "occupational_briefing"
@@ -247,6 +274,27 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
                     "внеплановый инструктаж при перерыве в работе по профессии более шести месяцев",
                     "перерыв в работе по профессии более шести месяцев внеплановый инструктаж",
                 ])
+
+    # Специальное расследование несчастного случая — отдельный юридический
+    # сценарий. Не смешиваем его с общим порядком расследования.
+    if re.search(
+        r"\bспециальн\w*\s+расследован\w*\b|"
+        r"\bкакие\s+несчастн\w*\s+случа\w*\s+подлежат\s+специальн\w*\s+расследован\w*",
+        query,
+        re.IGNORECASE,
+    ):
+        profile["event"] = "special_accident_investigation"
+        profile["object"] = "work_accident"
+        profile["qualifiers"].append("special_investigation")
+        profile["legal_phrases"].extend([
+            "специальное расследование несчастного случая на производстве",
+            "несчастные случаи подлежащие специальному расследованию",
+            "групповые несчастные случаи специальное расследование",
+            "несчастные случаи со смертельным исходом специальное расследование",
+            "несчастные случаи с тяжелыми производственными травмами специальное расследование",
+            "заключение по результатам специального расследования",
+            "государственный инспектор труда заключение специального расследования",
+        ])
 
     if re.search(r"\bстажиров\w*", query, re.IGNORECASE):
         profile["event"] = "occupational_training"

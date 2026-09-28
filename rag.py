@@ -8,7 +8,13 @@ from typing import Any, Dict, List, Optional
 from embedding import get_query_embeddings
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_universal_search_queries, build_search_queries
+from rag_engine.query_planner import build_query_plan, plan_summary
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
+from rag_engine.legal_relevance import (
+    legal_relevance_adjustment,
+    evidence_gate,
+    build_second_pass_queries,
+)
 from rag_query_classifier import (
     detect_legal_domain,
     detect_topic,
@@ -172,6 +178,32 @@ def _keyword_score(
 # СПЕЦИАЛЬНЫЙ SCORE ДЛЯ ЮРИДИЧЕСКОЙ ТЕМЫ
 # ============================================================
 
+
+def _knowledge_testing_relevance_score(
+    chunk: Dict[str, Any],
+    user_query: str = "",
+) -> float:
+    document = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {content}"
+    score = 0.0
+    if "проверка знаний" in text or "проверки знаний" in text:
+        score += 0.90
+    if any(marker in text for marker in ("требований охраны труда", "требования охраны труда", "охране труда")):
+        score += 0.30
+    if any(marker in text for marker in ("неудовлетворительн", "не прошел", "не сдал", "повторн", "переподготов")):
+        score += 0.35
+    if any(marker in text for marker in ("комисси", "председател", "допуск к самостоятельной работе")):
+        score += 0.20
+    q = str(user_query or "").lower()
+    if any(marker in q for marker in ("не прош", "не сдал", "неудовлетвор")):
+        if any(marker in content for marker in ("неудовлетвор", "не прошел", "не сдал", "повтор")):
+            score += 0.55
+    if any(marker in q for marker in ("дальнейш", "что делать", "порядок")):
+        if any(marker in content for marker in ("порядок", "повтор", "допуск", "обучен", "отстран")):
+            score += 0.40
+    return min(score, 2.50)
+
 def _topic_relevance_score(
     chunk: Dict[str, Any],
     topic: str,
@@ -215,6 +247,29 @@ def _topic_relevance_score(
 
         if "175" in document_name:
             score += 0.80
+
+
+    elif topic == "knowledge_testing":
+        if db_topic == "knowledge_testing":
+            score += 1.20
+        markers = [
+            "проверка знаний", "проверки знаний", "результат проверки знаний",
+            "неудовлетворительн", "повторная проверка",
+            "комиссия по проверке знаний", "допуск к самостоятельной работе",
+        ]
+        matches = sum(1 for marker in markers if marker in content)
+        score += min(matches * 0.42, 1.80)
+        if "охране труда" in document_name:
+            score += 0.25
+        if any(marker in document_name for marker in ("обуч", "провер", "инструк")):
+            score += 0.25
+        q = str(chunk.get("_user_query_for_scoring") or "")
+        if any(marker in q for marker in ("не прош", "не сдал", "неудовлетвор")):
+            if any(marker in content for marker in ("неудовлетвор", "не прошел", "не сдал", "повтор")):
+                score += 0.90
+        if "дальнейш" in q or "что делать" in q:
+            if any(marker in content for marker in ("порядок", "повтор", "допуск", "обучен", "отстран")):
+                score += 0.60
 
     elif topic == "ppe_nonprovision":
         if db_topic == "ppe_nonprovision":
@@ -1812,6 +1867,48 @@ def _universal_query_relevance_score(
     return max(0.0, min(score, 1.0))
 
 
+def _query_plan_relevance_score(
+    chunk: Dict[str, Any],
+    query_plan: Optional[Dict[str, Any]],
+) -> float:
+    """Score explicit planner constraints without replacing semantic relevance."""
+    if not query_plan:
+        return 0.0
+
+    document = _get_document_name(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {content}"
+
+    constraints = query_plan.get("source_constraints") or {}
+    preferred_documents = [
+        str(value).lower()
+        for value in (constraints.get("preferred_documents") or [])
+    ]
+    preferred_terms = [
+        str(value).lower()
+        for value in (constraints.get("preferred_terms") or [])
+    ]
+    negative_concepts = [
+        str(value).lower()
+        for value in (query_plan.get("negative_concepts") or [])
+    ]
+
+    score = 0.0
+    score += min(
+        sum(1 for marker in preferred_documents if marker and marker in document) * 0.10,
+        0.30,
+    )
+    score += min(
+        sum(1 for marker in preferred_terms if marker and marker in text) * 0.06,
+        0.24,
+    )
+    score -= min(
+        sum(1 for marker in negative_concepts if marker and marker in text) * 0.25,
+        0.75,
+    )
+    return max(-0.75, min(score, 0.50))
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -1824,6 +1921,7 @@ def _legal_relevance_score(
     special_category: Optional[str] = None,
     special_issue: Optional[str] = None,
     query_profile: Optional[Dict[str, Any]] = None,
+    query_plan: Optional[Dict[str, Any]] = None,
 ) -> float:
     semantic = _safe_float(chunk.get("_best_similarity", _semantic_score(chunk)))
     hybrid_score = _safe_float(chunk.get("_hybrid_final_score"))
@@ -1831,6 +1929,9 @@ def _legal_relevance_score(
     exact_score = _exact_match_score(chunk, user_query, topic)
 
     briefing_mode_bonus = 0.0
+    knowledge_testing_bonus = 0.0
+    if topic == "knowledge_testing":
+        knowledge_testing_bonus = min(_knowledge_testing_relevance_score(chunk, user_query), 1.80)
     if topic == "occupational_briefing":
         mode = (
             "target"
@@ -1900,25 +2001,43 @@ def _legal_relevance_score(
     )
     chunk["_special_category_bonus"] = special_category_bonus
 
+    legal_adjustment = legal_relevance_adjustment(
+        chunk,
+        topic,
+        query_profile,
+    )
+    chunk["_legal_relevance_adjustment"] = legal_adjustment["score"]
+    chunk["_legal_required_hits"] = legal_adjustment["required_hits"]
+    chunk["_legal_context_hits"] = legal_adjustment["context_hits"]
+    chunk["_legal_forbidden_hits"] = legal_adjustment["forbidden_hits"]
+    chunk["_legal_match"] = legal_adjustment["legal_match"]
+    chunk["_legal_hard_negative"] = legal_adjustment["hard_negative"]
+
     universal_score = _universal_query_relevance_score(
         chunk,
         query_profile or build_universal_query_profile(user_query),
     )
     chunk["_universal_score"] = universal_score
 
+    planner_score = _query_plan_relevance_score(chunk, query_plan)
+    chunk["_query_plan_score"] = planner_score
+
     return (
         semantic * 0.28
         + hybrid_score * 0.12
         + exact_score * 0.16
         + universal_score * 0.22
+        + planner_score * 0.08
         + keyword * keyword_weight
         + topic_score * topic_weight
         + intent_score * 0.05
         + primary_score * 0.10
         + briefing_mode_bonus
+        + knowledge_testing_bonus
         + labor_code_bonus
         + special_category_bonus
         + repeated_bonus
+        + legal_adjustment["score"]
     )
 
 
@@ -2169,6 +2288,28 @@ def _select_legal_diverse_chunks(
         if point_key is not None:
             points_seen.add(point_key)
         return True
+
+
+    if topic == "knowledge_testing":
+        knowledge_pool = [
+            chunk for chunk in ranked_chunks
+            if _knowledge_testing_relevance_score(
+                chunk, str(chunk.get("_user_query_for_scoring") or "")
+            ) >= 0.70
+        ]
+        knowledge_pool.sort(
+            key=lambda chunk: (
+                _knowledge_testing_relevance_score(
+                    chunk, str(chunk.get("_user_query_for_scoring") or "")
+                ),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for chunk in knowledge_pool:
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= min(4, limit):
+                    return selected
 
     if accident_mode == "worker_did_not_report":
         # Для этого intent финальный отбор идёт из узкого targeted-пула.
@@ -2495,27 +2636,30 @@ async def retrieve_context(
 ) -> Dict[str, Any]:
     logger.info("RAG | query=%s", user_query)
 
-    legal_domain = detect_legal_domain(user_query)
-    topic = detect_topic(user_query)
-    query_terms = _extract_query_terms(user_query)
-    intents = detect_query_intents(user_query)
-    cross_reference = is_cross_reference_query(intents)
-    primary_intent = detect_primary_intent(intents, user_query)
-    labor_code_query = _is_labor_code_query(user_query)
-    special_category = detect_special_category(user_query)
-    special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
-    query_profile = build_universal_query_profile(user_query)
+    # Query Planner 2.0 is the single orchestration point for query
+    # understanding and retrieval planning. Individual classifiers and
+    # generators remain reusable, but rag.py no longer assembles them ad hoc.
+    query_plan = build_query_plan(user_query)
 
-    search_queries = build_search_queries(
-        user_query,
-        topic,
-        legal_domain,
-        intents,
-    )
+    legal_domain = query_plan["domain"]
+    topic = query_plan["topic"]
+    query_terms = _extract_query_terms(user_query)
+    intents = query_plan["intents"]
+    cross_reference = query_plan["cross_reference"]
+    primary_intent = query_plan["primary_intent"]
+    labor_code_query = query_plan["labor_code_query"]
+    special_category = query_plan["special_category"]
+    special_issue = query_plan["special_issue"]
+    query_profile = query_plan["profile"]
+    search_queries = query_plan["search_queries"]
 
     logger.info(
         "RAG | query_input | %r",
         user_query,
+    )
+    logger.info(
+        "RAG | query_plan | %s",
+        plan_summary(query_plan),
     )
     logger.info(
         "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s",
@@ -2624,7 +2768,9 @@ async def retrieve_context(
         clean_groups.append(result or [])
 
     query_roles = [
-        "main" if index == 0 else "expanded"
+        query_plan["query_roles"][index]
+        if index < len(query_plan["query_roles"])
+        else "semantic"
         for index in range(len(clean_groups))
     ]
 
@@ -2697,7 +2843,19 @@ async def retrieve_context(
             special_category=special_category,
             special_issue=special_issue,
             query_profile=query_profile,
+            query_plan=query_plan,
         )
+
+    # Explicit wrong-domain legal matches are removed before final ranking.
+    # Semantic similarity must not outrank an explicit legal mismatch.
+    clean_candidate_chunks = [
+        chunk for chunk in candidate_chunks
+        if not chunk.get("_legal_hard_negative")
+    ]
+
+    # If every candidate is a legal hard-negative, keep the set empty so the
+    # evidence gate triggers recovery search instead of returning the wrong law.
+    candidate_chunks = clean_candidate_chunks
 
     ranked_chunks = sorted(
         candidate_chunks,
@@ -2705,20 +2863,136 @@ async def retrieve_context(
         reverse=True,
     )
 
+    evidence = evidence_gate(ranked_chunks, topic, query_profile)
+    logger.info(
+        "RAG | evidence_gate | sufficient=%s | reason=%s | best_score=%.4f | legal_match=%.4f",
+        evidence.get("sufficient"),
+        evidence.get("reason"),
+        _safe_float(evidence.get("best_score")),
+        _safe_float(evidence.get("legal_match")),
+    )
+
+    # Second retrieval pass: only when the first pass did not produce
+    # sufficient legal evidence. This keeps normal traffic cheap while
+    # giving ambiguous/weak queries a deterministic legal recovery path.
+    if not evidence.get("sufficient"):
+        second_pass_queries = build_second_pass_queries(
+            user_query,
+            topic,
+            query_profile,
+        )
+        second_pass_queries = [
+            query for query in second_pass_queries
+            if query and query not in valid_queries
+        ][:4]
+
+        if second_pass_queries:
+            logger.info(
+                "RAG | second_pass | queries=%s",
+                second_pass_queries,
+            )
+            second_vectors = await asyncio.to_thread(
+                get_query_embeddings,
+                second_pass_queries,
+            )
+
+            second_pairs = [
+                (query, vector)
+                for query, vector in zip(second_pass_queries, second_vectors)
+                if vector and len(vector) == 384
+            ]
+
+            second_groups = await asyncio.gather(
+                *[
+                    _run_search(vector, query)
+                    for query, vector in second_pairs
+                ],
+                return_exceptions=True,
+            )
+
+            second_clean_groups = []
+            for index, result in enumerate(second_groups):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "RAG | second_pass search failed | query=%s | error=%s",
+                        second_pairs[index][0],
+                        result,
+                    )
+                    second_clean_groups.append([])
+                else:
+                    second_clean_groups.append(result or [])
+
+            if second_clean_groups:
+                second_merged = _merge_search_results(
+                    second_clean_groups,
+                    ["second_pass"] * len(second_clean_groups),
+                )
+                candidate_chunks = _merge_search_results(
+                    [candidate_chunks, second_merged],
+                    ["first_pass", "second_pass"],
+                )
+
+                for chunk in candidate_chunks:
+                    chunk["_user_query_for_scoring"] = user_query
+                    chunk["_combined_score"] = _legal_relevance_score(
+                        chunk,
+                        query_terms,
+                        topic,
+                        intents,
+                        cross_reference,
+                        primary_intent=primary_intent,
+                        labor_code_query=labor_code_query,
+                        user_query=user_query,
+                        special_category=special_category,
+                        special_issue=special_issue,
+                        query_profile=query_profile,
+                        query_plan=query_plan,
+                    )
+
+                candidate_chunks = [
+                    chunk for chunk in candidate_chunks
+                    if not chunk.get("_legal_hard_negative")
+                ]
+                ranked_chunks = sorted(
+                    candidate_chunks,
+                    key=lambda chunk: chunk.get("_combined_score", 0.0),
+                    reverse=True,
+                )
+                evidence = evidence_gate(
+                    ranked_chunks,
+                    topic,
+                    query_profile,
+                )
+                candidate_count = len(candidate_chunks)
+
+                logger.info(
+                    "RAG | second_pass_result | candidates=%s | sufficient=%s | reason=%s | best_score=%.4f | legal_match=%.4f",
+                    candidate_count,
+                    evidence.get("sufficient"),
+                    evidence.get("reason"),
+                    _safe_float(evidence.get("best_score")),
+                    _safe_float(evidence.get("legal_match")),
+                )
+
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | planner=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | knowledge=%.4f | legal=%.4f | legal_match=%.4f | forbidden=%s | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
             _safe_float(_exact_match_score(chunk, user_query, topic)),
             _safe_float(chunk.get("_universal_score")),
+            _safe_float(chunk.get("_query_plan_score")),
             _safe_float(chunk.get("_constraint_scope_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
             _safe_float(_primary_intent_relevance_score(chunk, primary_intent, topic)),
             _safe_float(chunk.get("_briefing_mode_bonus")),
             _safe_float(chunk.get("_special_category_bonus")),
+            _safe_float(_knowledge_testing_relevance_score(chunk, user_query) if topic == "knowledge_testing" else 0.0),
+            _safe_float(chunk.get("_legal_relevance_adjustment")),
+            _safe_float(chunk.get("_legal_match")),
+            _safe_float(chunk.get("_legal_forbidden_hits")),
             _get_document_name(chunk),
             _get_point_number(chunk),
         )
@@ -2795,6 +3069,8 @@ async def retrieve_context(
         "topic": topic,
         "intents": intents,
         "query_profile": query_profile,
+        "query_plan": query_plan,
+        "evidence": evidence,
         "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
