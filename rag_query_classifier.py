@@ -253,7 +253,7 @@ def detect_topic(user_query: str) -> str:
         return "accident_investigation"
 
     scope_patterns = [
-        r"\bна\s+кого\s+(?:распространяется|действует|применяется)\b",
+        r"\bна\s+кого\s+(?:распространяется|распространяются|действует|действуют|применяется|применяются)\b",
         r"\bк\s+кому\s+(?:применяется|относится)\b",
         r"\bсфера\s+действия\b",
         r"\bобласть\s+действия\b",
@@ -288,6 +288,19 @@ def detect_scope_target(user_query: str) -> Optional[dict]:
             "document_name": "Трудовой кодекс Республики Беларусь",
             "article": None,
         }
+
+    # Общие «Правила по охране труда» — постановление Минтруда № 53.
+    # Не сопоставляем сюда специальные правила вида
+    # «Правила по охране труда при выполнении...».
+    rules_match = re.search(r"\bправила\s+по\s+охране\s+труда\b", query, re.IGNORECASE)
+    if rules_match:
+        tail = query[rules_match.end():]
+        if not re.match(r"\s+при\b", tail, re.IGNORECASE):
+            return {
+                "document_key": "правила по охране труда 53",
+                "document_name": "Правила по охране труда, постановление Минтруда № 53",
+                "article": "2",
+            }
 
     return None
 
