@@ -277,7 +277,7 @@ def build_search_queries(
         # Общие запросы про расследование НС здесь недостаточны: нужны п. 40
         # Правил № 30 и актуальные нормы о заключении государственного
         # инспектора труда после изменений, действующих с 01.03.2026.
-        if "special_investigation" in (profile.get("qualifiers") or []):
+        if "special_investigation" in (universal_profile.get("qualifiers") or []):
             queries.extend([
                 f"специальное расследование несчастного случая {original}",
                 "пункт 40 Правил № 30 специальному расследованию подлежат",
