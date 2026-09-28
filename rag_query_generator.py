@@ -17,7 +17,30 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
     # теряться после общих legal_phrases.
     queries: List[str] = []
 
-    if event == "lifting_and_moving_loads":
+    if event == "law_scope":
+        target = profile.get("target_document") or ""
+        if target == "356-з":
+            queries.extend([
+                "Закон Республики Беларусь Об охране труда № 356-З статья 3 сфера действия настоящего Закона",
+                "Закон № 356-З статья 3 применяется в отношении всех работодателей и работающих граждан",
+                "сфера действия Закона Об охране труда № 356-З статья 3",
+                "на кого распространяется действие Закона Республики Беларусь Об охране труда 356-З",
+            ])
+        elif target == "трудовой кодекс":
+            queries.extend([
+                "Трудовой кодекс Республики Беларусь сфера действия",
+                "Трудовой кодекс Республики Беларусь на кого распространяется действие",
+                "Трудовой кодекс Республики Беларусь трудовые отношения сфера действия",
+            ])
+        else:
+            queries.extend([
+                f"сфера действия {original}",
+                f"на кого распространяется действие {original}",
+                f"в отношении кого применяется {original}",
+            ])
+        queries.extend(profile.get("legal_phrases") or [])
+
+    elif event == "lifting_and_moving_loads":
         constraint = profile.get("constraint") or {}
         if constraint.get("subject") == "adult_male":
             queries.extend([
@@ -110,6 +133,28 @@ def build_search_queries(
     original = str(user_query or "").strip()
     universal_profile = build_universal_query_profile(original)
     queries: List[str] = [original]
+
+    if universal_profile.get("event") == "law_scope":
+        queries.extend(build_universal_search_queries(universal_profile, original))
+        target = universal_profile.get("target_document")
+        if target == "356-з":
+            queries.extend([
+                "Закон № 356-З статья 3 сфера действия настоящего Закона",
+                "Закон Об охране труда 356-З статья 3 на кого распространяется",
+                "применяется в отношении всех работодателей работающих граждан Республики Беларусь иностранных граждан лиц без гражданства",
+            ])
+        elif target == "трудовой кодекс":
+            queries.extend([
+                "Трудовой кодекс Республики Беларусь сфера действия",
+                "Трудовой кодекс Республики Беларусь на кого распространяется действие",
+            ])
+        else:
+            queries.extend([
+                f"сфера действия {original}",
+                f"на кого распространяется действие {original}",
+            ])
+        return list(dict.fromkeys(q for q in queries if q))[:8]
+
     queries.extend(build_universal_search_queries(universal_profile, original))
 
     # Для вопросов «какой/какому инструктаж» и «кто проводит инструктаж»
