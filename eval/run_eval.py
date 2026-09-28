@@ -14,7 +14,12 @@ if str(ROOT) not in sys.path:
 from rag import retrieve_context
 from .dataset import CASES
 from .metrics import mean, precision_at_k, recall_at_k, reciprocal_rank
-from .schema import EvalCase, chunk_is_forbidden, chunk_matches
+from .schema import (
+    EvalCase,
+    chunk_document_matches,
+    chunk_is_forbidden,
+    chunk_matches,
+)
 
 
 def load_jsonl(path: str) -> list[EvalCase]:
@@ -42,6 +47,9 @@ async def run_case(case: EvalCase, supabase):
     result = await retrieve_context(case.question, supabase)
     chunks = result.get("chunks") or []
     hit_ranks = [rank for rank, chunk in enumerate(chunks, 1) if chunk_matches(case, chunk)]
+    document_hit_ranks = [
+        rank for rank, chunk in enumerate(chunks, 1) if chunk_document_matches(case, chunk)
+    ]
     forbidden_ranks = [rank for rank, chunk in enumerate(chunks, 1) if chunk_is_forbidden(case, chunk)]
     return {
         "id": case.id,
@@ -50,9 +58,14 @@ async def run_case(case: EvalCase, supabase):
         "candidate_count": result.get("candidate_count", 0),
         "final_count": result.get("final_count", 0),
         "hit_ranks": hit_ranks,
+        "document_hit_ranks": document_hit_ranks,
         "forbidden_ranks": forbidden_ranks,
         "recall@3": recall_at_k(hit_ranks, 3),
         "recall@5": recall_at_k(hit_ranks, 5),
+        "document@3": recall_at_k(document_hit_ranks, 3),
+        "document@5": recall_at_k(document_hit_ranks, 5),
+        "exact_point@3": recall_at_k(hit_ranks, 3),
+        "exact_point@5": recall_at_k(hit_ranks, 5),
         "mrr": reciprocal_rank(hit_ranks),
         "precision@5": precision_at_k(hit_ranks, min(5, len(chunks) or 1)),
         "forbidden_rate": 1.0 if forbidden_ranks else 0.0,
@@ -65,6 +78,10 @@ def summarize(results):
         "cases": len(results),
         "recall@3": mean(r["recall@3"] for r in results),
         "recall@5": mean(r["recall@5"] for r in results),
+        "document@3": mean(r["document@3"] for r in results),
+        "document@5": mean(r["document@5"] for r in results),
+        "exact_point@3": mean(r["exact_point@3"] for r in results),
+        "exact_point@5": mean(r["exact_point@5"] for r in results),
         "mrr": mean(r["mrr"] for r in results),
         "precision@5": mean(r["precision@5"] for r in results),
         "forbidden_rate": mean(r["forbidden_rate"] for r in results),
@@ -78,6 +95,8 @@ def summarize(results):
         tag: {
             "cases": len(items),
             "recall@5": mean(x["recall@5"] for x in items),
+            "document@5": mean(x["document@5"] for x in items),
+            "exact_point@5": mean(x["exact_point@5"] for x in items),
             "mrr": mean(x["mrr"] for x in items),
             "forbidden_rate": mean(x["forbidden_rate"] for x in items),
             "empty_rate": mean(x["empty"] for x in items),
@@ -89,7 +108,10 @@ def summarize(results):
 
 def check_regression(current, baseline, max_regression):
     failures = []
-    for key in ("recall@3", "recall@5", "mrr", "precision@5"):
+    for key in (
+        "recall@3", "recall@5", "document@3", "document@5",
+        "exact_point@3", "exact_point@5", "mrr", "precision@5",
+    ):
         if key in baseline and current.get(key, 0) < baseline[key] - max_regression:
             failures.append(f"{key}: {baseline[key]:.4f} -> {current.get(key, 0):.4f}")
     for key in ("forbidden_rate", "empty_rate"):
@@ -127,12 +149,14 @@ async def main():
         print(
             f"[{index:03d}/{len(cases):03d}] {case.id} "
             f"R@5={item['recall@5']:.0%} "
+            f"P@5={item['exact_point@5']:.0%} "
+            f"D@5={item['document@5']:.0%} "
             f"MRR={item['mrr']:.3f} "
             f"forbidden={item['forbidden_rate']:.0%}"
         )
 
     summary = summarize(results)
-    print("\n=== RAG EVALUATION ===")
+    print("\\n=== RAG EVALUATION ===")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
     payload = {"summary": summary, "results": results}
@@ -148,11 +172,11 @@ async def main():
         baseline = baseline_payload.get("summary") or {}
         failures = check_regression(summary, baseline, args.max_regression)
         if failures:
-            print("\nREGRESSION GATE: FAILED")
+            print("\\nREGRESSION GATE: FAILED")
             for failure in failures:
                 print(" -", failure)
             raise SystemExit(2)
-        print("\nREGRESSION GATE: PASSED")
+        print("\\nREGRESSION GATE: PASSED")
 
 
 if __name__ == "__main__":
