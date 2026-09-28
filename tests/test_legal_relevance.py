@@ -116,3 +116,47 @@ def test_special_accident_investigation_queries_include_categories_and_conclusio
     lowered = "\n".join(queries).lower()
     assert "пункт 40 правил № 30 специальному расследованию подлежат" in lowered
     assert "по результатам специального расследования государственным инспектором труда составляется и подписывается заключение" in lowered
+
+
+def test_topic_hierarchy_distinguishes_electrical_knowledge_testing():
+    from rag_engine.topic_planner import build_topic_hierarchy
+
+    plan = build_topic_hierarchy(
+        "Кто проверяет знания электротехнического персонала?",
+        "electrical_safety",
+    )
+    assert plan["subtopic"] == "knowledge_testing"
+    assert plan["legal_object"] == "electrical_knowledge_testing"
+    assert plan["confidence"] >= 0.9
+
+
+def test_topic_hierarchy_distinguishes_fire_extinguishers():
+    from rag_engine.topic_planner import build_topic_hierarchy
+
+    plan = build_topic_hierarchy(
+        "Как часто проверяются огнетушители?",
+        "fire_safety",
+    )
+    assert plan["subtopic"] == "fire_extinguishers"
+    assert plan["legal_object"] == "fire_extinguisher"
+
+
+def test_topic_hierarchy_distinguishes_microclimate_from_general_sanitary():
+    from rag_engine.topic_planner import build_topic_hierarchy
+
+    plan = build_topic_hierarchy(
+        "Какая температура должна быть на рабочем месте?",
+        "sanitary",
+    )
+    assert plan["subtopic"] == "microclimate"
+    assert plan["legal_object"] == "microclimate"
+
+
+def test_query_plan_exposes_hierarchy():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan("Кто назначает ответственного за электрохозяйство?")
+    assert plan["topic"] == "electrical_safety"
+    assert plan["subtopic"] == "responsible_person"
+    assert plan["legal_object"] == "electrical_responsible_person"
+    assert "ответственный за электрохозяйство" in plan["source_constraints"]["preferred_terms"]
