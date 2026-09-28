@@ -59,6 +59,7 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bэлектроустановк\w*\s+свыше\s+\d+\s*кВ",
         r"\bэлектротехническ\w*\s+персонал\w*",
         r"\bэлектротехнологическ\w*\s+персонал\w*",
+        r"\bэлектрохозяйств\w*",
     ]
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in electrical_patterns):
