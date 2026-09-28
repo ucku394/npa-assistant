@@ -1152,6 +1152,33 @@ def _targeted_law_scope_search(
             chunk["_law_scope_target_document"] = "трудовой кодекс"
         return _deduplicate_chunks(results)
 
+    # Общие Правила по охране труда — постановление Минтруда № 53, пункт 2.
+    normalized_query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    rules_match = re.search(r"\bправила\s+по\s+охране\s+труда\b", normalized_query)
+    if rules_match and not re.match(r"\s+при\b", normalized_query[rules_match.end():]):
+        try:
+            response = (
+                supabase.table("npa_chunks")
+                .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+                .eq("legal_domain", "occupational_safety")
+                .or_(
+                    "doc_name.ilike.%Правила по охране труда № 53%,"
+                    "doc_name.ilike.%Правила по охране труда%,"
+                    "content.ilike.%распространяются на работодателей%,"
+                    "content.ilike.%организационно-правовых форм и форм собственности%"
+                )
+                .limit(TARGETED_SEARCH_LIMIT)
+                .execute()
+            )
+            results = _deduplicate_chunks(response.data or [])
+            for chunk in results:
+                chunk["_law_scope_targeted"] = True
+                chunk["_law_scope_target_document"] = "правила по охране труда 53"
+            return results
+        except Exception as exc:
+            logger.warning("RAG | Rules No.53 scope targeted search failed: %s", exc)
+            return []
+
     return []
 
 
