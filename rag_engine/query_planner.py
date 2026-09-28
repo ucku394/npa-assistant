@@ -178,6 +178,66 @@ def _assign_query_role(
     return "semantic"
 
 
+
+def _query_type_prefixes(question_type: str, preferred_term: str) -> List[str]:
+    """Build deterministic, intent-preserving lexical queries."""
+    if not preferred_term:
+        return []
+    prefixes = {
+        "kind": [
+            f"виды {preferred_term}",
+            f"какой вид {preferred_term}",
+            f"какой {preferred_term}",
+        ],
+        "who": [
+            f"кто проводит {preferred_term}",
+            f"кто отвечает за {preferred_term}",
+        ],
+        "frequency": [
+            f"периодичность {preferred_term}",
+            f"как часто проводится {preferred_term}",
+            f"сроки проведения {preferred_term}",
+        ],
+        "what_to_do": [
+            f"порядок действий при {preferred_term}",
+            f"что делать при {preferred_term}",
+        ],
+        "whether": [
+            f"имеет ли право {preferred_term}",
+            f"допускается ли {preferred_term}",
+        ],
+        "limit": [
+            f"предельные нормы {preferred_term}",
+            f"нормы {preferred_term}",
+        ],
+    }
+    return prefixes.get(question_type, [preferred_term])
+
+
+def _refine_search_queries(original: str, generated: List[str], hierarchy: Dict[str, Any], profile: Dict[str, Any], negatives: List[str]) -> List[str]:
+    """Prioritize exact/hierarchy/legal queries without changing question intent."""
+    preferred = hierarchy_preferred_terms(hierarchy)
+    preferred_term = preferred[0] if preferred else ""
+    qtype = str(profile.get("question_type") or "general")
+    result = [original] if original else []
+    result.extend(_query_type_prefixes(qtype, preferred_term))
+    for phrase in profile.get("legal_phrases") or []:
+        phrase = str(phrase).strip()
+        if phrase and phrase.lower() != preferred_term.lower():
+            result.append(phrase)
+    result.extend(generated)
+    negative_lower = [str(x).strip().lower() for x in negatives if str(x).strip()]
+    cleaned = []
+    seen = set()
+    for query in result:
+        query = str(query or "").strip()
+        key = query.lower()
+        if not query or key in seen or any(n in key for n in negative_lower):
+            continue
+        seen.add(key)
+        cleaned.append(query)
+    return cleaned[:8]
+
 def build_query_plan(user_query: str) -> Dict[str, Any]:
     """Build a deterministic retrieval plan from one user question."""
 
@@ -197,11 +257,16 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
     profile = build_universal_query_profile(original)
     hierarchy = build_topic_hierarchy(original, topic)
 
-    search_queries = build_search_queries(
+    generated_search_queries = build_search_queries(
         original,
         topic,
         domain,
         intents,
+    )
+
+    negative_concepts = _build_negative_concepts(topic, profile)
+    search_queries = _refine_search_queries(
+        original, generated_search_queries, hierarchy, profile, negative_concepts
     )
 
     query_roles = [
