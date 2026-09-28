@@ -314,7 +314,11 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
         profile,
         labor_code_query,
     )
-    search_queries, query_roles = _select_query_slots(\n        original, generated_search_queries, hierarchy, profile, negative_concepts, source_constraints\n    )\n\n    source_constraints["preferred_terms"] = _unique(
+    search_queries, query_roles = _select_query_slots(
+        original, generated_search_queries, hierarchy, profile, negative_concepts, source_constraints
+    )
+
+    source_constraints["preferred_terms"] = _unique(
         (source_constraints.get("preferred_terms") or [])
         + hierarchy_preferred_terms(hierarchy)
     )
@@ -337,7 +341,8 @@ def build_query_plan(user_query: str) -> Dict[str, Any]:
         "action_state": profile.get("action_state"),
         "profile": profile,
         "search_queries": search_queries,
-        "query_roles": query_roles,\n        "query_slots": [{"role": r, "query": q} for r, q in zip(query_roles, search_queries)],
+        "query_roles": query_roles,
+        "query_slots": [{"role": r, "query": q} for r, q in zip(query_roles, search_queries)],
         "negative_concepts": negative_concepts,
         "source_constraints": source_constraints,
         "special_category": special_category,
@@ -362,7 +367,8 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         "action_state": plan.get("action_state"),
         "primary_intent": plan.get("primary_intent"),
         "query_count": len(plan.get("search_queries") or []),
-        "query_roles": plan.get("query_roles") or [],\n        "query_slots": plan.get("query_slots") or [],
+        "query_roles": plan.get("query_roles") or [],
+        "query_slots": plan.get("query_slots") or [],
         "negative_count": len(plan.get("negative_concepts") or []),
         "preferred_documents": (
             plan.get("source_constraints", {}).get("preferred_documents") or []
