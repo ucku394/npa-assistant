@@ -229,10 +229,12 @@ def _refine_search_queries(original: str, generated: List[str], hierarchy: Dict[
     negative_lower = [str(x).strip().lower() for x in negatives if str(x).strip()]
     cleaned = []
     seen = set()
-    for query in result:
+    for index, query in enumerate(result):
         query = str(query or "").strip()
         key = query.lower()
-        if not query or key in seen or any(n in key for n in negative_lower):
+        if not query or key in seen or (
+            index != 0 and any(n in key for n in negative_lower)
+        ):
             continue
         seen.add(key)
         cleaned.append(query)
