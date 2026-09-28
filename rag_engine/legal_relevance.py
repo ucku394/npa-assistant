@@ -312,6 +312,20 @@ def build_second_pass_queries(
     }
 
     queries.extend(topic_queries.get(topic, []))
+
+    if (
+        topic == "accident_investigation"
+        and query_profile
+        and "special_investigation" in (query_profile.get("qualifiers") or [])
+    ):
+        queries.extend([
+            "пункт 40 Правил № 30 специальному расследованию подлежат",
+            "групповые несчастные случаи два и более работающих специальное расследование",
+            "несчастный случай со смертельным исходом специальное расследование",
+            "несчастный случай с тяжелой производственной травмой специальное расследование",
+            "по результатам специального расследования государственным инспектором труда составляется и подписывается заключение",
+        ])
+
     return list(dict.fromkeys(queries))
 
 
