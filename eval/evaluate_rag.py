@@ -24,6 +24,8 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     topic_ok = domain_ok = legal_ok = 0
     hierarchy_labeled = hierarchy_ok = subtopic_ok = legal_object_ok = 0
     knowledge_leak = briefing_leak = 0
+    query_role_usage = defaultdict(int)
+    query_role_by_topic = defaultdict(lambda: defaultdict(int))
     hierarchy_subtopic_matrix = defaultdict(lambda: defaultdict(int))
     hierarchy_legal_object_matrix = defaultdict(lambda: defaultdict(int))
     hierarchy_errors = []
@@ -52,6 +54,10 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         predicted_subtopic = plan.get("subtopic") or hierarchy.get("subtopic")
         predicted_legal_object = plan.get("legal_object") or hierarchy.get("legal_object")
         query_text = "\n".join(queries).lower()
+        for role in plan.get("query_roles") or []:
+            role = str(role or "unknown")
+            query_role_usage[role] += 1
+            query_role_by_topic[case["topic"]][role] += 1
 
         acceptable = set(case.get("acceptable_topics") or [case["topic"]])
         topic_pass = topic in acceptable
@@ -129,6 +135,7 @@ def evaluate_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
                     "predicted_legal_object": predicted_legal_object,
                     "question_type": profile.get("question_type"),
                     "query_roles": plan.get("query_roles"),
+                    "query_slots": plan.get("query_slots"),
                     "negative_concepts": plan.get("negative_concepts"),
                     "queries": queries,
                 }
