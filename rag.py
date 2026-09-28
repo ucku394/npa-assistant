@@ -20,6 +20,7 @@ from rag_query_classifier import (
     is_cross_reference_query,
     _is_target_briefing_query,
     _is_responsible_briefing_query,
+    detect_scope_target,
 )
 
 logger = logging.getLogger(__name__)
@@ -1102,6 +1103,58 @@ def _targeted_minor_search(supabase, user_query: str = "") -> List[Dict[str, Any
     return _deduplicate_chunks(results)
 
 
+def _targeted_law_scope_search(
+    supabase,
+    user_query: str = "",
+) -> List[Dict[str, Any]]:
+    """Точечный lexical-поиск для вопросов о сфере действия НПА."""
+    target = detect_scope_target(user_query) or {}
+    document_key = str(target.get("document_key") or "").lower()
+
+    if document_key == "356-з":
+        try:
+            response = (
+                supabase.table("npa_chunks")
+                .select(
+                    "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+                )
+                .eq("legal_domain", "occupational_safety")
+                .or_(
+                    "doc_name.ilike.%356-З%,"
+                    "doc_name.ilike.%356 З%,"
+                    "content.ilike.%сфера действия настоящего Закона%,"
+                    "content.ilike.%применяется в отношении всех работодателей%,"
+                    "point_num.ilike.%3%"
+                )
+                .limit(TARGETED_SEARCH_LIMIT)
+                .execute()
+            )
+            results = _deduplicate_chunks(response.data or [])
+            for chunk in results:
+                chunk["_law_scope_targeted"] = True
+                chunk["_law_scope_target_document"] = "356-з"
+            return results
+        except Exception as exc:
+            logger.warning("RAG | law scope targeted search failed: %s", exc)
+            return []
+
+    if document_key == "трудовой кодекс":
+        results = _execute_combined_targeted_search(
+            supabase,
+            [
+                "doc_name.ilike.%Трудовой кодекс%",
+                "content.ilike.%сфера действия%",
+                "content.ilike.%трудовые отношения%",
+            ],
+        )
+        for chunk in results:
+            chunk["_law_scope_targeted"] = True
+            chunk["_law_scope_target_document"] = "трудовой кодекс"
+        return _deduplicate_chunks(results)
+
+    return []
+
+
 def _deduplicate_chunks(
     chunks: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -1143,6 +1196,14 @@ async def _get_targeted_chunks(
             return minor_results
 
     if query_profile := build_universal_query_profile(user_query):
+        if query_profile.get("event") == "law_scope":
+            scope_results = await asyncio.to_thread(
+                _targeted_law_scope_search,
+                supabase,
+                user_query,
+            )
+            if scope_results:
+                return scope_results
         if query_profile.get("event") == "lifting_and_moving_loads":
             lifting_results = await asyncio.to_thread(
                 _targeted_lifting_search,
@@ -1729,6 +1790,36 @@ def _universal_query_relevance_score(
 
     score += min(sum(1 for phrase in phrases if phrase.lower() in text) * 0.16, 0.48)
 
+    if event == "law_scope":
+        target_document = str(profile.get("target_document") or "").lower()
+        target_article = str(profile.get("target_article") or "").lower()
+
+        if target_document == "356-з":
+            doc_hit = "356-з" in document or "356 з" in document
+            article_hit = bool(target_article and point == target_article)
+            scope_phrase_hits = hits((
+                "сфера действия настоящего закона",
+                "применяется в отношении всех работодателей",
+                "работающих граждан республики беларусь",
+                "иностранных граждан и лиц без гражданства",
+            ))
+            score += 0.55 if doc_hit else -0.45
+            if article_hit:
+                score += 0.95
+            if scope_phrase_hits:
+                score += min(scope_phrase_hits * 0.22, 0.66)
+            if chunk.get("_law_scope_targeted"):
+                score += 0.80
+
+        elif target_document == "трудовой кодекс":
+            if "трудовой кодекс" in document or "трудовои кодекс" in document:
+                score += 0.65
+            else:
+                score -= 0.25
+            score += min(hits(("сфера действия", "трудовые отношения")) * 0.18, 0.36)
+            if chunk.get("_law_scope_targeted"):
+                score += 0.50
+
     if event == "work_accident":
         score += min(hits(("несчастный случай", "несчастном случае")) * 0.10, 0.20)
         score += min(hits(("сообщить", "сообщает", "сообщают", "уведомить")) * 0.07, 0.21)
@@ -1905,12 +1996,14 @@ def _legal_relevance_score(
         query_profile or build_universal_query_profile(user_query),
     )
     chunk["_universal_score"] = universal_score
+    if query_profile and query_profile.get("event") == "law_scope":
+        chunk["_scope_score"] = universal_score
 
     return (
         semantic * 0.28
         + hybrid_score * 0.12
         + exact_score * 0.16
-        + universal_score * 0.22
+        + universal_score * (0.34 if query_profile and query_profile.get("event") == "law_scope" else 0.22)
         + keyword * keyword_weight
         + topic_score * topic_weight
         + intent_score * 0.05
@@ -2267,6 +2360,47 @@ def _select_legal_diverse_chunks(
                     max_per_point=1,
                 )
 
+    # Для явного вопроса о сфере действия сначала выбираем норму
+    # внутри указанного НПА. Это защищает от вытеснения ст. 3
+    # семантически похожими правилами по другим темам.
+    if (query_profile or {}).get("event") == "law_scope":
+        target_document = str((query_profile or {}).get("target_document") or "").lower()
+        scope_pool = []
+
+        for chunk in ranked_chunks:
+            text_lower = (
+                f"{_get_document_name(chunk)} "
+                f"{_get_point_number(chunk)} "
+                f"{str(chunk.get('content') or '')}"
+            ).lower()
+
+            if target_document == "356-з":
+                if ("356-з" in text_lower or "356 з" in text_lower) and (
+                    _get_point_number(chunk) == "3"
+                    or "сфера действия настоящего закона" in text_lower
+                    or "применяется в отношении всех работодателей" in text_lower
+                ):
+                    scope_pool.append(chunk)
+            elif target_document == "трудовой кодекс":
+                if "трудовой кодекс" in text_lower:
+                    scope_pool.append(chunk)
+            else:
+                if "сфера действия" in text_lower or "на кого распространяется" in text_lower:
+                    scope_pool.append(chunk)
+
+        scope_pool.sort(
+            key=lambda chunk: (
+                _safe_float(chunk.get("_scope_score")),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for chunk in scope_pool:
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= min(3, limit):
+                    return selected
+
     # Универсальный приоритет для количественных ограничений.
     # Сначала отбираем норму, соответствующую субъекту и операции запроса,
     # чтобы общие нормы ТК/КоАП не вытесняли прямое числовое ограничение.
@@ -2518,7 +2652,7 @@ async def retrieve_context(
         user_query,
     )
     logger.info(
-        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s",
+        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s | target_document=%s | target_article=%s",
         legal_domain,
         topic,
         intents,
@@ -2532,6 +2666,8 @@ async def retrieve_context(
         query_profile.get("event"),
         query_profile.get("action"),
         query_profile.get("action_state"),
+        query_profile.get("target_document"),
+        query_profile.get("target_article"),
     )
     constraint = query_profile.get("constraint") or {}
     logger.info(
