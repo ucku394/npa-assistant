@@ -5273,7 +5273,7 @@
   {
     "id": "HIER_069",
     "topic": "industrial_safety",
-    "question": "production_control",
+    "question": "Как часто проводится производственный контроль на опасном производственном объекте?",
     "required_terms": [
       "производственный контроль"
     ],
@@ -5292,7 +5292,7 @@
   {
     "id": "HIER_070",
     "topic": "industrial_safety",
-    "question": "industrial_safety_expertise",
+    "question": "Кто проводит экспертизу промышленной безопасности?",
     "required_terms": [
       "экспертиза промышленной безопасности"
     ],
@@ -5311,7 +5311,7 @@
   {
     "id": "HIER_071",
     "topic": "fire_safety",
-    "question": "evacuation",
+    "question": "Можно ли загромождать эвакуационные выходы?",
     "required_terms": [
       "эвакуационные выходы"
     ],
@@ -5330,7 +5330,7 @@
   {
     "id": "HIER_072",
     "topic": "fire_safety",
-    "question": "fire_detection_and_alarm",
+    "question": "Как проверяется работоспособность пожарной сигнализации?",
     "required_terms": [
       "пожарная сигнализация"
     ],
@@ -5349,7 +5349,7 @@
   {
     "id": "HIER_073",
     "topic": "electrical_safety",
-    "question": "electrical_safety_group",
+    "question": "Кому устанавливается группа по электробезопасности?",
     "required_terms": [
       "группа по электробезопасности"
     ],
@@ -5368,7 +5368,7 @@
   {
     "id": "HIER_074",
     "topic": "electrical_safety",
-    "question": "electrical_knowledge_testing",
+    "question": "Кто проводит проверку знаний электротехнического персонала?",
     "required_terms": [
       "проверка знаний"
     ],
@@ -5387,7 +5387,7 @@
   {
     "id": "HIER_075",
     "topic": "electrical_safety",
-    "question": "admission_to_electrical_work",
+    "question": "Кто оформляет допуск к работе в электроустановках?",
     "required_terms": [
       "допуск"
     ],
@@ -5406,7 +5406,7 @@
   {
     "id": "HIER_076",
     "topic": "sanitary",
-    "question": "microclimate",
+    "question": "Как контролируются температура и влажность на рабочем месте?",
     "required_terms": [
       "микроклимат"
     ],
@@ -5426,7 +5426,7 @@
   {
     "id": "HIER_077",
     "topic": "sanitary",
-    "question": "production_ventilation",
+    "question": "Как должна быть организована вентиляция производственного помещения?",
     "required_terms": [
       "вентиляция"
     ],
@@ -5446,7 +5446,7 @@
   {
     "id": "HIER_078",
     "topic": "occupational_safety",
-    "question": "employer_ohs_duties",
+    "question": "Кто несет обязанности работодателя по обеспечению охраны труда?",
     "required_terms": [
       "обязанности работодателя"
     ],
@@ -5465,7 +5465,7 @@
   {
     "id": "HIER_079",
     "topic": "occupational_safety",
-    "question": "employee_ohs_rights",
+    "question": "Имеет ли работник право требовать безопасные условия труда?",
     "required_terms": [
       "права работника"
     ],
@@ -5484,7 +5484,7 @@
   {
     "id": "HIER_080",
     "topic": "occupational_safety",
-    "question": "ohs_instructions",
+    "question": "Кто разрабатывает инструкции по охране труда?",
     "required_terms": [
       "инструкции по охране труда"
     ],
