@@ -15,6 +15,8 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         "actor": None,
         "recipient": None,
         "object": None,
+        "target_document": None,
+        "target_article": None,
         "qualifiers": [],
         "legal_phrases": [],
         "constraint": {
@@ -30,7 +32,44 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
     if not query:
         return profile
 
+    scope_pattern = (
+        r"\bна\s+кого\s+(?:распространяется|действует|применяется)\b|"
+        r"\bсфера\s+действия\b|"
+        r"\bв\s+отношении\s+кого\b|"
+        r"\bк\s+кому\s+(?:применяется|относится)\b"
+    )
+    if re.search(scope_pattern, query, re.IGNORECASE):
+        profile["question_type"] = "scope"
+        profile["event"] = "law_scope"
+        profile["object"] = "law_scope"
+
+        if re.search(
+            r"\b356[-–—]з\b|\b356\s*[-–—]\s*з\b|"
+            r"закона?\s+.{0,80}об\s+охране\s+труда",
+            query,
+            re.IGNORECASE,
+        ):
+            profile["target_document"] = "356-з"
+            profile["target_article"] = "3"
+            profile["legal_phrases"].extend([
+                "сфера действия настоящего Закона",
+                "настоящий Закон применяется в отношении всех работодателей",
+                "работающих граждан Республики Беларусь",
+                "иностранных граждан и лиц без гражданства",
+            ])
+        elif re.search(
+            r"\bтрудов(?:ого|ым)\s+кодекс\w*\b|\bтрудовой\s+кодекс\b",
+            query,
+            re.IGNORECASE,
+        ):
+            profile["target_document"] = "трудовой кодекс"
+            profile["legal_phrases"].extend([
+                "сфера действия Трудового кодекса",
+                "трудовые отношения",
+            ])
+
     qtypes = [
+        ("scope", [scope_pattern]),
         ("what_to_do", [r"\bчто\s+делать\b", r"\bкак\s+(?:должен|следует)\s+действ", r"\bпорядок\s+действ"]),
         ("frequency", [r"\bкак\s+часто\b", r"\bс\s+какой\s+периодичност", r"\bпериодичност\w*\b"]),
         ("limit", [r"\bсколько\b.*\bкг\b", r"\bсколько\s+разрешено\b", r"\bпредельн\w*\s+норм", r"\bнорм\w*\s+(?:подъема|перемещения)"]),
