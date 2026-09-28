@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: "Number of evaluation cases (60 core-like or 240 full corpus)"
+        description: "Number of evaluation cases (default: all 304 cases)"
         required: false
-        default: "240"
+        default: "304"
 
 jobs:
   retrieval-evaluation:
