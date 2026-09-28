@@ -33,7 +33,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         return profile
 
     scope_pattern = (
-        r"\bна\s+кого\s+(?:распространяется|действует|применяется)\b|"
+        r"\bна\s+кого\s+(?:распространяется|распространяются|действует|действуют|применяется|применяются)\b|"
         r"\bсфера\s+действия\b|"
         r"\bв\s+отношении\s+кого\b|"
         r"\bк\s+кому\s+(?:применяется|относится)\b"
@@ -67,6 +67,20 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
                 "сфера действия Трудового кодекса",
                 "трудовые отношения",
             ])
+        elif re.search(r"\bправила\s+по\s+охране\s+труда\b", query, re.IGNORECASE):
+            # Общие Правила по охране труда — постановление Минтруда № 53.
+            # Специальные правила «при ...» не переводим в этот документ.
+            rules_match = re.search(r"\bправила\s+по\s+охране\s+труда\b", query, re.IGNORECASE)
+            tail = query[rules_match.end():] if rules_match else ""
+            if not re.match(r"\s+при\b", tail, re.IGNORECASE):
+                profile["target_document"] = "правила по охране труда 53"
+                profile["target_article"] = "2"
+                profile["legal_phrases"].extend([
+                    "Правила по охране труда",
+                    "требования по охране труда распространяются на работодателей",
+                    "независимо от их организационно-правовых форм и форм собственности",
+                    "различные виды экономической деятельности",
+                ])
 
     qtypes = [
         ("scope", [scope_pattern]),
