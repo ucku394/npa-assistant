@@ -2152,6 +2152,7 @@ def _select_legal_diverse_chunks(
     special_issue: Optional[str] = None,
     accident_mode: Optional[str] = None,
     query_profile: Optional[Dict[str, Any]] = None,
+    user_query: str = "",
 ) -> List[Dict[str, Any]]:
     if not ranked_chunks or limit <= 0:
         return []
@@ -2207,9 +2208,9 @@ def _select_legal_diverse_chunks(
         return True
 
     if accident_mode == "general" and topic == "accident_investigation":
-        query_text = " ".join(
-            str(chunk.get("_user_query_for_scoring") or "") for chunk in ranked_chunks[:1]
-        ).lower()
+        query_text = str(user_query or "").strip().lower()
+        if not query_text and query_profile:
+            query_text = str(query_profile.get("raw_query") or "").strip().lower()
         deadline_query = any(marker in query_text for marker in (
             "в какой срок", "срок расследования", "срок должно быть проведено",
             "за исключением специального расследования",
