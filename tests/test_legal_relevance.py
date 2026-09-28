@@ -160,3 +160,30 @@ def test_query_plan_exposes_hierarchy():
     assert plan["subtopic"] == "responsible_person"
     assert plan["legal_object"] == "electrical_responsible_person"
     assert "ответственный за электрохозяйство" in plan["source_constraints"]["preferred_terms"]
+
+
+def test_query_plan_preserves_kind_intent_for_briefing():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan("Какой инструктаж проводится при приеме на работу?")
+    queries = [q.lower() for q in plan["search_queries"]]
+    assert any("виды инструктажей" in q for q in queries)
+    assert not any("кто проводит вводный инструктаж" in q for q in queries)
+
+
+def test_query_plan_builds_frequency_anchor_from_hierarchy():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan("Как часто проверяются огнетушители?")
+    queries = [q.lower() for q in plan["search_queries"]]
+    assert plan["subtopic"] == "fire_extinguishers"
+    assert any("периодичность огнетушители" in q for q in queries)
+
+
+def test_query_plan_builds_electrical_knowledge_testing_anchor():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan("Кто проверяет знания электротехнического персонала?")
+    queries = [q.lower() for q in plan["search_queries"]]
+    assert any("кто проводит проверка знаний электротехнического персонала" in q for q in queries)
+    assert plan["legal_object"] == "electrical_knowledge_testing"
