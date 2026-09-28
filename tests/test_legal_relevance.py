@@ -185,5 +185,30 @@ def test_query_plan_builds_electrical_knowledge_testing_anchor():
 
     plan = build_query_plan("Кто проверяет знания электротехнического персонала?")
     queries = [q.lower() for q in plan["search_queries"]]
-    assert any("кто проводит проверка знаний электротехнического персонала" in q for q in queries)
+    assert any("кто проводит проверку знаний электротехнического персонала" in q for q in queries)
     assert plan["legal_object"] == "electrical_knowledge_testing"
+
+
+def test_query_plan_exposes_explicit_query_slots():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan("Кто проверяет знания электротехнического персонала?")
+    slots = {item["role"]: item["query"].lower() for item in plan["query_slots"]}
+
+    assert slots["exact"] == "кто проверяет знания электротехнического персонала?"
+    assert "электротехнический персонал" in slots["object"]
+    assert "кто проводит проверку знаний" in slots["intent"]
+    assert len(plan["query_slots"]) == len(plan["search_queries"]) <= 8
+
+
+def test_query_plan_preserves_specialized_recovery_query():
+    from rag_engine.query_planner import build_query_plan
+
+    plan = build_query_plan(
+        "Какие категории несчастных случаев подлежат специальному расследованию?"
+    )
+    queries = [q.lower() for q in plan["search_queries"]]
+
+    assert len(queries) <= 8
+    assert any("пункт 40 правил № 30" in q for q in queries)
+    assert len(plan["query_roles"]) == len(queries)
