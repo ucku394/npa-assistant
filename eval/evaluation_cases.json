@@ -4274,9 +4274,9 @@
     ],
     "expected_domain": "occupational_safety",
     "gold_source_policy": "document-level curated baseline; chunk golds intentionally empty until manually verified"
-  }
+  },
   {
-  "id": "ACCI_021",
+    "id": "ACCI_021",
   "topic": "accident_investigation",
   "question": "Какие категории несчастных случаев подлежат специальному расследованию?",
   "required_terms": [
