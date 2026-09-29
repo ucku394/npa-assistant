@@ -59,6 +59,26 @@ OPENROUTER_SECOND_FALLBACK_MODEL = os.getenv(
     "openrouter/free",
 ).strip()
 
+# Дополнительные бесплатные резервные модели OpenRouter.
+# Они нужны как аварийный слой, когда конкретные модели из ENV
+# одновременно попадают под upstream rate-limit или возвращают
+# пустой ответ. Список намеренно содержит модели разных провайдеров.
+OPENROUTER_EXTRA_FALLBACK_MODELS = [
+    model.strip()
+    for model in os.getenv(
+        "OPENROUTER_EXTRA_FALLBACK_MODELS",
+        ",".join(
+            [
+                "qwen/qwen3.8-27b:free",
+                "nvidia/nemotron-3-super-120b-a12b:free",
+                "inclusionai/ling-3.0-flash:free",
+                "openrouter/free",
+            ]
+        ),
+    ).split(",")
+    if model.strip()
+]
+
 _gemini_disabled_until = 0.0
 _openrouter_disabled_until = 0.0
 _openrouter_model_disabled_until = {}
@@ -1074,6 +1094,7 @@ def generate_with_openrouter(prompt: str) -> str:
         OPENROUTER_MODEL,
         OPENROUTER_FALLBACK_MODEL,
         OPENROUTER_SECOND_FALLBACK_MODEL,
+        *OPENROUTER_EXTRA_FALLBACK_MODELS,
     ):
         if model and model not in models:
             models.append(model)
