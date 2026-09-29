@@ -20,6 +20,8 @@ from config import (
     OPENROUTER_API_KEY,
     OPENROUTER_VISION_MODEL,
     OPENROUTER_VISION_FALLBACK_MODEL,
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_VISION_MODEL,
     VISION_MAX_OUTPUT_TOKENS,
 )
 from prompts import VISION_STRUCTURED_PROMPT
@@ -35,6 +37,13 @@ _client = OpenAI(
         "X-Title": "Belarus OHS Safety Assistant - Vision",
     },
 ) if OPENROUTER_API_KEY else None
+
+_deepseek_client = OpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com",
+    max_retries=0,
+    default_headers={"X-Title": "Belarus OHS Safety Assistant - Vision"},
+) if DEEPSEEK_API_KEY else None
 
 
 # --- OSH-чеклист, который подмешивается в промпт -----------------------------
@@ -275,10 +284,14 @@ def _call_model(
     }
 
     raw_text = ""
+    client = _deepseek_client if model.startswith("deepseek-") else _client
+    if client is None:
+        raise RuntimeError(f"Vision provider is not configured for model={model}")
+
     for attempt in range(2):
         try:
             try:
-                response = _client.chat.completions.create(
+                response = client.chat.completions.create(
                     **request,
                     response_format={"type": "json_object"},
                 )
@@ -287,7 +300,7 @@ def _call_model(
                     "VISION | structured output unavailable model=%s attempt=%s | error=%s",
                     model, attempt + 1, structured_exc,
                 )
-                response = _client.chat.completions.create(**request)
+                response = client.chat.completions.create(**request)
 
             raw_text = _extract_text(response)
             if raw_text:
@@ -349,9 +362,12 @@ def analyze_image(
     )
     prompt_with_checklist = f"{base_prompt}\n\n{OSH_CHECKLIST}"
 
-    # Порядок моделей: основная -> fallback -> openrouter/free.
+    # Vision: сначала прямой DeepSeek (если API-ключ настроен),
+    # затем OpenRouter fallback. Не начинаем с openrouter/free:
+    # его суточная free-квота не должна блокировать всю инспекцию.
     models: List[str] = []
     for model in (
+        DEEPSEEK_VISION_MODEL if DEEPSEEK_API_KEY else "",
         OPENROUTER_VISION_MODEL,
         OPENROUTER_VISION_FALLBACK_MODEL,
         "openrouter/free",
