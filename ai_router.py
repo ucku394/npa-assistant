@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # короткой. Это не отключает Gemini на 30 минут после каждого
 # кратковременного сбоя.
 GEMINI_RATE_LIMIT_COOLDOWN_SECONDS = 300
+# Суточная квота Gemini Free Tier: повторять запросы до истечения суток
+# бессмысленно. Для такой ошибки модель отключается до следующего UTC-дня.
+GEMINI_DAILY_QUOTA_COOLDOWN_SECONDS = 24 * 60 * 60
 # 503/high-demand: после коротких retry переходим к резервной Gemini-модели,
 # а затем к OpenRouter. После серии 503 основная Gemini-модель
 # ставится на короткий 30-секундный cooldown, чтобы следующий запрос
@@ -539,6 +542,10 @@ def _extract_source_ids(prompt: str) -> list[str]:
     return result
 
 
+class _SourceGroundingError(RuntimeError):
+    """Юридический ответ не содержит подтверждённых SOURCE_ID."""
+
+
 def _extract_used_source_ids(text: str) -> list[str]:
     if not text:
         return []
@@ -558,6 +565,42 @@ def _extract_used_source_ids(text: str) -> list[str]:
             result.append(value)
 
     return result
+
+
+def _validate_source_grounding(prompt: str, text: str) -> list[str]:
+    """
+    Проверяет юридическую привязку ответа к RAG-контексту.
+
+    Если в prompt есть разрешённые SOURCE_ID, ответ обязан содержать
+    хотя бы один из них и не должен содержать чужих SOURCE_ID.
+    """
+    allowed_source_ids = _extract_source_ids(prompt)
+    used_source_ids = _extract_used_source_ids(text)
+
+    logger.info("LEGAL | allowed SOURCE_IDs=%s", allowed_source_ids)
+    logger.info("LEGAL | model SOURCE_IDs=%s", used_source_ids)
+
+    if not allowed_source_ids:
+        return used_source_ids
+
+    invalid_source_ids = [
+        source_id
+        for source_id in used_source_ids
+        if source_id not in allowed_source_ids
+    ]
+
+    if invalid_source_ids:
+        raise _SourceGroundingError(
+            "Model used SOURCE_IDs outside the RAG context: "
+            + ", ".join(invalid_source_ids)
+        )
+
+    if not used_source_ids:
+        raise _SourceGroundingError(
+            "Model returned no SOURCE_ID although legal RAG sources are available"
+        )
+
+    return used_source_ids
 
 
 # ============================================================
@@ -850,31 +893,7 @@ def _openrouter_request(
     # --------------------------------------------------------
     # SOURCE_ID VALIDATION
     # --------------------------------------------------------
-
-    allowed_source_ids = _extract_source_ids(prompt)
-    used_source_ids = _extract_used_source_ids(text)
-
-    invalid_source_ids = [
-        source_id
-        for source_id in used_source_ids
-        if source_id not in allowed_source_ids
-    ]
-
-    logger.info(
-        "LEGAL | allowed SOURCE_IDs=%s",
-        allowed_source_ids,
-    )
-
-    logger.info(
-        "LEGAL | model SOURCE_IDs=%s",
-        used_source_ids,
-    )
-
-    if invalid_source_ids:
-        logger.warning(
-            "LEGAL | invalid SOURCE_IDs used by model=%s",
-            invalid_source_ids,
-        )
+    _validate_source_grounding(prompt, text)
 
     return text
 
@@ -1243,6 +1262,21 @@ def generate_with_openrouter(prompt: str) -> str:
 # GEMINI ERROR CLASSIFICATION
 # ============================================================
 
+def _is_gemini_daily_quota_error(error: Exception) -> bool:
+    """Возвращает True, если Gemini сообщает именно суточную quota-ошибку."""
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+            "generaterequestsperdayperproject-freetier",
+            "generate_requests_per_day",
+            "per_day_per_project",
+            "free_tier_requests",
+        )
+    )
+
+
 def _classify_gemini_error(
     error: Exception,
 ) -> str:
@@ -1274,8 +1308,13 @@ def _classify_gemini_error(
     ):
         return "configuration"
 
-    # 429/quota — отдельная категория: после rate-limit
-    # cooldown должен быть длиннее, чем после обычного 503/timeout.
+    # Суточная Free Tier quota — отдельная категория. Не тратим
+    # дополнительные попытки и не обращаемся к той же модели
+    # каждые несколько минут.
+    if _is_gemini_daily_quota_error(error):
+        return "daily_quota"
+
+    # 429/quota — кратковременный rate-limit.
     if any(
         marker in message
         for marker in (
@@ -1309,6 +1348,9 @@ def _classify_gemini_error(
 # ============================================================
 
 def _gemini_cooldown_seconds(category: str) -> int:
+    if category == "daily_quota":
+        return GEMINI_DAILY_QUOTA_COOLDOWN_SECONDS
+
     if category == "temporary":
         return GEMINI_TEMPORARY_COOLDOWN_SECONDS
 
@@ -1344,12 +1386,20 @@ def generate_answer(prompt: str) -> str:
                         CHAT_MODEL,
                     )
 
+                    _validate_source_grounding(prompt, result)
                     _gemini_disabled_until = 0.0
                     return result
 
                 except Exception as e:
                     last_gemini_error = e
-                    category = _classify_gemini_error(e)
+                    if isinstance(e, _SourceGroundingError):
+                        logger.warning(
+                            "LEGAL | Gemini primary rejected: missing/invalid SOURCE_ID | model=%s",
+                            CHAT_MODEL,
+                        )
+                        category = "temporary"
+                    else:
+                        category = _classify_gemini_error(e)
 
                     logger.warning(
                         "AI | Gemini primary failed | model=%s | "
@@ -1372,7 +1422,7 @@ def generate_answer(prompt: str) -> str:
                         break
 
                     # 503/temporary: retry with short backoff.
-                    # 429: do not burn multiple requests against a quota.
+                    # Любой quota/rate-limit не повторяем внутри этого запроса.
                     if (
                         category == "temporary"
                         and attempt < GEMINI_RETRY_ATTEMPTS
@@ -1444,6 +1494,7 @@ def generate_answer(prompt: str) -> str:
                     GEMINI_FALLBACK_MODEL,
                 )
 
+                _validate_source_grounding(prompt, result)
                 _gemini_fallback_disabled_until = 0.0
 
                 logger.info(
@@ -1455,7 +1506,14 @@ def generate_answer(prompt: str) -> str:
                 return result
 
             except Exception as e:
-                category = _classify_gemini_error(e)
+                if isinstance(e, _SourceGroundingError):
+                    logger.warning(
+                        "LEGAL | Gemini fallback rejected: missing/invalid SOURCE_ID | model=%s",
+                        GEMINI_FALLBACK_MODEL,
+                    )
+                    category = "temporary"
+                else:
+                    category = _classify_gemini_error(e)
 
                 logger.warning(
                     "AI | Gemini fallback failed | model=%s | "
