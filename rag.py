@@ -2821,29 +2821,39 @@ async def retrieve_context(
             None,
         )
 
-    search_tasks = [
-        _run_search(
-            vector,
-            search_query,
-            remove_domain_filter=(cross_reference and index == 0),
-        )
-        for index, (vector, search_query) in enumerate(zip(query_vectors, valid_queries))
-    ]
-
-    search_groups = await asyncio.gather(*search_tasks, return_exceptions=True)
+    # Keep concurrent Supabase searches bounded. This lowers peak RAM while
+    # preserving the same queries, search limits, scoring and final selection.
     clean_groups: List[List[Dict[str, Any]]] = []
+    search_concurrency = max(1, int(os.getenv("RAG_SEARCH_CONCURRENCY", "2")))
 
-    for index, result in enumerate(search_groups):
-        if isinstance(result, Exception):
-            logger.warning(
-                "RAG | search failed | query=%s | error=%s",
-                valid_queries[index],
-                result,
-            )
-            clean_groups.append([])
-            continue
+    for batch_start in range(0, len(valid_queries), search_concurrency):
+        batch_indices = range(
+            batch_start,
+            min(batch_start + search_concurrency, len(valid_queries)),
+        )
+        batch_results = await asyncio.gather(
+            *[
+                _run_search(
+                    query_vectors[index],
+                    valid_queries[index],
+                    remove_domain_filter=(cross_reference and index == 0),
+                )
+                for index in batch_indices
+            ],
+            return_exceptions=True,
+        )
 
-        clean_groups.append(result or [])
+        for index, result in zip(batch_indices, batch_results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "RAG | search failed | query=%s | error=%s",
+                    valid_queries[index],
+                    result,
+                )
+                clean_groups.append([])
+                continue
+
+            clean_groups.append(result or [])
 
     query_roles = [
         "main" if index == 0 else "expanded"
