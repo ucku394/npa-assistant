@@ -238,6 +238,16 @@ def _postprocess(result: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # --- Один вызов модели -------------------------------------------------------
+def _is_openrouter_daily_free_quota_error(exc: Exception) -> bool:
+    """True, если OpenRouter сообщил об исчерпании суточной free-моделей квоты."""
+    text = str(exc or "").lower()
+    return any(marker in text for marker in (
+        "free-models-per-day",
+        "openrouter_free_tier_daily",
+        "rate limit exceeded: free",
+    ))
+
+
 def _call_model(
     model: str,
     prompt: str,
@@ -265,7 +275,7 @@ def _call_model(
     }
 
     raw_text = ""
-    for attempt in range(3):
+    for attempt in range(2):
         try:
             try:
                 response = _client.chat.completions.create(
@@ -284,14 +294,20 @@ def _call_model(
                 break
             logger.warning("VISION | empty response model=%s attempt=%s", model, attempt + 1)
         except Exception as request_exc:
+            if _is_openrouter_daily_free_quota_error(request_exc):
+                logger.error(
+                    "VISION | OpenRouter Free Tier daily quota exhausted; skip retries model=%s",
+                    model,
+                )
+                raise
             logger.warning(
                 "VISION | request failed model=%s attempt=%s | error=%s",
                 model, attempt + 1, request_exc,
             )
-            if attempt == 2:
+            if attempt == 1:
                 raise
-        if attempt < 2:
-            time.sleep(1.5 * (attempt + 1))
+        if attempt < 1:
+            time.sleep(1.5)
 
     if not raw_text:
         raise ValueError("Vision model returned an empty response after retries.")
@@ -346,8 +362,17 @@ def analyze_image(
 
     last_error: Exception | None = None
     best_empty: Dict[str, Any] | None = None
+    free_tier_exhausted = False
 
     for model in models:
+        if free_tier_exhausted and (
+            model == "openrouter/free" or model.endswith(":free")
+        ):
+            logger.warning(
+                "VISION | skip free model after daily quota exhaustion model=%s",
+                model,
+            )
+            continue
         try:
             logger.info("VISION | trying model=%s", model)
 
@@ -387,6 +412,11 @@ def analyze_image(
 
         except Exception as exc:
             last_error = exc
+            if _is_openrouter_daily_free_quota_error(exc):
+                free_tier_exhausted = True
+                logger.error(
+                    "VISION | daily OpenRouter Free Tier quota exhausted; free models disabled for this request"
+                )
             logger.warning("VISION | model failed=%s | error=%s", model, exc)
 
     # Ни одна модель не дала findings. Возвращаем лучший «пустой» результат,
@@ -395,5 +425,12 @@ def analyze_image(
         if not best_empty["potential_findings"]:
             best_empty["needs_review"] = True
         return best_empty
+
+    if free_tier_exhausted:
+        raise RuntimeError(
+            "Vision analysis unavailable: OpenRouter Free Tier daily quota "
+            "is exhausted. Configure a non-free OPENROUTER_VISION_MODEL "
+            "or OPENROUTER_VISION_FALLBACK_MODEL."
+        ) from last_error
 
     raise RuntimeError(f"Vision analysis failed: {last_error}")
