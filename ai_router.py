@@ -1542,7 +1542,8 @@ def generate_answer(
                     GEMINI_FALLBACK_MODEL,
                 )
 
-                _validate_source_grounding(prompt, result)
+                if enforce_source_grounding:
+                    _validate_source_grounding(prompt, result)
                 _gemini_fallback_disabled_until = 0.0
 
                 logger.info(
@@ -1631,4 +1632,7 @@ def generate_vision_legal_json(prompt: str) -> str:
     It deliberately uses the existing AI fallback chain so the inspection
     feature remains compatible with the project's current resilience logic.
     """
-    return generate_answer(prompt)
+    return generate_answer(
+        prompt,
+        enforce_source_grounding=False,
+    )
