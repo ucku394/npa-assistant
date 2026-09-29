@@ -57,7 +57,7 @@ from prompts import (
 )
 
 from rag import build_source_id
-from core.chat_service import ChatService
+from core.chat_service import chat_service
 
 
 # ============================================================
@@ -273,7 +273,8 @@ supabase = create_client(
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
-chat_service = ChatService(supabase_client=supabase)
+# Reuse the singleton ChatService from core.chat_service.
+# This avoids creating a second Supabase client/service in the worker process.
 
 deepseek_client = (
     OpenAI(
