@@ -2102,6 +2102,89 @@ def _universal_query_relevance_score(
     return max(0.0, min(score, 1.0))
 
 
+def _legal_authority_relevance_score(
+    chunk: Dict[str, Any],
+    user_query: str,
+    query_profile: Optional[Dict[str, Any]] = None,
+) -> float:
+    """
+    Legal-authority reranker.
+
+    Semantic similarity is useful for discovery, but for legal questions
+    an exact normative target (document/article/point) must outrank a
+    merely semantically similar document such as a general code provision.
+    """
+    profile = query_profile or {}
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+
+    score = 0.0
+
+    target_document = str(profile.get("target_document") or "").strip().lower()
+    target_article = str(profile.get("target_article") or "").strip().lower()
+
+    if target_document:
+        normalized_doc = re.sub(r"[^a-zа-яё0-9]+", " ", document)
+        normalized_target = re.sub(r"[^a-zа-яё0-9]+", " ", target_document)
+        if normalized_target and normalized_target in normalized_doc:
+            score += 0.75
+
+    if target_article:
+        normalized_point = point.rstrip(".").strip()
+        normalized_article = target_article.rstrip(".").strip()
+        if normalized_point == normalized_article:
+            score += 1.15
+
+    # Explicit NPA number in the user query is a strong legal signal.
+    npa_numbers = re.findall(r"№\s*([0-9]+(?:[-/]?[а-яa-z0-9]+)?)", query, flags=re.IGNORECASE)
+    if npa_numbers:
+        for number in npa_numbers:
+            if re.search(rf"(?<!\d){re.escape(number)}(?!\d)", document, flags=re.IGNORECASE):
+                score += 0.55
+                break
+
+    # Explicit article/point marker in the query.
+    article_match = re.search(
+        r"\b(?:статья|ст\.?|пункт|п\.?)\s*([0-9]+(?:\.[0-9]+)*)",
+        query,
+        flags=re.IGNORECASE,
+    )
+    if article_match:
+        requested_point = article_match.group(1).rstrip(".")
+        if point.rstrip(".") == requested_point:
+            score += 0.85
+
+    # When the user explicitly asks about the Labour Code, unrelated NPA
+    # documents should not win solely because their wording is semantically close.
+    if "трудовой кодекс" in query or "трудовом кодексе" in query:
+        if "трудовой кодекс" in document or "трудовои кодекс" in document:
+            score += 0.35
+        else:
+            score -= 0.35
+
+    # Same legal domain is a weak positive signal; domain-specific topic
+    # and existing targeted markers remain handled by the other rerankers.
+    if chunk.get("legal_domain") == "occupational_safety":
+        score += 0.05
+
+    # Targeted lexical retrieval is stronger evidence than raw cosine similarity.
+    if any(
+        chunk.get(flag)
+        for flag in (
+            "_law_scope_targeted",
+            "_ppe_refusal_targeted",
+            "_work_break_targeted",
+            "_training_suspension_targeted",
+            "_osh_knowledge_frequency_targeted",
+        )
+    ):
+        score += 0.30
+
+    return score
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -2198,8 +2281,15 @@ def _legal_relevance_score(
     if query_profile and query_profile.get("event") == "law_scope":
         chunk["_scope_score"] = universal_score
 
+    authority_score = _legal_authority_relevance_score(
+        chunk,
+        user_query,
+        query_profile or build_universal_query_profile(user_query),
+    )
+    chunk["_legal_authority_score"] = authority_score
+
     return (
-        semantic * 0.28
+        semantic * 0.27
         + hybrid_score * 0.12
         + exact_score * 0.16
         + universal_score * (0.34 if query_profile and query_profile.get("event") == "law_scope" else 0.22)
@@ -2207,6 +2297,7 @@ def _legal_relevance_score(
         + topic_score * topic_weight
         + intent_score * 0.05
         + primary_score * 0.10
+        + authority_score * 0.13
         + briefing_mode_bonus
         + labor_code_bonus
         + special_category_bonus
@@ -3116,12 +3207,13 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | authority=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
             _safe_float(_exact_match_score(chunk, user_query, topic)),
             _safe_float(chunk.get("_universal_score")),
+            _safe_float(chunk.get("_legal_authority_score")),
             _safe_float(chunk.get("_constraint_scope_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
