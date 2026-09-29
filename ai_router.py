@@ -11,6 +11,7 @@ from openai import OpenAI, RateLimitError
 from config import (
     GEMINI_API_KEY,
     CHAT_MODEL,
+    GEMINI_FALLBACK_MODEL,
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
     OPENROUTER_FALLBACK_MODEL,
@@ -23,17 +24,19 @@ logger = logging.getLogger(__name__)
 # короткой. Это не отключает Gemini на 30 минут после каждого
 # кратковременного сбоя.
 GEMINI_RATE_LIMIT_COOLDOWN_SECONDS = 300
-# 503/high-demand: не мучаем перегруженный endpoint повтором через 2 секунды.
-# После одной неудачи Gemini временно пропускается, а запрос сразу уходит
-# в OpenRouter. Следующий пользовательский запрос сможет снова попробовать
-# Gemini после короткого cooldown.
-GEMINI_TEMPORARY_COOLDOWN_SECONDS = 300
+# 503/high-demand: после коротких retry переходим к резервной Gemini-модели,
+# а затем к OpenRouter. Google рекомендует backoff/retry для 503.
+GEMINI_TEMPORARY_COOLDOWN_SECONDS = 120
 GEMINI_UNKNOWN_COOLDOWN_SECONDS = 120
 
-# Для 503/high-demand retry внутри одного пользовательского запроса отключён.
-# Это не задерживает Telegram-ответ и не создаёт лишнюю нагрузку на Gemini.
-GEMINI_RETRY_ATTEMPTS = 0
-GEMINI_RETRY_DELAY_SECONDS = 0
+# Для 503 делаем две короткие повторные попытки в рамках одного запроса.
+# Задержки 2 и 5 секунд не дают мгновенно переключаться на другой провайдер
+# при кратковременном всплеске нагрузки.
+GEMINI_RETRY_ATTEMPTS = 2
+GEMINI_RETRY_DELAYS_SECONDS = (2, 5)
+
+# Резервная Gemini-модель. Основная модель остаётся CHAT_MODEL.
+GEMINI_FALLBACK_COOLDOWN_SECONDS = 120
 
 # Ошибки конфигурации/доступности API (например, location is not supported)
 # не имеют смысла повторять каждые 30 минут. В таком случае Gemini
@@ -676,7 +679,10 @@ def _remove_accidental_internal_reasoning(text: str) -> str:
 # GEMINI
 # ============================================================
 
-def generate_with_gemini(prompt: str) -> str:
+def generate_with_gemini(
+    prompt: str,
+    model: str,
+) -> str:
     _validate_prompt(prompt)
 
     if gemini_client is None:
@@ -686,18 +692,31 @@ def generate_with_gemini(prompt: str) -> str:
 
     logger.info(
         "AI | trying Gemini | model=%s",
-        CHAT_MODEL,
+        model,
     )
 
     system_prompt = _build_legal_system_prompt(prompt)
 
+    config_kwargs = {
+        "max_output_tokens": AI_MAX_OUTPUT_TOKENS,
+        "system_instruction": system_prompt,
+    }
+
+    # Gemini 3.8 Flash uses the new thinking-level controls and the
+    # migration guidance recommends removing temperature/top_p/top_k.
+    # Keep 3.6 on the existing low-temperature configuration.
+    if model == "gemini-3.8-flash":
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            thinking_level="low",
+        )
+    else:
+        config_kwargs["temperature"] = 0.1
+
     response = gemini_client.models.generate_content(
-        model=CHAT_MODEL,
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            temperature=0.1,
-            max_output_tokens=AI_MAX_OUTPUT_TOKENS,
-            system_instruction=system_prompt,
+            **config_kwargs,
         ),
     )
 
@@ -707,18 +726,19 @@ def generate_with_gemini(prompt: str) -> str:
 
     if not text:
         raise RuntimeError(
-            "Gemini returned empty response"
+            f"Gemini returned empty response | model={model}"
         )
 
     text = _remove_accidental_internal_reasoning(text)
 
     if not text:
         raise RuntimeError(
-            "Gemini returned empty response after cleanup"
+            f"Gemini returned empty response after cleanup | model={model}"
         )
 
     logger.info(
-        "AI | Gemini success | chars=%s",
+        "AI | Gemini success | model=%s | chars=%s",
+        model,
         len(text),
     )
 
@@ -1270,30 +1290,33 @@ def _gemini_cooldown_seconds(category: str) -> int:
     return GEMINI_UNKNOWN_COOLDOWN_SECONDS
 
 
+_gemini_fallback_disabled_until = 0.0
+
+
 def generate_answer(prompt: str) -> str:
     global _gemini_disabled_until
+    global _gemini_fallback_disabled_until
 
     _validate_prompt(prompt)
 
     # --------------------------------------------------------
-    # 1. GEMINI
+    # 1. PRIMARY GEMINI
     # --------------------------------------------------------
 
     if gemini_client is not None:
-
         now = time.time()
 
         if now >= _gemini_disabled_until:
-
             last_gemini_error = None
 
             for attempt in range(GEMINI_RETRY_ATTEMPTS + 1):
                 try:
-                    result = generate_with_gemini(prompt)
+                    result = generate_with_gemini(
+                        prompt,
+                        CHAT_MODEL,
+                    )
 
-                    # Успешный запрос снимает предыдущий transient cooldown.
                     _gemini_disabled_until = 0.0
-
                     return result
 
                 except Exception as e:
@@ -1301,97 +1324,154 @@ def generate_answer(prompt: str) -> str:
                     category = _classify_gemini_error(e)
 
                     logger.warning(
-                        "AI | Gemini failed | attempt=%s/%s | "
-                        "category=%s | error=%s",
+                        "AI | Gemini primary failed | model=%s | "
+                        "attempt=%s/%s | category=%s | error=%s",
+                        CHAT_MODEL,
                         attempt + 1,
                         GEMINI_RETRY_ATTEMPTS + 1,
                         category,
                         e,
                     )
 
-                    # Ошибки конфигурации/доступа бессмысленно повторять.
                     if category == "configuration":
                         _gemini_disabled_until = GEMINI_CONFIG_DISABLED
-
                         logger.error(
-                            "AI | Gemini disabled until process restart "
-                            "because the error is configuration/access related | "
+                            "AI | Gemini primary disabled until process restart | "
                             "category=%s | error=%s",
                             category,
                             e,
                         )
                         break
 
-                    # Retry внутри одного Telegram-запроса намеренно отключён для
-                    # transient/rate-limit ошибок. При 503/high-demand
-                    # сразу переключаемся на OpenRouter, а Gemini получает
-                    # cooldown и автоматически возвращается позже.
+                    # 503/temporary: retry with short backoff.
+                    # 429: do not burn multiple requests against a quota.
                     if (
-                        category in ("temporary", "rate_limit")
+                        category == "temporary"
                         and attempt < GEMINI_RETRY_ATTEMPTS
                     ):
+                        delay = GEMINI_RETRY_DELAYS_SECONDS[
+                            min(attempt, len(GEMINI_RETRY_DELAYS_SECONDS) - 1)
+                        ]
+
                         logger.info(
-                            "AI | Gemini retry scheduled | "
-                            "attempt=%s | delay=%ss | category=%s",
+                            "AI | Gemini primary retry | model=%s | "
+                            "next_attempt=%s | delay=%ss",
+                            CHAT_MODEL,
                             attempt + 2,
-                            GEMINI_RETRY_DELAY_SECONDS,
-                            category,
+                            delay,
                         )
-                        time.sleep(GEMINI_RETRY_DELAY_SECONDS)
+                        time.sleep(delay)
                         continue
 
                     cooldown = _gemini_cooldown_seconds(category)
-                    _gemini_disabled_until = (
-                        time.time() + cooldown
-                    )
+                    _gemini_disabled_until = time.time() + cooldown
 
                     logger.warning(
-                        "AI | Gemini cooldown set | "
+                        "AI | Gemini primary cooldown | model=%s | "
                         "category=%s | seconds=%s | error=%s",
+                        CHAT_MODEL,
                         category,
                         cooldown,
                         last_gemini_error,
                     )
                     break
 
+        elif _gemini_disabled_until == GEMINI_CONFIG_DISABLED:
+            logger.info(
+                "AI | Gemini primary disabled until process restart "
+                "(configuration/access error)"
+            )
         else:
+            remaining = max(
+                0,
+                int(_gemini_disabled_until - now),
+            )
 
-            if _gemini_disabled_until == GEMINI_CONFIG_DISABLED:
-                logger.info(
-                    "AI | Gemini disabled until process restart "
-                    "(configuration/access error)"
-                )
-            else:
-                remaining = max(
-                    0,
-                    int(_gemini_disabled_until - now),
-                )
-
-                logger.info(
-                    "AI | Gemini temporarily disabled | remaining=%ss",
-                    remaining,
-                )
+            logger.info(
+                "AI | Gemini primary cooldown | model=%s | remaining=%ss",
+                CHAT_MODEL,
+                remaining,
+            )
 
     # --------------------------------------------------------
-    # 2. OPENROUTER
+    # 2. GEMINI 3.8 FALLBACK
+    # --------------------------------------------------------
+
+    if (
+        gemini_client is not None
+        and GEMINI_FALLBACK_MODEL
+        and GEMINI_FALLBACK_MODEL != CHAT_MODEL
+    ):
+        now = time.time()
+
+        if now >= _gemini_fallback_disabled_until:
+            try:
+                logger.info(
+                    "AI | trying Gemini fallback | model=%s",
+                    GEMINI_FALLBACK_MODEL,
+                )
+
+                result = generate_with_gemini(
+                    prompt,
+                    GEMINI_FALLBACK_MODEL,
+                )
+
+                _gemini_fallback_disabled_until = 0.0
+
+                logger.info(
+                    "AI | Gemini fallback success | model=%s | chars=%s",
+                    GEMINI_FALLBACK_MODEL,
+                    len(result),
+                )
+
+                return result
+
+            except Exception as e:
+                category = _classify_gemini_error(e)
+
+                logger.warning(
+                    "AI | Gemini fallback failed | model=%s | "
+                    "category=%s | error=%s",
+                    GEMINI_FALLBACK_MODEL,
+                    category,
+                    e,
+                )
+
+                if category == "configuration":
+                    _gemini_fallback_disabled_until = GEMINI_CONFIG_DISABLED
+                else:
+                    _gemini_fallback_disabled_until = (
+                        time.time() + GEMINI_FALLBACK_COOLDOWN_SECONDS
+                    )
+
+        else:
+            remaining = max(
+                0,
+                int(_gemini_fallback_disabled_until - now),
+            )
+
+            logger.info(
+                "AI | Gemini fallback cooldown | model=%s | remaining=%ss",
+                GEMINI_FALLBACK_MODEL,
+                remaining,
+            )
+
+    # --------------------------------------------------------
+    # 3. OPENROUTER
     # --------------------------------------------------------
 
     if openrouter_client is not None:
-
         try:
-            return generate_with_openrouter(
-                prompt
-            )
+            return generate_with_openrouter(prompt)
 
         except Exception as e:
-
             logger.exception(
                 "AI | OpenRouter failed | error=%s",
                 e,
             )
 
     # --------------------------------------------------------
-    # 3. NOTHING WORKED
+    # 4. NOTHING WORKED
     # --------------------------------------------------------
 
     raise RuntimeError(
