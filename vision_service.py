@@ -225,7 +225,8 @@ def analyze_image(
                     "VISION | non-JSON response model=%s | preview=%r",
                     model, raw_text[:1200],
                 )
-                result = _fallback_from_text(raw_text)            logger.info(
+                result = _fallback_from_text(raw_text)
+                logger.info(
                 "VISION | category=%s | findings=%s",
                 result["category"],
                 len(result["potential_findings"]),
