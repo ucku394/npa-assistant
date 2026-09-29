@@ -14,20 +14,19 @@ Telegram
 
 PHOTO:
 Telegram
-    -> DeepSeek Vision
-    -> Telegram
+    -> OpenRouter free multimodal vision
+    -> structured visual findings
+    -> Belarus NPA RAG verification
+    -> human-confirmed draft prescription
 """
 
 import asyncio
-import base64
 import html
 import logging
-import os
 import re
 from contextlib import asynccontextmanager
 from io import BytesIO
 
-from openai import OpenAI
 from supabase import create_client
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
