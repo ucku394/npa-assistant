@@ -66,8 +66,8 @@ async def verify_finding(
     finding: Dict[str, Any],
     supabase,
 ) -> Dict[str, Any]:
-    query = str(finding.get("description") or "").strip()
-    if not query:
+    raw_query = str(finding.get("description") or "").strip()
+    if not raw_query:
         return {
             "status": "not_confirmed",
             "violation": "",
@@ -76,6 +76,14 @@ async def verify_finding(
             "risk_level": "medium",
         }
 
+    # Vision findings are frequently returned in English. The legal RAG
+    # classifier is optimized for Belarusian/Russian legal terminology, so
+    # explicitly anchor the verification query in the OHS/fire-safety domain.
+    query = (
+        "требования охраны труда и пожарной безопасности: "
+        + raw_query
+    )
+
     rag = await retrieve_context(query, supabase)
     chunks = rag.get("chunks") or []
     context = rag.get("retrieved_text") or ""
@@ -83,7 +91,7 @@ async def verify_finding(
     if not chunks or not context:
         return {
             "status": "potential",
-            "violation": query,
+            "violation": raw_query,
             "evidence": str(finding.get("visual_evidence") or ""),
             "legal_basis": [],
             "corrective_action": "",
@@ -106,7 +114,7 @@ async def verify_finding(
 
     data["status"] = status
     data["legal_basis"] = basis
-    data["violation"] = str(data.get("violation") or query).strip()
+    data["violation"] = str(data.get("violation") or raw_query).strip()
     data["evidence"] = str(
         data.get("evidence")
         or finding.get("visual_evidence")
