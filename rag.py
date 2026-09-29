@@ -776,6 +776,29 @@ def _targeted_training_suspension_search(supabase) -> List[Dict[str, Any]]:
         return []
 
 
+def _targeted_osh_knowledge_frequency_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный поиск п. 51 Инструкции № 175 о периодичности проверки знаний рабочих."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .or_(
+                "point_num.eq.51,point_num.eq.51.,content.ilike.%рабочие%периодическую проверку знаний%,content.ilike.%не реже одного раза в 12 месяцев%"
+            )
+            .limit(TARGETED_SEARCH_LIMIT)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        for chunk in results:
+            chunk["_osh_knowledge_frequency_targeted"] = True
+        return results
+    except Exception as exc:
+        logger.warning("RAG | OHS knowledge frequency targeted search failed: %s", exc)
+        return []
+
+
 def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     queries = [
         "doc_name.ilike.%175%",
@@ -1261,6 +1284,14 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if "osh_knowledge_check_frequency_workers" in (query_profile.get("qualifiers") or []):
+            frequency_results = await asyncio.to_thread(
+                _targeted_osh_knowledge_frequency_search,
+                supabase,
+            )
+            if frequency_results:
+                return frequency_results
 
         if "suspension_for_unpassed_osh_training" in (query_profile.get("qualifiers") or []):
             suspension_results = await asyncio.to_thread(
@@ -1791,6 +1822,34 @@ def _ppe_refusal_relevance_score(
     if "незамедлительно письменно сообщить работодателю" in text:
         score += 0.25
 
+    return min(score, 4.00)
+
+
+def _osh_knowledge_frequency_relevance_score(
+    chunk: Dict[str, Any],
+) -> float:
+    """Узкий score для периодичности проверки знаний рабочих по Инструкции № 175."""
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk).lower()
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    text = f"{document} {point} {content}"
+    score = 0.0
+    if chunk.get("_osh_knowledge_frequency_targeted"):
+        score += 0.80
+    if "175" in document:
+        score += 0.35
+    if re.search(r"(?<!d)51.?", point):
+        score += 1.00
+    if "рабочие" in text:
+        score += 0.30
+    if "периодическую проверку знаний" in text:
+        score += 0.65
+    if "не реже одного раза в 12 месяцев" in text or "не реже одного раза в год" in text:
+        score += 1.00
+    if "повышенной опасностью" in text:
+        score += 0.30
+    if "опасных производственных объектах" in text or "потенциально опасных объектах" in text:
+        score += 0.25
     return min(score, 4.00)
 
 
@@ -2588,6 +2647,36 @@ def _select_legal_diverse_chunks(
                 if len(selected) >= limit:
                     break
                 if _ppe_refusal_relevance_score(chunk) >= 0.45:
+                    _add(chunk, max_per_document=3, max_per_point=1)
+
+    # Для вопроса о периодичности проверки знаний рабочих п. 51
+    # Инструкции № 175 является прямой нормой и должен опережать
+    # нерелевантные статьи ТК, даже если их semantic score выше.
+    knowledge_frequency_qualifier = "osh_knowledge_check_frequency_workers" in (
+        (query_profile or {}).get("qualifiers") or []
+    )
+
+    if knowledge_frequency_qualifier:
+        frequency_pool = [
+            chunk for chunk in ranked_chunks
+            if _osh_knowledge_frequency_relevance_score(chunk) >= 1.20
+        ]
+        frequency_pool.sort(
+            key=lambda chunk: (
+                _osh_knowledge_frequency_relevance_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for chunk in frequency_pool:
+            if _add(chunk, max_per_document=3, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+        if selected:
+            for chunk in ranked_chunks:
+                if len(selected) >= limit:
+                    break
+                if _osh_knowledge_frequency_relevance_score(chunk) >= 0.70:
                     _add(chunk, max_per_document=3, max_per_point=1)
 
     # Для запроса о перерыве более шести месяцев п. 27 Инструкции № 175
