@@ -36,7 +36,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         ("limit", [r"\bсколько\b.*\bкг\b", r"\bсколько\s+разрешено\b", r"\bпредельн\w*\s+норм", r"\bнорм\w*\s+(?:подъема|перемещения)"]),
         ("who", [r"^кто\b", r"\bкто\s+(?:провод|должен|обязан|назнач|ответствен)", r"\bкем\b", r"\bкакое\s+лицо\b"]),
         ("kind", [r"\bкакой\s+(?:вид\s+)?инструктаж", r"\bкакому\s+инструктаж", r"\bвид\w*\s+инструктаж"]),
-        ("whether", [r"\bможно\s+ли\b", r"\bразрешено\s+ли\b", r"\bдопускается\s+ли\b", r"\bимеет\s+ли\s+прав"]),
+        ("whether", [r"\bможно\s+ли\b", r"\bразрешено\s+ли\b", r"\bдопускается\s+ли\b", r"\bимеет\s+ли\s+прав", r"\bобязан\s+ли\b", r"\bобязана\s+ли\b"]),
         ("responsibility", [r"\bкто\s+нес[её]т\s+ответствен", r"\bкто\s+ответствен", r"\bкакая\s+ответствен"]),
         ("term", [r"\bкакой\s+срок\b", r"\bсрок\w*\b", r"\bв\s+течение\b"]),
         ("document", [r"\bкаким\s+документ", r"\bкакой\s+(?:нпа|документ|акт)\b"]),
@@ -215,7 +215,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "периодический медицинский осмотр",
         ])
 
-    if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
+    # Узкий юридический сценарий: работник не прошёл инструктаж и/или проверку знаний.\n    # Для такого вопроса ключевая норма — ст. 49 ТК РБ.\n    training_suspension_pattern = (\n        r"(?:не\s+прошед\w*|не\s+прош\w*)"\n        r".{0,120}?инструктаж\w*"\n        r".{0,120}?провер\w*\s+знан\w*"\n    )\n    training_suspension_reverse_pattern = (\n        r"провер\w*\s+знан\w*"\n        r".{0,120}?инструктаж\w*"\n        r".{0,120}?не\s+прошед\w*"\n    )\n    training_suspension_question = (\n        bool(re.search(r"\bотстран\w*", query, re.IGNORECASE))\n        and (\n            bool(re.search(training_suspension_pattern, query, re.IGNORECASE))\n            or bool(re.search(training_suspension_reverse_pattern, query, re.IGNORECASE))\n        )\n    )\n    if training_suspension_question:\n        profile["qualifiers"].append("suspension_for_unpassed_osh_training")\n        profile["action"] = "suspend_work"\n        profile["legal_phrases"].extend([\n            "Трудовой кодекс Республики Беларусь статья 49 отстранение от работы",\n            "наниматель обязан не допускать к работе не прошедшего инструктаж стажировку и проверку знаний",\n            "не прошедший инструктаж стажировку и проверку знаний по вопросам охраны труда",\n            "отстранить от работы в соответствующий день смену",\n        ])\n\n    if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
         profile["event"] = "occupational_briefing"
         profile["object"] = "occupational_briefing"
         if profile["question_type"] == "kind":
