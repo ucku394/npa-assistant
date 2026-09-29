@@ -227,10 +227,10 @@ def analyze_image(
                 )
                 result = _fallback_from_text(raw_text)
                 logger.info(
-                "VISION | category=%s | findings=%s",
-                result["category"],
-                len(result["potential_findings"]),
-            )
+                    "VISION | category=%s | findings=%s",
+                    result["category"],
+                    len(result["potential_findings"]),
+                )
             return result
         except Exception as exc:
             last_error = exc
