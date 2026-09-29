@@ -706,9 +706,12 @@ def generate_with_gemini(
     # migration guidance recommends removing temperature/top_p/top_k.
     # Keep 3.6 on the existing low-temperature configuration.
     if model == "gemini-3.8-flash":
-        config_kwargs["thinking_config"] = types.ThinkingConfig(
-            thinking_level="low",
-        )
+        # Gemini 3.8 Flash uses medium thinking by default.
+        # Do not pass thinking_config here because the deployed
+        # google-genai SDK may not yet expose thinking_level in
+        # ThinkingConfig. Omitting it keeps the fallback compatible
+        # while retaining the model's default reasoning level.
+        pass
     else:
         config_kwargs["temperature"] = 0.1
 
