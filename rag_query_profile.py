@@ -89,7 +89,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         ("limit", [r"\bсколько\b.*\bкг\b", r"\bсколько\s+разрешено\b", r"\bпредельн\w*\s+норм", r"\bнорм\w*\s+(?:подъема|перемещения)"]),
         ("who", [r"^кто\b", r"\bкто\s+(?:провод|должен|обязан|назнач|ответствен)", r"\bкем\b", r"\bкакое\s+лицо\b"]),
         ("kind", [r"\bкакой\s+(?:вид\s+)?инструктаж", r"\bкакому\s+инструктаж", r"\bвид\w*\s+инструктаж"]),
-        ("whether", [r"\bможно\s+ли\b", r"\bразрешено\s+ли\b", r"\bдопускается\s+ли\b", r"\bимеет\s+ли\s+прав"]),
+        ("whether", [r"\bможно\s+ли\b", r"\bразрешено\s+ли\b", r"\bдопускается\s+ли\b", r"\bимеет\s+ли\s+прав", r"\bобязан\s+ли\b", r"\bобязана\s+ли\b"]),
         ("responsibility", [r"\bкто\s+нес[её]т\s+ответствен", r"\bкто\s+ответствен", r"\bкакая\s+ответствен"]),
         ("term", [r"\bкакой\s+срок\b", r"\bсрок\w*\b", r"\bв\s+течение\b"]),
         ("document", [r"\bкаким\s+документ", r"\bкакой\s+(?:нпа|документ|акт)\b"]),
@@ -99,7 +99,7 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             profile["question_type"] = qtype
             break
 
-    if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
+    if (\n        re.search(r"\bотстран\w*", query, re.IGNORECASE)\n        and re.search(r"\bне\s+прош\w*\s+инструктаж\w*", query, re.IGNORECASE)\n        and re.search(r"\bпровер\w*\s+знан\w*", query, re.IGNORECASE)\n    ):\n        profile["qualifiers"].append("suspension_for_unpassed_osh_training")\n        profile["action"] = "suspend_work"\n        profile["legal_phrases"].extend([\n            "Трудовой кодекс Республики Беларусь статья 49 отстранение от работы",\n            "наниматель обязан не допускать к работе не прошедшего инструктаж стажировку и проверку знаний",\n            "не прошедший инструктаж стажировку и проверку знаний по вопросам охраны труда",\n            "отстранить от работы в соответствующий день смену",\n        ])\n\n    if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
         profile["action_state"] = "not_done"
 
     if re.search(r"\bнесчастн\w*\s+случа\w*|\bтравм\w*\s+на\s+производств", query, re.IGNORECASE):
