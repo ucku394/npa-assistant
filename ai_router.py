@@ -1505,3 +1505,17 @@ def generate_answer(prompt: str) -> str:
     raise RuntimeError(
         "All AI providers failed"
     )
+
+
+
+# ============================================================
+# STRUCTURED VISION / INSPECTION ROUTING
+# ============================================================
+
+def generate_vision_legal_json(prompt: str) -> str:
+    """
+    Dedicated structured call for photo finding legal verification.
+    It deliberately uses the existing AI fallback chain so the inspection
+    feature remains compatible with the project's current resilience logic.
+    """
+    return generate_answer(prompt)
