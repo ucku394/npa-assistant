@@ -274,6 +274,27 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
                 "статья 11 Закон 356-З средства индивидуальной защиты отказ от работы",
             ])
 
+    # Точный сценарий: периодичность проверки знаний по ОТ для рабочих.
+    if (
+        re.search(r"\bрабоч\w*", query, re.IGNORECASE)
+        and re.search(r"\bпровер\w*\s+знан\w*", query, re.IGNORECASE)
+        and re.search(
+            r"\bкак\s+часто\b|\bпериодичност\w*\b|\bчерез\s+какой\s+срок\b|\bне\s+реже\b",
+            query,
+            re.IGNORECASE,
+        )
+    ):
+        profile["qualifiers"].append("osh_knowledge_check_frequency_workers")
+        profile["event"] = "occupational_training"
+        profile["object"] = "knowledge_check"
+        profile["action"] = "knowledge_check"
+        profile["legal_phrases"].extend([
+            "Инструкция № 175 периодическая проверка знаний рабочих не реже одного раза в 12 месяцев",
+            "рабочие занятые на работах с повышенной опасностью периодическая проверка знаний",
+            "опасных производственных объектах потенциально опасных объектах проверка знаний",
+            "периодическая проверка знаний работающих по вопросам охраны труда",
+        ])
+
     if re.search(r"\bмедицинск\w*\s+осмотр\w*|\bмедосмотр\w*", query, re.IGNORECASE):
         profile.update({"subject": "employee", "event": "medical_exam", "action": "medical_examination", "object": "medical_exam"})
         profile["legal_phrases"].extend([
