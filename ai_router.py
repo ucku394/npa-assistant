@@ -1121,7 +1121,10 @@ def _is_openrouter_model_on_cooldown(model: str) -> bool:
 # OPENROUTER
 # ============================================================
 
-def generate_with_openrouter(prompt: str) -> str:
+def generate_with_openrouter(
+    prompt: str,
+    enforce_source_grounding: bool = True,
+) -> str:
     global _openrouter_disabled_until
 
     if openrouter_client is None:
@@ -1190,7 +1193,9 @@ def generate_with_openrouter(prompt: str) -> str:
             # SOURCE_ID обязателен только для обычного RAG-grounded
             # юридического ответа. Для vision/inspection он не является
             # частью контракта результата.
-            _validate_source_grounding(prompt, result)
+            if enforce_source_grounding:
+                if enforce_source_grounding:
+                    _validate_source_grounding(prompt, result)
 
             logger.info(
                 "AI | OpenRouter success | model=%s | chars=%s",
@@ -1402,7 +1407,10 @@ def _gemini_cooldown_seconds(category: str) -> int:
 _gemini_fallback_disabled_until = 0.0
 
 
-def generate_answer(prompt: str) -> str:
+def generate_answer(
+    prompt: str,
+    enforce_source_grounding: bool = True,
+) -> str:
     global _gemini_disabled_until
     global _gemini_fallback_disabled_until
 
@@ -1425,7 +1433,8 @@ def generate_answer(prompt: str) -> str:
                         CHAT_MODEL,
                     )
 
-                    _validate_source_grounding(prompt, result)
+                    if enforce_source_grounding:
+                        _validate_source_grounding(prompt, result)
                     _gemini_disabled_until = 0.0
                     return result
 
@@ -1591,7 +1600,10 @@ def generate_answer(prompt: str) -> str:
 
     if openrouter_client is not None:
         try:
-            return generate_with_openrouter(prompt)
+            return generate_with_openrouter(
+                prompt,
+                enforce_source_grounding=enforce_source_grounding,
+            )
 
         except Exception as e:
             logger.exception(
