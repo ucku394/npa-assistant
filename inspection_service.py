@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from ai_router import generate_answer
+from ai_router import generate_vision_legal_json
 from prompts import VISUAL_LEGAL_VERIFICATION_PROMPT
 from rag import build_source_id, retrieve_context
 
@@ -94,7 +94,7 @@ async def verify_finding(
         }
 
     prompt = VISUAL_LEGAL_VERIFICATION_PROMPT.replace("{finding}", json.dumps(finding, ensure_ascii=False)).replace("{retrieved_text}", context)
-    answer = await asyncio.to_thread(generate_answer, prompt)
+    answer = await asyncio.to_thread(generate_vision_legal_json, prompt)
     data = _parse_json(answer)
 
     basis = _validated_basis(chunks, data)
