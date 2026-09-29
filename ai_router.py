@@ -25,18 +25,21 @@ logger = logging.getLogger(__name__)
 # кратковременного сбоя.
 GEMINI_RATE_LIMIT_COOLDOWN_SECONDS = 300
 # 503/high-demand: после коротких retry переходим к резервной Gemini-модели,
-# а затем к OpenRouter. Google рекомендует backoff/retry для 503.
-GEMINI_TEMPORARY_COOLDOWN_SECONDS = 120
+# а затем к OpenRouter. После серии 503 основная Gemini-модель
+# ставится на короткий 30-секундный cooldown, чтобы следующий запрос
+# не продолжал долбить перегруженный endpoint.
+GEMINI_TEMPORARY_COOLDOWN_SECONDS = 30
 GEMINI_UNKNOWN_COOLDOWN_SECONDS = 120
 
 # Для 503 делаем две короткие повторные попытки в рамках одного запроса.
-# Задержки 2 и 5 секунд не дают мгновенно переключаться на другой провайдер
-# при кратковременном всплеске нагрузки.
+# Задержки 2 и 5 секунд: сохраняем шанс переждать краткий всплеск,
+# но после второй неудачи сразу идём к Gemini fallback/OpenRouter.
 GEMINI_RETRY_ATTEMPTS = 2
 GEMINI_RETRY_DELAYS_SECONDS = (2, 5)
 
 # Резервная Gemini-модель. Основная модель остаётся CHAT_MODEL.
-GEMINI_FALLBACK_COOLDOWN_SECONDS = 120
+# После её временного 503/timeout также используем короткий cooldown,
+# чтобы следующий запрос быстрее дошёл до OpenRouter.
 
 # Ошибки конфигурации/доступности API (например, location is not supported)
 # не имеют смысла повторять каждые 30 минут. В таком случае Gemini
