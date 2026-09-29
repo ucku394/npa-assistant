@@ -74,7 +74,6 @@ OPENROUTER_EXTRA_FALLBACK_MODELS = [
             [
                 "qwen/qwen3.8-27b:free",
                 "nvidia/nemotron-3-super-120b-a12b:free",
-                "inclusionai/ling-3.0-flash:free",
                 "openrouter/free",
             ]
         ),
@@ -567,6 +566,35 @@ def _extract_used_source_ids(text: str) -> list[str]:
     return result
 
 
+def _prompt_requires_source_grounding(prompt: str) -> bool:
+    """Strict SOURCE_ID validation only for prompts containing legal RAG sources."""
+    if not prompt:
+        return False
+
+    allowed = _extract_source_ids(prompt)
+    if not allowed:
+        return False
+
+    p = prompt.lower()
+
+    # Vision/inspection requests may use legal context internally, but their
+    # contract is structured JSON/findings rather than SOURCE_ID annotations.
+    # Do not reject an otherwise valid inspection result merely because the
+    # vision model omitted SOURCE_ID.
+    vision_markers = (
+        "vision",
+        "фотоинспек",
+        "inspection",
+        "verify_finding",
+        "findings",
+        "generate_vision_legal_json",
+    )
+    if any(marker in p for marker in vision_markers):
+        return False
+
+    return True
+
+
 def _validate_source_grounding(prompt: str, text: str) -> list[str]:
     """
     Проверяет юридическую привязку ответа к RAG-контексту.
@@ -579,6 +607,12 @@ def _validate_source_grounding(prompt: str, text: str) -> list[str]:
 
     logger.info("LEGAL | allowed SOURCE_IDs=%s", allowed_source_ids)
     logger.info("LEGAL | model SOURCE_IDs=%s", used_source_ids)
+
+    if not _prompt_requires_source_grounding(prompt):
+        logger.info(
+            "LEGAL | SOURCE_ID validation skipped | non-grounded/vision prompt"
+        )
+        return used_source_ids
 
     if not allowed_source_ids:
         return used_source_ids
@@ -1152,6 +1186,11 @@ def generate_with_openrouter(prompt: str) -> str:
                 prompt,
                 model,
             )
+
+            # SOURCE_ID обязателен только для обычного RAG-grounded
+            # юридического ответа. Для vision/inspection он не является
+            # частью контракта результата.
+            _validate_source_grounding(prompt, result)
 
             logger.info(
                 "AI | OpenRouter success | model=%s | chars=%s",
