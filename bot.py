@@ -30,34 +30,31 @@ from io import BytesIO
 from openai import OpenAI
 from supabase import create_client
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
 
-from ai_router import generate_answer
 
 from config import (
-    DEEPSEEK_API_KEY,
-    DEEPSEEK_VISION_MODEL,
     SUPABASE_SERVICE_ROLE_KEY,
     SUPABASE_URL,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
 )
 
-from prompts import (
-    LEGAL_ASSISTANT_PROMPT,
-    VISION_ANALYSIS_PROMPT,
-)
 
 from rag import build_source_id
 from core.chat_service import chat_service
+from vision_service import analyze_image
+from inspection_service import verify_findings
+from prescription_service import build_draft_prescription
 
 
 # ============================================================
@@ -265,6 +262,7 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 
 
 # ============================================================
+# ============================================================
 # CLIENTS
 # ============================================================
 
@@ -273,20 +271,6 @@ supabase = create_client(
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
-# Reuse the singleton ChatService from core.chat_service.
-# This avoids creating a second Supabase client/service in the worker process.
-
-deepseek_client = (
-    OpenAI(
-        api_key=DEEPSEEK_API_KEY,
-        base_url="https://api.deepseek.com",
-    )
-    if DEEPSEEK_API_KEY
-    else None
-)
-
-
-# ============================================================
 # TEXT UTILITIES
 # ============================================================
 
@@ -564,31 +548,57 @@ async def text_handler(
 
 
 # ============================================================
-# DEEPSEEK VISION RESPONSE PARSER
+# ============================================================
+# PHOTO INSPECTION / PRESCRIPTION
 # ============================================================
 
-def _extract_vision_text(response) -> str:
-    if not response or not response.choices:
-        return ""
+def _format_inspection_result(vision: dict, verified: list[dict]) -> str:
+    lines = ["📷 <b>Результат фотоинспекции</b>"]
 
-    content = response.choices[0].message.content
+    scene = vision.get("scene")
+    if scene:
+        lines.append(f"\n<b>Сцена:</b> {html.escape(scene)}")
 
-    if isinstance(content, str):
-        return content.strip()
+    confirmed = [x for x in verified if x.get("status") == "confirmed"]
+    potential = [x for x in verified if x.get("status") != "confirmed"]
 
-    if isinstance(content, list):
-        pieces = []
-        for part in content:
-            if isinstance(part, dict) and part.get("type") == "text":
-                pieces.append(str(part.get("text") or ""))
-        return "\n".join(pieces).strip()
+    if confirmed:
+        lines.append("\n⚠️ <b>Подтверждённые по фото и НПА несоответствия:</b>")
+        for i, item in enumerate(confirmed, 1):
+            lines.append(
+                f"{i}. {html.escape(str(item.get('violation') or ''))}"
+            )
+            basis = item.get("legal_basis") or []
+            if basis:
+                refs = "; ".join(
+                    f"{x.get('document', 'НПА')} — {x.get('point', '')}"
+                    for x in basis
+                )
+                lines.append(f"   📚 {html.escape(refs)}")
+            action = item.get("corrective_action")
+            if action:
+                lines.append(f"   🛠️ {html.escape(str(action))}")
 
-    return str(content or "").strip()
+    if potential:
+        lines.append("\n🔎 <b>Требует проверки на месте:</b>")
+        for i, item in enumerate(potential, 1):
+            desc = item.get("violation") or "Потенциальный риск"
+            lines.append(f"{i}. {html.escape(str(desc))}")
+            checks = item.get("verification_needed") or []
+            if checks:
+                lines.append(
+                    "   Проверить: " +
+                    html.escape("; ".join(str(x) for x in checks))
+                )
 
+    if not confirmed:
+        lines.append(
+            "\nℹ️ <b>Автоматически подтверждённых нарушений нет.</b> "
+            "Проект предписания не будет оформлен как основанный на неподтверждённом факте."
+        )
 
-# ============================================================
-# PHOTO HANDLER
-# ============================================================
+    return "\n".join(lines)
+
 
 async def photo_handler(
     update: Update,
@@ -597,22 +607,13 @@ async def photo_handler(
     if not update.effective_message or not update.effective_message.photo:
         return
 
-    if deepseek_client is None:
-        await update.effective_message.reply_text(
-            "Анализ фотографий сейчас недоступен: не настроен DEEPSEEK_API_KEY."
-        )
-        return
-
     status_message = None
     try:
         status_message = await update.effective_message.reply_text(
-            "📷 <i>Анализирую изображение на соответствие требованиям безопасности...</i>",
+            "📷 <i>1/3 Анализирую фотографию через OpenRouter...</i>",
             parse_mode="HTML",
         )
-    except Exception as e:
-        logger.warning("Не удалось отправить статусное сообщение для фото: %s", e)
 
-    try:
         async with continuous_typing(update.effective_chat):
             photo = update.effective_message.photo[-1]
             telegram_file = await context.bot.get_file(photo.file_id)
@@ -621,81 +622,144 @@ async def photo_handler(
             await telegram_file.download_to_memory(out=buffer)
             image_bytes = buffer.getvalue()
 
-            if len(image_bytes) > 20 * 1024 * 1024:
-                if status_message:
-                    try:
-                        await status_message.delete()
-                    except Exception:
-                        pass
+            if len(image_bytes) > 12 * 1024 * 1024:
+                raise ValueError("Фотография слишком большая для анализа (максимум 12 МБ).")
 
-                await update.effective_message.reply_text(
-                    "Фотография слишком большая для анализа."
-                )
-                return
+            caption = (update.effective_message.caption or "").strip()
 
-            image_b64 = base64.b64encode(image_bytes).decode("ascii")
-            user_caption = (update.effective_message.caption or "").strip()
-
-            prompt = VISION_ANALYSIS_PROMPT.format(
-                user_caption=user_caption or "Подпись отсутствует.",
+            vision = await asyncio.to_thread(
+                analyze_image,
+                image_bytes,
+                "image/jpeg",
+                caption,
             )
 
-            response = await asyncio.to_thread(
-                lambda: deepseek_client.chat.completions.create(
-                    model=DEEPSEEK_VISION_MODEL,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": prompt,
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{image_b64}",
-                                    },
-                                },
-                            ],
-                        }
-                    ],
-                    temperature=0.1,
-                    max_tokens=1200,
+            if status_message:
+                await status_message.edit_text(
+                    "⚖️ <i>2/3 Проверяю потенциальные нарушения по базе НПА РБ...</i>",
+                    parse_mode="HTML",
                 )
+
+            verified = await verify_findings(vision.get("potential_findings") or [], supabase)
+
+            context.user_data["pending_inspection"] = {
+                "vision": vision,
+                "verified": verified,
+                "photo_bytes": image_bytes,
+                "caption": caption,
+            }
+
+            answer = _format_inspection_result(vision, verified)
+            confirmed = [
+                item for item in verified
+                if item.get("status") == "confirmed" and item.get("legal_basis")
+            ]
+
+            if confirmed:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "📄 Оформить ПРОЕКТ предписания",
+                        callback_data="inspection:prescription",
+                    )],
+                    [InlineKeyboardButton(
+                        "❌ Отклонить результаты",
+                        callback_data="inspection:reject",
+                    )],
+                ])
+            else:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "❌ Закрыть результат",
+                        callback_data="inspection:reject",
+                    )],
+                ])
+
+            if status_message:
+                await status_message.delete()
+
+            await update.effective_message.reply_text(
+                answer,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
             )
 
-            result = _extract_vision_text(response)
-            if not result:
-                raise RuntimeError("Vision model returned an empty response.")
-
+    except Exception as exc:
+        logger.exception("Photo inspection failed: %s", exc)
         if status_message:
             try:
                 await status_message.delete()
             except Exception:
                 pass
-
-        await send_long_message(
-            update,
-            result,
-            use_html=True,
-        )
-
-    except Exception:
-        logger.exception("Photo handler failed.")
-
-        if status_message:
-            try:
-                await status_message.delete()
-            except Exception:
-                pass
-
         await update.effective_message.reply_text(
-            "Не удалось проанализировать фотографию. Попробуйте отправить её ещё раз."
+            "Не удалось выполнить фотоинспекцию. "
+            "Проверьте OPENROUTER_API_KEY и повторите отправку фотографии."
         )
 
 
-# ============================================================
+async def inspection_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    query = update.callback_query
+    if not query:
+        return
+
+    await query.answer()
+
+    pending = context.user_data.get("pending_inspection")
+    if not pending:
+        await query.edit_message_text(
+            "Результат фотоинспекции больше недоступен. Отправьте фотографию заново."
+        )
+        return
+
+    if query.data == "inspection:reject":
+        context.user_data.pop("pending_inspection", None)
+        await query.edit_message_text("Результат фотоинспекции отклонён.")
+        return
+
+    if query.data != "inspection:prescription":
+        return
+
+    confirmed = [
+        item for item in pending.get("verified", [])
+        if item.get("status") == "confirmed" and item.get("legal_basis")
+    ]
+    if not confirmed:
+        await query.edit_message_text(
+            "Нет подтверждённых нарушений с валидным нормативным основанием."
+        )
+        return
+
+    await query.edit_message_text(
+        "📄 <b>Формирую проект предписания...</b>",
+        parse_mode="HTML",
+    )
+
+    try:
+        docx_bytes = await asyncio.to_thread(
+            build_draft_prescription,
+            confirmed,
+            pending.get("photo_bytes"),
+        )
+        await query.message.reply_document(
+            document=BytesIO(docx_bytes),
+            filename="proekt_predpisaniya_po_foto.docx",
+            caption=(
+                "📄 Проект предписания сформирован. "
+                "Перед официальным применением проверьте факты, "
+                "сроки, ответственных и нормативное основание."
+            ),
+        )
+        context.user_data.pop("pending_inspection", None)
+    except Exception:
+        logger.exception("Prescription generation failed.")
+        await query.message.reply_text(
+            "Не удалось сформировать DOCX проекта предписания."
+        )
+
+
 # GLOBAL ERROR HANDLER
 # ============================================================
 
@@ -729,6 +793,7 @@ def main():
     )
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    application.add_handler(CallbackQueryHandler(inspection_callback, pattern=r"^inspection:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     application.add_error_handler(error_handler)
 
