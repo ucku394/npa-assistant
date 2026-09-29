@@ -274,26 +274,60 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
                 "статья 11 Закон 356-З средства индивидуальной защиты отказ от работы",
             ])
 
-    # Точный сценарий: периодичность проверки знаний по ОТ для рабочих.
+    # Периодичность проверки знаний по ОТ зависит от категории работающих.
+    # Нельзя переносить правило п. 51 (12 месяцев) на руководителей и специалистов:
+    # для них прямая норма содержится в п. 42 (не реже одного раза в 3 года),
+    # а для членов комиссии — дополнительно в п. 43.
+    knowledge_frequency_pattern = (
+        r"\bпровер\w*\s+знан\w*"
+        r"|\bпериодическ\w*\s+провер\w*"
+    )
+    knowledge_frequency_question_pattern = (
+        r"\bкак\s+часто\b|\bпериодичност\w*\b|"
+        r"\bчерез\s+какой\s+срок\b|\bне\s+реже\b"
+    )
     if (
-        re.search(r"\bрабоч\w*", query, re.IGNORECASE)
-        and re.search(r"\bпровер\w*\s+знан\w*", query, re.IGNORECASE)
-        and re.search(
-            r"\bкак\s+часто\b|\bпериодичност\w*\b|\bчерез\s+какой\s+срок\b|\bне\s+реже\b",
-            query,
-            re.IGNORECASE,
-        )
+        re.search(knowledge_frequency_pattern, query, re.IGNORECASE)
+        and re.search(knowledge_frequency_question_pattern, query, re.IGNORECASE)
     ):
-        profile["qualifiers"].append("osh_knowledge_check_frequency_workers")
         profile["event"] = "occupational_training"
         profile["object"] = "knowledge_check"
         profile["action"] = "knowledge_check"
-        profile["legal_phrases"].extend([
-            "Инструкция № 175 периодическая проверка знаний рабочих не реже одного раза в 12 месяцев",
-            "рабочие занятые на работах с повышенной опасностью периодическая проверка знаний",
-            "опасных производственных объектах потенциально опасных объектах проверка знаний",
-            "периодическая проверка знаний работающих по вопросам охраны труда",
-        ])
+
+        managers_specialists = bool(
+            re.search(r"\bруководител\w*\b|\bспециалист\w*\b", query, re.IGNORECASE)
+        )
+        workers = bool(
+            re.search(r"\bрабоч\w*\b", query, re.IGNORECASE)
+        )
+
+        if managers_specialists:
+            profile["subject"] = "managers_specialists"
+            profile["qualifiers"].append("osh_knowledge_check_frequency_managers_specialists")
+            profile["legal_phrases"].extend([
+                "Инструкция № 175 пункт 42 руководители и специалисты периодическая проверка знаний не реже одного раза в три года",
+                "руководители и специалисты не позднее месяца со дня назначения проходят первичную проверку знаний",
+                "руководители и специалисты периодическая проверка знаний по вопросам охраны труда не реже одного раза в три года",
+                "Инструкция № 175 пункт 43 руководители и специалисты члены комиссии периодически не реже одного раза в три года",
+            ])
+        elif workers:
+            profile["subject"] = "workers"
+            profile["qualifiers"].append("osh_knowledge_check_frequency_workers")
+            profile["legal_phrases"].extend([
+                "Инструкция № 175 пункт 51 периодическая проверка знаний рабочих не реже одного раза в 12 месяцев",
+                "рабочие занятые на работах с повышенной опасностью периодическая проверка знаний",
+                "опасных производственных объектах потенциально опасных объектах проверка знаний",
+                "периодическая проверка знаний работающих по вопросам охраны труда",
+            ])
+        else:
+            profile["subject"] = "working_persons"
+            profile["qualifiers"].append("osh_knowledge_check_frequency")
+            profile["legal_phrases"].extend([
+                "Инструкция № 175 периодическая проверка знаний работающих по вопросам охраны труда",
+                "пункт 42 руководители и специалисты не реже одного раза в три года",
+                "пункт 51 рабочие не реже одного раза в 12 месяцев",
+                "пункт 53 периодическая проверка знаний проводится до истечения действия результатов предыдущей проверки",
+            ])
 
     if re.search(r"\bмедицинск\w*\s+осмотр\w*|\bмедосмотр\w*", query, re.IGNORECASE):
         profile.update({"subject": "employee", "event": "medical_exam", "action": "medical_examination", "object": "medical_exam"})
