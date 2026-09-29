@@ -70,7 +70,14 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
 
         queries.extend(profile.get("legal_phrases") or [])
     else:
-        if "suspension_for_unpassed_osh_training" in (profile.get("qualifiers") or []):
+        if "osh_knowledge_check_frequency_workers" in (profile.get("qualifiers") or []):
+            queries.extend([
+                "Инструкция № 175 периодическая проверка знаний рабочих не реже одного раза в 12 месяцев",
+                "рабочие периодическая проверка знаний по вопросам охраны труда не реже одного раза в 12 месяцев",
+                "рабочие занятые на работах с повышенной опасностью проверка знаний охрана труда 12 месяцев",
+                "пункт 51 Инструкции № 175 периодическая проверка знаний рабочих",
+            ])
+        elif "suspension_for_unpassed_osh_training" in (profile.get("qualifiers") or []):
             queries.extend([
                 "Трудовой кодекс Республики Беларусь статья 49 отстранение от работы не прошедшего инструктаж проверку знаний",
                 "наниматель обязан не допускать к работе не прошедшего инструктаж стажировку и проверку знаний по вопросам охраны труда",
