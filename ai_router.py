@@ -40,6 +40,7 @@ GEMINI_RETRY_DELAYS_SECONDS = (2, 5)
 # Резервная Gemini-модель. Основная модель остаётся CHAT_MODEL.
 # После её временного 503/timeout также используем короткий cooldown,
 # чтобы следующий запрос быстрее дошёл до OpenRouter.
+GEMINI_FALLBACK_COOLDOWN_SECONDS = 30
 
 # Ошибки конфигурации/доступности API (например, location is not supported)
 # не имеют смысла повторять каждые 30 минут. В таком случае Gemini
