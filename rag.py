@@ -2855,7 +2855,15 @@ def _select_legal_diverse_chunks(
             if len(selected) >= limit:
                 return selected
 
-    max_per_document = 3 if primary_intent else (2 if cross_reference else 4)
+    # Для расследования несчастных случаев ограничиваем один НПА тремя
+    # фрагментами. Это предотвращает ситуацию, когда 4 из 5 мест финального
+    # контекста занимает один документ (например, НПА №30), хотя в кандидатах
+    # есть релевантные нормы других НПА. Для остальных тем сохраняем прежнюю
+    # политику отбора.
+    if topic == "accident_investigation" and not primary_intent and not cross_reference:
+        max_per_document = 3
+    else:
+        max_per_document = 3 if primary_intent else (2 if cross_reference else 4)
 
     for chunk in ranked_chunks:
         _add(chunk, max_per_document=max_per_document)
