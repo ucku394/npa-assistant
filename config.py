@@ -72,6 +72,27 @@ OPENROUTER_FALLBACK_MODEL = os.getenv(
 
 
 # ============================================================
+# OPENROUTER VISION / INSPECTION
+# ============================================================
+
+OPENROUTER_VISION_MODEL = os.getenv(
+    "OPENROUTER_VISION_MODEL",
+    "openrouter/free",
+).strip()
+
+OPENROUTER_VISION_FALLBACK_MODEL = os.getenv(
+    "OPENROUTER_VISION_FALLBACK_MODEL",
+    "",
+).strip()
+
+VISION_MAX_OUTPUT_TOKENS = int(os.getenv("VISION_MAX_OUTPUT_TOKENS", "1800"))
+
+PRESCRIPTION_DEFAULT_DEADLINE_DAYS = int(
+    os.getenv("PRESCRIPTION_DEFAULT_DEADLINE_DAYS", "10")
+)
+
+
+# ============================================================
 # SUPABASE
 # ============================================================
 
