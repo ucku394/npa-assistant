@@ -30,6 +30,11 @@ CHAT_MODEL = os.getenv(
     "gemini-3.6-flash",
 ).strip()
 
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL",
+    "gemini-3.8-flash",
+).strip()
+
 
 # ============================================================
 # DEEPSEEK
