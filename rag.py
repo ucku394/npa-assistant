@@ -756,7 +756,7 @@ def _targeted_ppe_nonprovision_search(supabase) -> List[Dict[str, Any]]:
     return _deduplicate_chunks(results)
 
 
-def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
+def _targeted_training_suspension_search(supabase) -> List[Dict[str, Any]]:\n    """Точечный поиск ст. 49 ТК РБ для непройденного ОТ-обучения."""\n    try:\n        response = (\n            supabase.table("npa_chunks")\n            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")\n            .eq("legal_domain", "occupational_safety")\n            .eq("doc_name", "Трудовой кодекс Республики Беларусь 2026")\n            .or_("point_num.eq.Статья 49,point_num.eq.49")\n            .execute()\n        )\n        results = _deduplicate_chunks(response.data or [])\n        for chunk in results:\n            chunk["_training_suspension_targeted"] = True\n        return results\n    except Exception as exc:\n        logger.warning("RAG | training-suspension targeted search failed: %s", exc)\n        return []\n\n\ndef _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     queries = [
         "doc_name.ilike.%175%",
         "doc_name.ilike.%Инструкци%",
@@ -1242,7 +1242,7 @@ async def _get_targeted_chunks(
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
 
-        if (
+        if "suspension_for_unpassed_osh_training" in (query_profile.get("qualifiers") or []):\n            suspension_results = await asyncio.to_thread(\n                _targeted_training_suspension_search,\n                supabase,\n            )\n            if suspension_results:\n                return suspension_results\n\n        if (
             "refusal_due_to_no_ppe" in (query_profile.get("qualifiers") or [])
             or "ppe_nonprovision_action" in (query_profile.get("qualifiers") or [])
         ):
