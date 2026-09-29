@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import re
+import time
 from typing import Any, Dict
 
 from openai import OpenAI
@@ -32,17 +33,23 @@ _client = OpenAI(
 def _extract_text(response: Any) -> str:
     if not response or not getattr(response, "choices", None):
         return ""
-    content = response.choices[0].message.content
-    if isinstance(content, str):
+    message = response.choices[0].message
+    content = getattr(message, "content", None)
+    if isinstance(content, str) and content.strip():
         return content.strip()
     if isinstance(content, list):
-        return "\n".join(
+        text = "\n".join(
             str(part.get("text") or "")
             for part in content
             if isinstance(part, dict) and part.get("type") == "text"
         ).strip()
-    return str(content or "").strip()
-
+        if text:
+            return text
+    for field in ("output_text", "text"):
+        value = getattr(message, field, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
 
 def _parse_json(text: str) -> Dict[str, Any]:
     text = str(text or "").strip()
@@ -185,30 +192,40 @@ def analyze_image(
                 "max_tokens": VISION_MAX_OUTPUT_TOKENS,
             }
 
-            try:
-                response = _client.chat.completions.create(
-                    **request,
-                    response_format={"type": "json_object"},
-                )
-            except Exception as structured_exc:
-                logger.warning(
-                    "VISION | structured output unavailable model=%s | error=%s",
-                    model,
-                    structured_exc,
-                )
-                response = _client.chat.completions.create(**request)
-
-            raw_text = _extract_text(response)
+            response = None
+            raw_text = ""
+            for attempt in range(3):
+                try:
+                    try:
+                        response = _client.chat.completions.create(
+                            **request,
+                            response_format={"type": "json_object"},
+                        )
+                    except Exception as structured_exc:
+                        logger.warning(
+                            "VISION | structured output unavailable model=%s attempt=%s | error=%s",
+                            model, attempt + 1, structured_exc,
+                        )
+                        response = _client.chat.completions.create(**request)
+                    raw_text = _extract_text(response)
+                    if raw_text:
+                        break
+                    logger.warning("VISION | empty response model=%s attempt=%s", model, attempt + 1)
+                except Exception as request_exc:
+                    last_error = request_exc
+                    logger.warning("VISION | request failed model=%s attempt=%s | error=%s", model, attempt + 1, request_exc)
+                if attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+            if not raw_text:
+                raise ValueError("Vision model returned an empty response after retries.")
             try:
                 result = _normalize(_parse_json(raw_text))
             except ValueError:
                 logger.warning(
                     "VISION | non-JSON response model=%s | preview=%r",
-                    model,
-                    raw_text[:1200],
+                    model, raw_text[:1200],
                 )
-                result = _fallback_from_text(raw_text)
-            logger.info(
+                result = _fallback_from_text(raw_text)            logger.info(
                 "VISION | category=%s | findings=%s",
                 result["category"],
                 len(result["potential_findings"]),
