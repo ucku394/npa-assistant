@@ -60,6 +60,41 @@ def _parse_json(text: str) -> Dict[str, Any]:
     return value
 
 
+def _fallback_from_text(text: str) -> Dict[str, Any]:
+    """Convert a free-form vision response into safe visual findings.
+
+    Some free OpenRouter vision models may ignore a JSON-only instruction.
+    Keep their text as unverified visual evidence; legal verification happens
+    later against the Belarus NPA RAG context.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        raise ValueError("Vision model returned an empty response.")
+
+    cleaned = re.sub(r"^\s*\`\`\`(?:text|markdown)?\s*", "", raw, flags=re.I)
+    cleaned = re.sub(r"\s*\`\`\`\s*$", "", cleaned).strip()
+
+    return {
+        "scene": cleaned[:500],
+        "category": "unknown",
+        "observations": [{
+            "description": cleaned[:1500],
+            "confidence": 0.5,
+            "evidence": "Свободный текстовый ответ модели по изображению; требуется проверка специалистом.",
+        }],
+        "potential_findings": [{
+            "description": cleaned[:1500],
+            "risk_level": "medium",
+            "confidence": 0.5,
+            "visual_evidence": cleaned[:1500],
+            "verification_needed": [
+                "Проверить описанный факт непосредственно на месте.",
+                "Сопоставить его с применимыми НПА Республики Беларусь.",
+            ],
+        }],
+    }
+
+
 def _confidence(value: Any) -> float:
     try:
         return max(0.0, min(1.0, float(value)))
@@ -132,9 +167,9 @@ def analyze_image(
     for model in models:
         try:
             logger.info("VISION | OpenRouter model=%s", model)
-            response = _client.chat.completions.create(
-                model=model,
-                messages=[{
+            request = {
+                "model": model,
+                "messages": [{
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt},
@@ -146,10 +181,33 @@ def analyze_image(
                         },
                     ],
                 }],
-                temperature=0.0,
-                max_tokens=VISION_MAX_OUTPUT_TOKENS,
-            )
-            result = _normalize(_parse_json(_extract_text(response)))
+                "temperature": 0.0,
+                "max_tokens": VISION_MAX_OUTPUT_TOKENS,
+            }
+
+            try:
+                response = _client.chat.completions.create(
+                    **request,
+                    response_format={"type": "json_object"},
+                )
+            except Exception as structured_exc:
+                logger.warning(
+                    "VISION | structured output unavailable model=%s | error=%s",
+                    model,
+                    structured_exc,
+                )
+                response = _client.chat.completions.create(**request)
+
+            raw_text = _extract_text(response)
+            try:
+                result = _normalize(_parse_json(raw_text))
+            except ValueError:
+                logger.warning(
+                    "VISION | non-JSON response model=%s | preview=%r",
+                    model,
+                    raw_text[:1200],
+                )
+                result = _fallback_from_text(raw_text)
             logger.info(
                 "VISION | category=%s | findings=%s",
                 result["category"],
