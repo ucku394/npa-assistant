@@ -116,9 +116,7 @@ def analyze_image(
         raise RuntimeError("OPENROUTER_API_KEY is not configured.")
 
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
-    prompt = VISION_STRUCTURED_PROMPT.format(
-        user_caption=user_caption or "не указан"
-    )
+    prompt = VISION_STRUCTURED_PROMPT.replace("{user_caption}", user_caption or "не указан")
 
     models = []
     for model in (
