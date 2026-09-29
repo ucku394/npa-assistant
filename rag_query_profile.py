@@ -99,7 +99,21 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             profile["question_type"] = qtype
             break
 
-    if (\n        re.search(r"\bотстран\w*", query, re.IGNORECASE)\n        and re.search(r"\bне\s+прош\w*\s+инструктаж\w*", query, re.IGNORECASE)\n        and re.search(r"\bпровер\w*\s+знан\w*", query, re.IGNORECASE)\n    ):\n        profile["qualifiers"].append("suspension_for_unpassed_osh_training")\n        profile["action"] = "suspend_work"\n        profile["legal_phrases"].extend([\n            "Трудовой кодекс Республики Беларусь статья 49 отстранение от работы",\n            "наниматель обязан не допускать к работе не прошедшего инструктаж стажировку и проверку знаний",\n            "не прошедший инструктаж стажировку и проверку знаний по вопросам охраны труда",\n            "отстранить от работы в соответствующий день смену",\n        ])\n\n    if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
+    if (
+        re.search(r"\bотстран\w*", query, re.IGNORECASE)
+        and re.search(r"\bне\s+прош\w*\s+инструктаж\w*", query, re.IGNORECASE)
+        and re.search(r"\bпровер\w*\s+знан\w*", query, re.IGNORECASE)
+    ):
+        profile["qualifiers"].append("suspension_for_unpassed_osh_training")
+        profile["action"] = "suspend_work"
+        profile["legal_phrases"].extend([
+            "Трудовой кодекс Республики Беларусь статья 49 отстранение от работы",
+            "наниматель обязан не допускать к работе не прошедшего инструктаж стажировку и проверку знаний",
+            "не прошедший инструктаж стажировку и проверку знаний по вопросам охраны труда",
+            "отстранить от работы в соответствующий день смену",
+        ])
+
+    if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
         profile["action_state"] = "not_done"
 
     if re.search(r"\bнесчастн\w*\s+случа\w*|\bтравм\w*\s+на\s+производств", query, re.IGNORECASE):
