@@ -93,10 +93,7 @@ async def verify_finding(
             "risk_level": finding.get("risk_level", "medium"),
         }
 
-    prompt = VISUAL_LEGAL_VERIFICATION_PROMPT.format(
-        finding=json.dumps(finding, ensure_ascii=False),
-        retrieved_text=context,
-    )
+    prompt = VISUAL_LEGAL_VERIFICATION_PROMPT.replace("{finding}", json.dumps(finding, ensure_ascii=False)).replace("{retrieved_text}", context)
     answer = await asyncio.to_thread(generate_answer, prompt)
     data = _parse_json(answer)
 
