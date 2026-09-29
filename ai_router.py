@@ -1525,6 +1525,10 @@ def generate_answer(prompt: str) -> str:
 
                 if category == "configuration":
                     _gemini_fallback_disabled_until = GEMINI_CONFIG_DISABLED
+                elif category == "daily_quota":
+                    _gemini_fallback_disabled_until = (
+                        time.time() + GEMINI_DAILY_QUOTA_COOLDOWN_SECONDS
+                    )
                 else:
                     _gemini_fallback_disabled_until = (
                         time.time() + GEMINI_FALLBACK_COOLDOWN_SECONDS
