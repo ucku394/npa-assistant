@@ -390,6 +390,102 @@ async def send_long_message(
         )
 
 
+def split_html_message(
+    text: str,
+    limit: int = TELEGRAM_MESSAGE_LIMIT,
+) -> list[str]:
+    """
+    Разбивает уже подготовленный Telegram HTML на безопасные по длине
+    блоки. Старается резать только по строкам/абзацам и не оставляет
+    незакрытые HTML-теги.
+    """
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return [text]
+
+    lines = text.splitlines()
+    parts = []
+    current = ""
+
+    def flush():
+        nonlocal current
+        if current.strip():
+            parts.append(current.strip())
+        current = ""
+
+    for line in lines:
+        candidate = line if not current else current + "\n" + line
+
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+
+        if current:
+            flush()
+
+        if len(line) <= limit:
+            current = line
+            continue
+
+        remaining = line
+        while len(remaining) > limit:
+            cut = remaining.rfind(" ", 0, limit)
+            if cut < limit // 2:
+                cut = limit
+
+            chunk = remaining[:cut].strip()
+            if chunk:
+                parts.append(chunk)
+            remaining = remaining[cut:].strip()
+
+        if remaining:
+            current = remaining
+
+    flush()
+    return parts
+
+
+async def send_inspection_message(
+    update: Update,
+    text: str,
+    reply_markup=None,
+):
+    """
+    Отправляет профессиональный результат фотоинспекции без риска
+    Telegram BadRequest: Message is too long.
+
+    Кнопки прикрепляются только к последней части.
+    """
+    if not update.effective_message:
+        return
+
+    parts = split_html_message(text)
+
+    for index, part in enumerate(parts):
+        markup = reply_markup if index == len(parts) - 1 else None
+
+        try:
+            await update.effective_message.reply_text(
+                part,
+                parse_mode="HTML",
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Inspection HTML send failed for part %s/%s: %s. "
+                "Retrying plain text.",
+                index + 1,
+                len(parts),
+                exc,
+            )
+            await update.effective_message.reply_text(
+                re.sub(r"<[^>]+>", "", html.unescape(part)),
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+
+
 # ============================================================
 # DEBUG UPDATE
 # ============================================================
@@ -873,11 +969,10 @@ async def photo_handler(
             if status_message:
                 await status_message.delete()
 
-            await update.effective_message.reply_text(
+            await send_inspection_message(
+                update,
                 answer,
-                parse_mode="HTML",
                 reply_markup=keyboard,
-                disable_web_page_preview=True,
             )
 
     except Exception as exc:
