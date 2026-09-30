@@ -47,7 +47,7 @@ DEEPSEEK_API_KEY = os.getenv(
 
 DEEPSEEK_VISION_MODEL = os.getenv(
     "DEEPSEEK_VISION_MODEL",
-    "deepseek-v4-flash-vision-exp",
+    "deepseek-flash",
 ).strip()
 
 
