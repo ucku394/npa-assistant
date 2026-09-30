@@ -1,3 +1,48 @@
+const photoInput = document.getElementById("photoInput");
+const inspectionResult = document.getElementById("inspectionResult");
+let lastInspectionFindings = [];
+
+function renderInspection(data) {
+  lastInspectionFindings = data.findings || [];
+  const confirmed = lastInspectionFindings.filter(x => x.status === "confirmed" && (x.legal_basis || []).length);
+  const potential = lastInspectionFindings.filter(x => x.status === "potential");
+  const observations = data.observations || [];
+  let html = '<div class="inspection-scene"><strong>Область:</strong> ' + escapeHtml(data.category || "Требует определения") + '</div>';
+  if (data.scene) html += '<div class="inspection-scene"><strong>Что видно:</strong> ' + escapeHtml(data.scene) + '</div>';
+  if (observations.length) html += '<div class="inspection-title">👁️ Наблюдения</div><ul>' + observations.map(x => '<li>' + escapeHtml(x.description || "") + '</li>').join("") + '</ul>';
+  if (confirmed.length) {
+    html += '<div class="inspection-title confirmed">🚨 Подтверждённые нарушения</div>' +
+      confirmed.map((x,i) => '<div class="finding confirmed"><strong>' + (i+1) + '. ' + escapeHtml(x.violation || x.description || "Нарушение") + '</strong><div>НПА: ' + escapeHtml((x.legal_basis || []).map(b => [b.document,b.point].filter(Boolean).join(", ")).join("; ")) + '</div><div>Действие: ' + escapeHtml(x.corrective_action || "") + '</div></div>').join("") +
+      '<button type="button" class="prescription-button" id="makePrescription">📄 Сформировать проект предписания</button>';
+  }
+  if (potential.length) html += '<div class="inspection-title potential">⚠️ Требуют проверки</div>' + potential.map(x => '<div class="finding"><strong>' + escapeHtml(x.violation || x.description || "") + '</strong><div>' + escapeHtml((x.verification_needed || []).join(" ")) + '</div></div>').join("");
+  if (!confirmed.length) html += '<div class="inspection-note">Проект предписания доступен только при наличии подтверждённых нарушений с конкретным нормативным основанием.</div>';
+  inspectionResult.innerHTML = html; inspectionResult.hidden = false;
+  const button = document.getElementById("makePrescription"); if (button) button.addEventListener("click", createPrescription);
+}
+
+async function createPrescription() {
+  const button = document.getElementById("makePrescription"); if (button) {button.disabled=true;button.textContent="Формирую DOCX…";}
+  try {
+    const response = await fetch("/api/prescription",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({findings:lastInspectionFindings})});
+    if (!response.ok) { let msg="Не удалось сформировать предписание."; try {const d=await response.json();msg=d.detail||msg;} catch {} throw new Error(msg); }
+    const blob=await response.blob(), url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url;a.download="proekt_predpisaniya.docx";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  } catch(e) { alert(e.message || "Ошибка формирования предписания."); }
+  finally { if(button){button.disabled=false;button.textContent="📄 Сформировать проект предписания";} }
+}
+
+if (photoInput) photoInput.addEventListener("change", async () => {
+  const file=photoInput.files && photoInput.files[0]; if(!file)return;
+  inspectionResult.hidden=false; inspectionResult.innerHTML='<div class="inspection-loading">📷 Анализирую фотографию и проверяю признаки по НПА…</div>';
+  try {
+    const form=new FormData(); form.append("file",file);
+    const response=await fetch("/api/inspect",{method:"POST",body:form}), data=await response.json();
+    if(!response.ok)throw new Error(data.detail||"Ошибка фотоинспекции."); renderInspection(data);
+  } catch(e) {inspectionResult.innerHTML='<div class="inspection-error">'+escapeHtml(e.message||"Не удалось выполнить фотоинспекцию.")+'</div>';}
+  finally {photoInput.value="";}
+});
+
 const composer = document.getElementById("composer");
 const question = document.getElementById("question");
 const chat = document.getElementById("chat");
