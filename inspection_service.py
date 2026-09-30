@@ -76,13 +76,24 @@ async def verify_finding(
             "risk_level": "medium",
         }
 
-    # Vision findings are frequently returned in English. The legal RAG
-    # classifier is optimized for Belarusian/Russian legal terminology, so
-    # explicitly anchor the verification query in the OHS/fire-safety domain.
-    query = (
-        "требования охраны труда и пожарной безопасности: "
-        + raw_query
-    )
+    # Do not force every visual finding into fire safety: PPE/tool/electrical
+    # findings should retrieve occupational-safety requirements.
+    finding_text = (raw_query + " " + str(finding.get("visual_evidence") or "")).lower()
+    if any(marker in finding_text for marker in (
+        "сварочн", "welding", "щиток", "helmet", "очки", "glasses",
+        "перчат", "glove", "каск", "сиз", "ppe", "кабел", "cable",
+        "электроинструмент", "grinder", "болгар", "ушм", "дрел", "drill",
+        "пил", "tool", "инструмент", "рукоят", "кожух", "guard",
+    )):
+        domain_hint = "охрана труда"
+    elif any(marker in finding_text for marker in (
+        "огнетуш", "extinguisher", "искр", "sparks", "горюч", "combust",
+        "пожар", "fire", "средства пожаротушения",
+    )):
+        domain_hint = "пожарная безопасность"
+    else:
+        domain_hint = "охрана труда и пожарная безопасность"
+    query = f"нормативные требования Республики Беларусь, {domain_hint}: {raw_query}"
 
     rag = await retrieve_context(query, supabase)
     chunks = rag.get("chunks") or []
@@ -102,8 +113,32 @@ async def verify_finding(
         }
 
     prompt = VISUAL_LEGAL_VERIFICATION_PROMPT.replace("{finding}", json.dumps(finding, ensure_ascii=False)).replace("{retrieved_text}", context)
-    answer = await asyncio.to_thread(generate_vision_legal_json, prompt)
-    data = _parse_json(answer)
+    try:
+        answer = await asyncio.to_thread(generate_vision_legal_json, prompt)
+        data = _parse_json(answer)
+    except Exception as exc:
+        logger.warning(
+            "INSPECTION | legal verification unavailable; preserving visual finding | error=%s",
+            exc,
+        )
+        return {
+            "status": "potential",
+            "violation": raw_query,
+            "evidence": str(finding.get("visual_evidence") or ""),
+            "legal_basis": [],
+            "corrective_action": "",
+            "verification_needed": [
+                "Проверить факт непосредственно на месте.",
+                "Сопоставить факт с применимым НПА Республики Беларусь.",
+            ],
+            "risk_level": finding.get("risk_level", "medium"),
+            "rag": {
+                "candidate_count": rag.get("candidate_count", 0),
+                "final_count": rag.get("final_count", 0),
+                "legal_domain": rag.get("legal_domain"),
+                "topic": rag.get("topic"),
+            },
+        }
 
     basis = _validated_basis(chunks, data)
     status = data.get("status")
