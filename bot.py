@@ -975,7 +975,27 @@ async def photo_handler(
                 reply_markup=keyboard,
             )
 
-    except VisionUnavailableError:\n        logger.warning("Photo inspection temporarily unavailable: vision providers are unavailable")\n        if status_message:\n            try:\n                await status_message.delete()\n            except Exception:\n                pass\n        await update.effective_message.reply_text(\n            "⚠️ Фото получено, но сейчас недоступен сервис визуального анализа, временно перегружен.\\n\\n"\n            "Попробуйте отправить фото ещё раз немного позже."\n        )\n    except Exception as exc:\n        logger.exception("Photo inspection failed: %s", exc)\n        if status_message:\n            try:\n                await status_message.delete()\n            except Exception:\n                pass\n        await update.effective_message.reply_text(\n            "Не удалось выполнить фотоинспекцию. Проверьте доступность сервиса и повторите отправку фотографии."\n        )
+    except VisionUnavailableError:
+        logger.warning("Photo inspection temporarily unavailable: vision providers are unavailable")
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+        await update.effective_message.reply_text(
+            "⚠️ Фото получено, но сейчас недоступен сервис визуального анализа, временно перегружен.\n\n"
+            "Попробуйте отправить фото ещё раз немного позже."
+        )
+    except Exception as exc:
+        logger.exception("Photo inspection failed: %s", exc)
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+        await update.effective_message.reply_text(
+            "Не удалось выполнить фотоинспекцию. Проверьте доступность сервиса и повторите отправку фотографии."
+        )
 
 
 async def inspection_callback(
