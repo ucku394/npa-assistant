@@ -12,3 +12,5 @@ numpy
 python-docx
 fastapi
 uvicorn[standard]
+
+python-multipart
