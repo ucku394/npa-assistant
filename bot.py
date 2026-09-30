@@ -552,52 +552,60 @@ async def text_handler(
 # ============================================================
 
 def _format_inspection_result(vision: dict, verified: list[dict]) -> str:
-    lines = ["📷 <b>Результат фотоинспекции</b>"]
+    lines = ["📷 <b>Фотоинспекция</b>"]
 
-    scene = vision.get("scene")
+    category = str(vision.get("category") or "").strip()
+    scene = str(vision.get("scene") or "").strip()
+    observations = vision.get("observations") or []
+
+    if category:
+        lines.append(f"🏷️ <b>Область:</b> {html.escape(category)}")
     if scene:
-        lines.append(f"\n<b>Сцена:</b> {html.escape(scene)}")
+        lines.append(f"\n👁️ <b>Что видно на фото</b>\n{html.escape(scene)}")
+
+    if observations:
+        lines.append("\n🔎 <b>Наблюдения</b>")
+        for item in observations[:5]:
+            desc = str(item.get("description") or "").strip()
+            evidence = str(item.get("evidence") or "").strip()
+            if desc:
+                lines.append(f"• {html.escape(desc)}")
+                if evidence and evidence != desc:
+                    lines.append(f"  <i>Признак: {html.escape(evidence)}</i>")
 
     confirmed = [x for x in verified if x.get("status") == "confirmed"]
     potential = [x for x in verified if x.get("status") != "confirmed"]
 
     if confirmed:
-        lines.append("\n⚠️ <b>Подтверждённые по фото и НПА несоответствия:</b>")
+        lines.append("\n⚠️ <b>Подтверждённые несоответствия</b>")
         for i, item in enumerate(confirmed, 1):
-            lines.append(
-                f"{i}. {html.escape(str(item.get('violation') or ''))}"
-            )
-            basis = item.get("legal_basis") or []
-            if basis:
-                refs = "; ".join(
-                    f"{x.get('document', 'НПА')} — {x.get('point', '')}"
-                    for x in basis
-                )
-                lines.append(f"   📚 {html.escape(refs)}")
-            action = item.get("corrective_action")
+            lines.append(f"<b>{i}. {html.escape(str(item.get('violation') or 'Несоответствие'))}</b>")
+            for ref in (item.get("legal_basis") or [])[:3]:
+                doc = str(ref.get("document") or "НПА").strip()
+                point = str(ref.get("point") or "").strip()
+                lines.append(f"   📚 {html.escape(doc + (', ' + point if point else ''))}")
+            action = str(item.get("corrective_action") or "").strip()
             if action:
-                lines.append(f"   🛠️ {html.escape(str(action))}")
+                lines.append(f"   🛠️ <b>Действие:</b> {html.escape(action)}")
 
     if potential:
-        lines.append("\n🔎 <b>Требует проверки на месте:</b>")
+        lines.append("\n🟡 <b>Потенциальные риски — требуется проверка</b>")
         for i, item in enumerate(potential, 1):
-            desc = item.get("violation") or "Потенциальный риск"
-            lines.append(f"{i}. {html.escape(str(desc))}")
-            checks = item.get("verification_needed") or []
+            desc = str(item.get("violation") or "Потенциальный риск").strip()
+            lines.append(f"<b>{i}. {html.escape(desc)}</b>")
+            evidence = str(item.get("evidence") or "").strip()
+            if evidence:
+                lines.append(f"   👁️ {html.escape(evidence)}")
+            checks = [str(x).strip() for x in (item.get("verification_needed") or []) if str(x).strip()]
             if checks:
-                lines.append(
-                    "   Проверить: " +
-                    html.escape("; ".join(str(x) for x in checks))
-                )
+                lines.append("   🔎 <b>Проверить:</b>")
+                for check in checks[:4]:
+                    lines.append(f"   • {html.escape(check)}")
 
     if not confirmed:
-        lines.append(
-            "\nℹ️ <b>Автоматически подтверждённых нарушений нет.</b> "
-            "Проект предписания не будет оформлен как основанный на неподтверждённом факте."
-        )
+        lines.append("\nℹ️ <i>Автоматически подтверждённых нарушений нет. Выявленные потенциальные риски требуют проверки на месте и сопоставления с применимыми НПА Республики Беларусь.</i>")
 
     return "\n".join(lines)
-
 
 async def photo_handler(
     update: Update,
