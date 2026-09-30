@@ -31,20 +31,40 @@ def _parse_json(text: str) -> Dict[str, Any]:
 
 def _validated_basis(chunks: List[Dict[str, Any]], data: Dict[str, Any]):
     by_id = {}
+    by_index = {}
     for index, chunk in enumerate(chunks, 1):
         source_id = chunk.get("_source_id") or build_source_id(chunk, index)
         if source_id:
             chunk["_source_id"] = source_id
             by_id[str(source_id)] = chunk
+            by_index[index] = chunk
 
     result = []
     for item in data.get("legal_basis") or []:
         if not isinstance(item, dict):
             continue
+
+        # Prefer source_index selected from the exact indexed RAG context.
+        source_index = item.get("source_index")
+        chunk = None
+        try:
+            if source_index is not None:
+                chunk = by_index.get(int(source_index))
+        except (TypeError, ValueError):
+            chunk = None
+
+        # Backward compatibility with older models that returned source_id.
         source_id = str(item.get("source_id") or "").strip()
-        chunk = by_id.get(source_id)
+        if chunk is None and source_id:
+            chunk = by_id.get(source_id)
+
         if not chunk:
             continue
+
+        source_id = str(chunk.get("_source_id") or "").strip()
+        if not source_id:
+            continue
+
         result.append({
             "source_id": source_id,
             "document": str(
@@ -60,6 +80,30 @@ def _validated_basis(chunks: List[Dict[str, Any]], data: Dict[str, Any]):
             ).strip(),
         })
     return result
+
+
+def _indexed_legal_context(chunks: List[Dict[str, Any]]) -> str:
+    """Build a numbered legal context so the model selects a source by index."""
+    parts = []
+    for index, chunk in enumerate(chunks, 1):
+        source_id = chunk.get("_source_id") or build_source_id(chunk, index)
+        if source_id:
+            chunk["_source_id"] = source_id
+        doc_name = str(
+            chunk.get("doc_name")
+            or chunk.get("document")
+            or "НПА"
+        ).strip()
+        point = str(chunk.get("point_num") or "").strip()
+        content = str(chunk.get("content") or "").strip()
+        parts.append(
+            f"[ИСТОЧНИК {index}]\n"
+            f"SOURCE_ID={source_id or 'не определён'}\n"
+            f"НПА: {doc_name}\n"
+            f"Пункт/статья: {point}\n"
+            f"Текст: {content}"
+        )
+    return "\n\n".join(parts)
 
 
 async def verify_finding(
@@ -112,7 +156,12 @@ async def verify_finding(
             "risk_level": finding.get("risk_level", "medium"),
         }
 
-    prompt = VISUAL_LEGAL_VERIFICATION_PROMPT.replace("{finding}", json.dumps(finding, ensure_ascii=False)).replace("{retrieved_text}", context)
+    indexed_context = _indexed_legal_context(chunks)
+    prompt = (
+        VISUAL_LEGAL_VERIFICATION_PROMPT
+        .replace("{finding}", json.dumps(finding, ensure_ascii=False))
+        .replace("{retrieved_text}", indexed_context)
+    )
     try:
         answer = await asyncio.to_thread(generate_vision_legal_json, prompt)
         data = _parse_json(answer)
