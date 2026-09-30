@@ -902,7 +902,7 @@ async def photo_handler(
     status_message = None
     try:
         status_message = await update.effective_message.reply_text(
-            "📷 <i>1/3 Анализирую фотографию через OpenRouter...</i>",
+            "📷 <i>1/3 Анализирую фотографию...</i>",
             parse_mode="HTML",
         )
 
@@ -984,7 +984,7 @@ async def photo_handler(
                 pass
         await update.effective_message.reply_text(
             "Не удалось выполнить фотоинспекцию. "
-            "Проверьте OPENROUTER_API_KEY и повторите отправку фотографии."
+            "Проверьте доступность сервисов AI и повторите отправку фотографии."
         )
 
 
