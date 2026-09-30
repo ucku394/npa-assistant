@@ -44,6 +44,70 @@ _client = OpenAI(
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
+
+_GEMINI_VISION_SCHEMA = types.Schema(
+    type="OBJECT",
+    properties={
+        "scene": types.Schema(type="STRING"),
+        "category": types.Schema(
+            type="STRING",
+            enum=[
+                "occupational_safety",
+                "fire_safety",
+                "industrial_safety",
+                "radiation_safety",
+                "unknown",
+            ],
+        ),
+        "observations": types.Schema(
+            type="ARRAY",
+            items=types.Schema(
+                type="OBJECT",
+                properties={
+                    "description": types.Schema(type="STRING"),
+                    "confidence": types.Schema(type="NUMBER"),
+                    "evidence": types.Schema(type="STRING"),
+                },
+                required=["description", "confidence", "evidence"],
+            ),
+        ),
+        "potential_findings": types.Schema(
+            type="ARRAY",
+            items=types.Schema(
+                type="OBJECT",
+                properties={
+                    "description": types.Schema(type="STRING"),
+                    "risk_level": types.Schema(
+                        type="STRING",
+                        enum=["low", "medium", "high", "critical"],
+                    ),
+                    "confidence": types.Schema(type="NUMBER"),
+                    "visual_evidence": types.Schema(type="STRING"),
+                    "verification_needed": types.Schema(
+                        type="ARRAY",
+                        items=types.Schema(type="STRING"),
+                    ),
+                },
+                required=[
+                    "description",
+                    "risk_level",
+                    "confidence",
+                    "visual_evidence",
+                    "verification_needed",
+                ],
+            ),
+        ),
+        "needs_review": types.Schema(type="BOOLEAN"),
+    },
+    required=[
+        "scene",
+        "category",
+        "observations",
+        "potential_findings",
+        "needs_review",
+    ],
+)
+
 _deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com",
@@ -133,24 +197,17 @@ def _fallback_from_text(text: str) -> Dict[str, Any]:
     cleaned = re.sub(r"^\s*```(?:text|markdown)?\s*", "", raw, flags=re.I)
     cleaned = re.sub(r"\s*```\s*$", "", cleaned).strip()
 
+    # Не превращаем произвольный/обрезанный ответ модели в «нарушение».
+    # Иначе в Telegram может попасть сырой JSON или фраза вроде User Safety: safe.
     return {
-        "scene": cleaned[:500],
+        "scene": "",
         "category": "unknown",
         "observations": [{
-            "description": cleaned[:1500],
-            "confidence": 0.5,
-            "evidence": "Свободный текстовый ответ модели; требуется проверка специалистом.",
+            "description": "Ответ модели не удалось корректно разобрать; требуется повторный анализ фотографии.",
+            "confidence": 0.0,
+            "evidence": "Структурированный ответ модели отсутствует или повреждён.",
         }],
-        "potential_findings": [{
-            "description": cleaned[:1500],
-            "risk_level": "medium",
-            "confidence": 0.5,
-            "visual_evidence": cleaned[:1500],
-            "verification_needed": [
-                "Проверить описанный факт непосредственно на месте.",
-                "Сопоставить его с применимыми НПА Республики Беларусь.",
-            ],
-        }],
+        "potential_findings": [],
         "needs_review": True,
     }
 
@@ -332,8 +389,9 @@ def _call_model(
                     ],
                     config=types.GenerateContentConfig(
                         temperature=0.0,
-                        max_output_tokens=VISION_MAX_OUTPUT_TOKENS,
+                        max_output_tokens=max(VISION_MAX_OUTPUT_TOKENS, 2400),
                         response_mime_type="application/json",
+                        response_schema=_GEMINI_VISION_SCHEMA,
                     ),
                 )
                 raw_text = str(getattr(response, "text", "") or "").strip()
@@ -420,7 +478,18 @@ def analyze_image(
     base_prompt = VISION_STRUCTURED_PROMPT.replace(
         "{user_caption}", user_caption or "не указан"
     )
-    prompt_with_checklist = f"{base_prompt}\n\n{OSH_CHECKLIST}"
+    prompt_with_checklist = f"""{base_prompt}
+
+ДОПОЛНИТЕЛЬНОЕ ПРАВИЛО ДЛЯ СТРУКТУРИРОВАННОГО ОТВЕТА:
+- Ответ должен быть коротким и полностью завершённым JSON.
+- Не дублируй один и тот же факт в scene, observations и potential_findings без необходимости.
+- Максимум 5 observations и максимум 5 potential_findings.
+- Для каждого observation используй одну короткую фразу.
+- Для verification_needed — максимум 3 коротких пункта.
+- Если конкретный визуальный факт не различим, не делай предположение.
+- Никогда не возвращай Markdown, пояснения до/после JSON или незакрытый JSON.
+
+{OSH_CHECKLIST}"""
 
     # Vision: сначала прямой DeepSeek (если API-ключ настроен),
     # затем OpenRouter fallback. Не начинаем с openrouter/free:
@@ -450,7 +519,11 @@ def analyze_image(
             )
             continue
         try:
-            logger.info("VISION | trying model=%s | provider=%s", model, "deepseek" if model.startswith("deepseek-") else "openrouter")
+            logger.info(
+                "VISION | trying model=%s | provider=%s",
+                model,
+                "gemini" if model.startswith("gemini-") else ("deepseek" if model.startswith("deepseek-") else "openrouter"),
+            )
 
             # Первая попытка — расширенный промпт с OSH-чеклистом.
             raw_text = _call_model(
@@ -493,7 +566,12 @@ def analyze_image(
                 logger.error(
                     "VISION | daily OpenRouter Free Tier quota exhausted; free models disabled for this request"
                 )
-            logger.warning("VISION | model failed=%s | provider=%s | error=%s", model, "deepseek" if model.startswith("deepseek-") else "openrouter", exc)
+            logger.warning(
+                "VISION | model failed=%s | provider=%s | error=%s",
+                model,
+                "gemini" if model.startswith("gemini-") else ("deepseek" if model.startswith("deepseek-") else "openrouter"),
+                exc,
+            )
 
     # Ни одна модель не дала findings. Возвращаем лучший «пустой» результат,
     # но помечаем его как требующий ручной проверки.
