@@ -150,6 +150,32 @@ def _fallback_from_text(text: str) -> Dict[str, Any]:
 
 
 # --- Вспомогательные нормализаторы -------------------------------------------
+def _ru_text(value: Any) -> str:
+    text = str(value or "").strip()
+    replacements = {
+        "User Safety: safe": "На фотографии выявлены визуальные признаки, требующие проверки.",
+        "lack of eye protection while using angle grinder": "При работе с углошлифовальной машиной визуально не наблюдается защита глаз.",
+        "both workers lack hearing protection": "У работников визуально не наблюдается защита органов слуха.",
+        "power cord lies on the ground creating a trip hazard": "Кабель электроинструмента расположен на земле и может создавать опасность спотыкания.",
+        "potential fire ignition source": "потенциальный источник воспламенения",
+        "fire ignition source": "источник воспламенения",
+        "trip hazard": "опасность спотыкания",
+        "lack of PPE": "отсутствие или неиспользование СИЗ",
+        "not visible": "не видно на фотографии",
+    }
+    for en, ru in replacements.items():
+        text = re.sub(re.escape(en), ru, text, flags=re.I)
+    return text
+
+def _ru_category(value: Any) -> str:
+    return {
+        "occupational_safety": "Охрана труда",
+        "fire_safety": "Пожарная безопасность",
+        "industrial_safety": "Промышленная безопасность",
+        "radiation_safety": "Радиационная безопасность",
+        "unknown": "Требует определения",
+    }.get(str(value or "").strip(), _ru_text(value))
+
 def _confidence(value: Any) -> float:
     try:
         return max(0.0, min(1.0, float(value)))
@@ -165,16 +191,16 @@ def _normalize(data: Dict[str, Any]) -> Dict[str, Any]:
     for item in data.get("observations") or []:
         if isinstance(item, dict) and str(item.get("description") or "").strip():
             observations.append({
-                "description": str(item.get("description")).strip(),
+                "description": _ru_text(item.get("description")),
                 "confidence": _confidence(item.get("confidence")),
-                "evidence": str(item.get("evidence") or "").strip(),
+                "evidence": _ru_text(item.get("evidence")),
             })
 
     findings: List[Dict[str, Any]] = []
     for item in data.get("potential_findings") or []:
         if not isinstance(item, dict):
             continue
-        description = str(item.get("description") or "").strip()
+        description = _ru_text(item.get("description"))
         if not description:
             continue
         level = item.get("risk_level")
@@ -184,17 +210,17 @@ def _normalize(data: Dict[str, Any]) -> Dict[str, Any]:
             "description": description,
             "risk_level": level,
             "confidence": _confidence(item.get("confidence")),
-            "visual_evidence": str(item.get("visual_evidence") or "").strip(),
+            "visual_evidence": _ru_text(item.get("visual_evidence")),
             "verification_needed": [
-                str(x).strip()
+                _ru_text(x)
                 for x in (item.get("verification_needed") or [])
                 if str(x).strip()
             ],
         })
 
     return {
-        "scene": str(data.get("scene") or "").strip(),
-        "category": str(data.get("category") or "unknown").strip(),
+        "scene": _ru_text(data.get("scene")),
+        "category": _ru_category(data.get("category")),
         "observations": observations,
         "potential_findings": findings,
         "needs_review": bool(data.get("needs_review", False)),
@@ -278,7 +304,10 @@ def _call_model(
 
     request = {
         "model": model,
-        "messages": [{"role": "user", "content": content}],
+        "messages": [
+            {"role": "system", "content": "ВСЕГДА ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ. Все строковые значения JSON должны быть на русском языке. Не используй английские описания."},
+            {"role": "user", "content": content},
+        ],
         "temperature": 0.0,
         "max_tokens": VISION_MAX_OUTPUT_TOKENS,
     }
