@@ -552,89 +552,247 @@ async def text_handler(
 # ============================================================
 
 def _format_inspection_result(vision: dict, verified: list[dict]) -> str:
-    lines = ["📷 <b>Фотоинспекция</b>"]
+    """
+    Профессиональное представление результата фотоинспекции.
 
-    category = str(vision.get("category") or "").strip()
+    Принцип:
+    1. Что объективно видно на фотографии.
+    2. Какие признаки требуют внимания.
+    3. Какие нарушения подтверждены конкретным НПА.
+    4. Какие факты необходимо проверить на месте.
+
+    Технические поля AI/RAG пользователю не показываются.
+    """
+    category_map = {
+        "occupational_safety": "Охрана труда",
+        "fire_safety": "Пожарная безопасность",
+        "industrial_safety": "Промышленная безопасность",
+        "radiation_safety": "Радиационная безопасность",
+        "unknown": "Требует определения",
+    }
+
+    def esc(value) -> str:
+        return html.escape(str(value or "").strip())
+
+    def first_text(item: dict, *keys: str) -> str:
+        for key in keys:
+            value = str(item.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    category_raw = str(vision.get("category") or "").strip()
+    category = category_map.get(category_raw, category_raw or "Требует определения")
     scene = str(vision.get("scene") or "").strip()
     observations = vision.get("observations") or []
 
-    if category:
-        lines.append(f"🏷️ <b>Область:</b> {html.escape(category)}")
+    confirmed = [
+        item for item in verified
+        if item.get("status") == "confirmed"
+    ]
+    potential = [
+        item for item in verified
+        if item.get("status") == "potential"
+    ]
+    not_confirmed = [
+        item for item in verified
+        if item.get("status") == "not_confirmed"
+    ]
+
+    lines = [
+        "📷 <b>Фотоинспекция</b>",
+        "",
+        f"🏷️ <b>Область:</b> {esc(category)}",
+    ]
+
+    # --------------------------------------------------------
+    # 1. OBJECTIVE VISUAL DESCRIPTION
+    # --------------------------------------------------------
+    lines.extend(["", "👁️ <b>Что видно на фото</b>"])
+
     if scene:
-        lines.append(f"\n👁️ <b>Что видно на фото</b>\n{html.escape(scene)}")
+        lines.append(esc(scene))
 
-    if observations:
-        lines.append("\n🔎 <b>Наблюдения</b>")
-        for item in observations[:5]:
-            desc = str(item.get("description") or "").strip()
-            evidence = str(item.get("evidence") or "").strip()
-            if desc:
-                lines.append(f"• {html.escape(desc)}")
-                if evidence and evidence != desc:
-                    lines.append(f"  <i>Признак: {html.escape(evidence)}</i>")
+    visible_observations = []
+    for item in observations[:5]:
+        if not isinstance(item, dict):
+            continue
 
-    confirmed = [x for x in verified if x.get("status") == "confirmed"]
-    potential = [x for x in verified if x.get("status") == "potential"]
-    not_confirmed = [x for x in verified if x.get("status") == "not_confirmed"]
+        description = first_text(item, "description", "observation")
+        evidence = first_text(item, "evidence", "visual_evidence")
 
+        if description:
+            visible_observations.append((description, evidence))
+
+    if visible_observations:
+        for description, evidence in visible_observations:
+            lines.append(f"• {esc(description)}")
+            if evidence and evidence != description:
+                lines.append(f"  <i>Визуальный признак: {esc(evidence)}</i>")
+    elif not scene:
+        lines.append(
+            "• На фотографии недостаточно данных для уверенного "
+            "описания обстановки."
+        )
+
+    # --------------------------------------------------------
+    # 2. CONFIRMED VIOLATIONS
+    # --------------------------------------------------------
     if confirmed:
-        lines.append("\n🚨 <b>Подтверждённые нарушения</b>")
-        for i, item in enumerate(confirmed, 1):
-            violation = str(item.get("violation") or "Нарушение").strip()
-            lines.append(f"<b>{i}. {html.escape(violation)}</b>")
+        lines.extend(["", "🚨 <b>Подтверждённые нарушения</b>"])
 
-            evidence = str(item.get("evidence") or "").strip()
+        for index, item in enumerate(confirmed, 1):
+            violation = first_text(
+                item,
+                "violation",
+                "description",
+            ) or "Подтверждённое нарушение"
+
+            lines.append(f"<b>{index}. {esc(violation)}</b>")
+
+            evidence = first_text(
+                item,
+                "evidence",
+                "visual_evidence",
+            )
             if evidence:
-                lines.append(f"   👁️ {html.escape(evidence)}")
-
-            for ref in (item.get("legal_basis") or [])[:3]:
-                doc = str(ref.get("document") or "НПА").strip()
-                point = str(ref.get("point") or "").strip()
                 lines.append(
-                    f"   📚 {html.escape(doc + (', ' + point if point else ''))}"
+                    f"   👁️ <b>Визуальный признак:</b> {esc(evidence)}"
                 )
 
-            action = str(item.get("corrective_action") or "").strip()
+            legal_basis = item.get("legal_basis") or []
+            if legal_basis:
+                lines.append("   📚 <b>Нормативное основание:</b>")
+                for ref in legal_basis[:3]:
+                    if not isinstance(ref, dict):
+                        continue
+
+                    document = first_text(
+                        ref,
+                        "document",
+                        "doc_name",
+                    ) or "НПА Республики Беларусь"
+                    point = first_text(
+                        ref,
+                        "point",
+                        "article",
+                    )
+
+                    reference = esc(document)
+                    if point:
+                        reference += f", {esc(point)}"
+
+                    lines.append(f"   • {reference}")
+
+            action = first_text(
+                item,
+                "corrective_action",
+                "action",
+            )
             if action:
-                lines.append(f"   🛠️ <b>Действие:</b> {html.escape(action)}")
+                lines.append(
+                    f"   🛠️ <b>Рекомендуемое действие:</b> {esc(action)}"
+                )
 
+    # --------------------------------------------------------
+    # 3. POTENTIAL / NEEDS ON-SITE VERIFICATION
+    # --------------------------------------------------------
     if potential:
-        lines.append("\n⚠️ <b>Выявлены признаки возможных нарушений</b>")
-        for i, item in enumerate(potential, 1):
-            desc = str(item.get("violation") or "Потенциальное несоответствие").strip()
-            lines.append(f"<b>{i}. {html.escape(desc)}</b>")
+        lines.extend(["", "⚠️ <b>Признаки, требующие проверки</b>"])
 
-            evidence = str(item.get("evidence") or "").strip()
+        for index, item in enumerate(potential, 1):
+            description = first_text(
+                item,
+                "violation",
+                "description",
+            ) or "Возможный риск или признак несоответствия"
+
+            lines.append(f"<b>{index}. {esc(description)}</b>")
+
+            evidence = first_text(
+                item,
+                "evidence",
+                "visual_evidence",
+            )
             if evidence:
-                lines.append(f"   👁️ <b>Визуальный признак:</b> {html.escape(evidence)}")
+                lines.append(
+                    f"   👁️ <b>Визуальный признак:</b> {esc(evidence)}"
+                )
 
             checks = [
-                str(x).strip()
-                for x in (item.get("verification_needed") or [])
-                if str(x).strip()
+                str(value).strip()
+                for value in (item.get("verification_needed") or [])
+                if str(value).strip()
             ]
-            if checks:
-                lines.append("   🔎 <b>Требуется проверить:</b>")
-                for check in checks[:4]:
-                    lines.append(f"   • {html.escape(check)}")
 
+            if checks:
+                lines.append("   🔎 <b>Что проверить на месте:</b>")
+                for check in checks[:4]:
+                    lines.append(f"   • {esc(check)}")
+
+            legal_basis = item.get("legal_basis") or []
+            if legal_basis:
+                lines.append("   📚 <b>Нормативная проверка:</b>")
+                for ref in legal_basis[:3]:
+                    if not isinstance(ref, dict):
+                        continue
+
+                    document = first_text(
+                        ref,
+                        "document",
+                        "doc_name",
+                    ) or "НПА Республики Беларусь"
+                    point = first_text(
+                        ref,
+                        "point",
+                        "article",
+                    )
+
+                    reference = esc(document)
+                    if point:
+                        reference += f", {esc(point)}"
+
+                    lines.append(f"   • {reference}")
+
+    # --------------------------------------------------------
+    # 4. NOT CONFIRMED / NO FINDINGS
+    # --------------------------------------------------------
     if not confirmed and not potential:
         if not_confirmed:
-            lines.append(
-                "\nℹ️ <i>По отдельным признакам фото не позволяет "
-                "достоверно установить нарушение. Требуется проверка на месте.</i>"
-            )
+            lines.extend([
+                "",
+                "ℹ️ <b>Результат проверки</b>",
+                "По отдельным визуальным признакам фотография "
+                "не позволяет достоверно установить нарушение.",
+                "",
+                "📌 <i>Для окончательной оценки необходимо проверить "
+                "фактические условия выполнения работ на месте.</i>",
+            ])
         else:
-            lines.append(
-                "\nℹ️ <i>На фотографии не обнаружено визуальных признаков, "
-                "которые можно обоснованно отнести к нарушению. "
-                "Это не заменяет проверку условий на месте.</i>"
-            )
+            lines.extend([
+                "",
+                "✅ <b>Явных признаков нарушений не обнаружено</b>",
+                "",
+                "По фотографии не выявлено визуальных признаков, "
+                "которые можно обоснованно отнести к нарушению "
+                "требований безопасности.",
+                "",
+                "📌 <i>Фотоанализ не заменяет проверку условий "
+                "выполнения работ на месте.</i>",
+            ])
     elif potential and not confirmed:
-        lines.append(
-            "\n📌 <i>На фото есть признаки возможных нарушений. "
-            "Они требуют проверки факта и нормативного основания на месте.</i>"
-        )
+        lines.extend([
+            "",
+            "📌 <i>Выявленные признаки не считаются подтверждённым "
+            "нарушением до проверки факта и применимого нормативного "
+            "требования.</i>",
+        ])
+    elif confirmed and potential:
+        lines.extend([
+            "",
+            "📌 <i>Часть выявленных признаков подтверждена нормативно, "
+            "остальные требуют дополнительной проверки на месте.</i>",
+        ])
 
     return "\n".join(lines)
 
