@@ -1,4 +1,4 @@
-"""Structured multimodal inspection using OpenRouter free vision models.
+"""Structured multimodal inspection for Belarus OHS/fire/industrial safety.
 
 Переработано:
 - пустой potential_findings больше не считается успехом;
@@ -353,9 +353,6 @@ def analyze_image(
     mime_type: str = "image/jpeg",
     user_caption: str = "",
 ) -> Dict[str, Any]:
-    if _client is None:
-        raise RuntimeError("OPENROUTER_API_KEY is not configured.")
-
     image_b64 = base64.b64encode(image_bytes).decode("ascii")
     base_prompt = VISION_STRUCTURED_PROMPT.replace(
         "{user_caption}", user_caption or "не указан"
@@ -370,7 +367,6 @@ def analyze_image(
         DEEPSEEK_VISION_MODEL if DEEPSEEK_API_KEY else "",
         OPENROUTER_VISION_MODEL,
         OPENROUTER_VISION_FALLBACK_MODEL,
-        "openrouter/free",
     ):
         model = str(model or "").strip()
         if model and model not in models:
@@ -390,7 +386,7 @@ def analyze_image(
             )
             continue
         try:
-            logger.info("VISION | trying model=%s", model)
+            logger.info("VISION | trying model=%s | provider=%s", model, "deepseek" if model.startswith("deepseek-") else "openrouter")
 
             # Первая попытка — расширенный промпт с OSH-чеклистом.
             raw_text = _call_model(
@@ -433,7 +429,7 @@ def analyze_image(
                 logger.error(
                     "VISION | daily OpenRouter Free Tier quota exhausted; free models disabled for this request"
                 )
-            logger.warning("VISION | model failed=%s | error=%s", model, exc)
+            logger.warning("VISION | model failed=%s | provider=%s | error=%s", model, "deepseek" if model.startswith("deepseek-") else "openrouter", exc)
 
     # Ни одна модель не дала findings. Возвращаем лучший «пустой» результат,
     # но помечаем его как требующий ручной проверки.
