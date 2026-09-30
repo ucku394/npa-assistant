@@ -32,6 +32,37 @@ from prompts import VISION_STRUCTURED_PROMPT
 
 logger = logging.getLogger(__name__)
 
+class VisionUnavailableError(RuntimeError):
+    """Vision providers are temporarily unavailable; the API can return 503."""
+    pass
+
+
+def _error_kind(exc: Exception) -> str:
+    """Classify provider errors so permanent failures are not retried."""
+    text = str(exc or "").lower()
+
+    if any(x in text for x in (
+        "resource_exhausted", "quota", "rate limit", "429",
+        "free-models-per-day", "openrouter_free_tier_daily",
+    )):
+        return "quota"
+    if any(x in text for x in ("402", "insufficient balance", "insufficient_balance")):
+        return "balance"
+    if any(x in text for x in ("401", "unauthorized", "invalid api key", "authentication")):
+        return "auth"
+    if any(x in text for x in ("403", "forbidden", "permission denied")):
+        return "forbidden"
+    if any(x in text for x in ("503", "service unavailable", "unavailable", "overloaded", "high demand")):
+        return "transient"
+    if any(x in text for x in ("timeout", "timed out", "temporarily")):
+        return "transient"
+    return "other"
+
+
+def _should_retry(exc: Exception) -> bool:
+    return _error_kind(exc) == "transient"
+
+
 _client = OpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1",
@@ -404,11 +435,17 @@ def _call_model(
                 if raw_text:
                     return raw_text
                 logger.warning("VISION | Gemini empty response model=%s attempt=%s", model, attempt + 1)
+                if attempt == 0:
+                    time.sleep(1.0)
             except Exception as exc:
-                logger.warning("VISION | Gemini request failed model=%s attempt=%s | error=%s", model, attempt + 1, exc)
-                if attempt == 1:
+                kind = _error_kind(exc)
+                logger.warning(
+                    "VISION | Gemini request failed model=%s attempt=%s kind=%s | error=%s",
+                    model, attempt + 1, kind, exc,
+                )
+                if not _should_retry(exc) or attempt == 1:
                     raise
-                time.sleep(1.5)
+                time.sleep(1.0)
         raise ValueError("Gemini vision returned an empty response.")
 
     client = _deepseek_client if model.startswith("deepseek-") else _client
@@ -434,20 +471,21 @@ def _call_model(
                 break
             logger.warning("VISION | empty response model=%s attempt=%s", model, attempt + 1)
         except Exception as request_exc:
-            if _is_openrouter_daily_free_quota_error(request_exc):
+            kind = _error_kind(request_exc)
+            if kind in {"quota", "balance", "auth", "forbidden"}:
                 logger.error(
-                    "VISION | OpenRouter Free Tier daily quota exhausted; skip retries model=%s",
-                    model,
+                    "VISION | provider unavailable model=%s kind=%s action=skip | error=%s",
+                    model, kind, request_exc,
                 )
                 raise
             logger.warning(
-                "VISION | request failed model=%s attempt=%s | error=%s",
-                model, attempt + 1, request_exc,
+                "VISION | request failed model=%s attempt=%s kind=%s | error=%s",
+                model, attempt + 1, kind, request_exc,
             )
-            if attempt == 1:
+            if not _should_retry(request_exc) or attempt == 1:
                 raise
         if attempt < 1:
-            time.sleep(1.5)
+            time.sleep(1.0)
 
     if not raw_text:
         raise ValueError("Vision model returned an empty response after retries.")
@@ -587,10 +625,11 @@ def analyze_image(
         return best_empty
 
     if free_tier_exhausted:
-        raise RuntimeError(
+        raise VisionUnavailableError(
             "Vision analysis unavailable: OpenRouter Free Tier daily quota "
-            "is exhausted. Configure a non-free OPENROUTER_VISION_MODEL "
-            "or OPENROUTER_VISION_FALLBACK_MODEL."
+            "is exhausted and no other configured vision provider succeeded."
         ) from last_error
 
-    raise RuntimeError(f"Vision analysis failed: {last_error}")
+    raise VisionUnavailableError(
+        f"Vision providers unavailable: {last_error}"
+    ) from last_error
