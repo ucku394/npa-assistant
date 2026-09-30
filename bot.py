@@ -574,36 +574,67 @@ def _format_inspection_result(vision: dict, verified: list[dict]) -> str:
                     lines.append(f"  <i>Признак: {html.escape(evidence)}</i>")
 
     confirmed = [x for x in verified if x.get("status") == "confirmed"]
-    potential = [x for x in verified if x.get("status") != "confirmed"]
+    potential = [x for x in verified if x.get("status") == "potential"]
+    not_confirmed = [x for x in verified if x.get("status") == "not_confirmed"]
 
     if confirmed:
-        lines.append("\n⚠️ <b>Подтверждённые несоответствия</b>")
+        lines.append("\n🚨 <b>Подтверждённые нарушения</b>")
         for i, item in enumerate(confirmed, 1):
-            lines.append(f"<b>{i}. {html.escape(str(item.get('violation') or 'Несоответствие'))}</b>")
+            violation = str(item.get("violation") or "Нарушение").strip()
+            lines.append(f"<b>{i}. {html.escape(violation)}</b>")
+
+            evidence = str(item.get("evidence") or "").strip()
+            if evidence:
+                lines.append(f"   👁️ {html.escape(evidence)}")
+
             for ref in (item.get("legal_basis") or [])[:3]:
                 doc = str(ref.get("document") or "НПА").strip()
                 point = str(ref.get("point") or "").strip()
-                lines.append(f"   📚 {html.escape(doc + (', ' + point if point else ''))}")
+                lines.append(
+                    f"   📚 {html.escape(doc + (', ' + point if point else ''))}"
+                )
+
             action = str(item.get("corrective_action") or "").strip()
             if action:
                 lines.append(f"   🛠️ <b>Действие:</b> {html.escape(action)}")
 
     if potential:
-        lines.append("\n🟡 <b>Потенциальные риски — требуется проверка</b>")
+        lines.append("\n⚠️ <b>Выявлены признаки возможных нарушений</b>")
         for i, item in enumerate(potential, 1):
-            desc = str(item.get("violation") or "Потенциальный риск").strip()
+            desc = str(item.get("violation") or "Потенциальное несоответствие").strip()
             lines.append(f"<b>{i}. {html.escape(desc)}</b>")
+
             evidence = str(item.get("evidence") or "").strip()
             if evidence:
-                lines.append(f"   👁️ {html.escape(evidence)}")
-            checks = [str(x).strip() for x in (item.get("verification_needed") or []) if str(x).strip()]
+                lines.append(f"   👁️ <b>Визуальный признак:</b> {html.escape(evidence)}")
+
+            checks = [
+                str(x).strip()
+                for x in (item.get("verification_needed") or [])
+                if str(x).strip()
+            ]
             if checks:
-                lines.append("   🔎 <b>Проверить:</b>")
+                lines.append("   🔎 <b>Требуется проверить:</b>")
                 for check in checks[:4]:
                     lines.append(f"   • {html.escape(check)}")
 
-    if not confirmed:
-        lines.append("\nℹ️ <i>Автоматически подтверждённых нарушений нет. Выявленные потенциальные риски требуют проверки на месте и сопоставления с применимыми НПА Республики Беларусь.</i>")
+    if not confirmed and not potential:
+        if not_confirmed:
+            lines.append(
+                "\nℹ️ <i>По отдельным признакам фото не позволяет "
+                "достоверно установить нарушение. Требуется проверка на месте.</i>"
+            )
+        else:
+            lines.append(
+                "\nℹ️ <i>На фотографии не обнаружено визуальных признаков, "
+                "которые можно обоснованно отнести к нарушению. "
+                "Это не заменяет проверку условий на месте.</i>"
+            )
+    elif potential and not confirmed:
+        lines.append(
+            "\n📌 <i>На фото есть признаки возможных нарушений. "
+            "Они требуют проверки факта и нормативного основания на месте.</i>"
+        )
 
     return "\n".join(lines)
 
