@@ -6,16 +6,21 @@ RAG, prompt, AI fallback and SOURCE_ID validation pipeline.
 
 import logging
 import os
+import asyncio
+from io import BytesIO
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from core.chat_service import chat_service
+from inspection_service import verify_findings
+from prescription_service import build_draft_prescription
+from vision_service import analyze_image
 
 
 logging.basicConfig(
@@ -161,3 +166,60 @@ async def chat(request: ChatRequest):
         sources=result.get("sources") or [],
         rag=result.get("rag") or {},
     )
+
+
+class PrescriptionRequest(BaseModel):
+    findings: list[dict] = Field(default_factory=list)
+    enterprise: str = ""
+    subdivision: str = ""
+    workplace: str = ""
+    recipient: str = ""
+    prescription_number: str = ""
+    deadline: str = ""
+    issuer_name: str = ""
+    issuer_position: str = ""
+    recipient_name: str = ""
+    recipient_position: str = ""
+
+
+@app.post("/api/inspect")
+async def inspect_photo(file: UploadFile = File(...)):
+    allowed = {"image/jpeg", "image/png", "image/webp"}
+    mime = file.content_type or "image/jpeg"
+    if mime not in allowed:
+        raise HTTPException(status_code=400, detail="Поддерживаются JPG, PNG и WEBP.")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Файл фотографии пуст.")
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Размер фотографии не должен превышать 12 МБ.")
+    try:
+        vision = await asyncio.to_thread(analyze_image, data, mime, "")
+        findings = await verify_findings(vision.get("potential_findings") or [], chat_service.supabase)
+        return {"success": True, "scene": vision.get("scene",""), "category": vision.get("category",""),
+                "observations": vision.get("observations", []), "findings": findings,
+                "needs_review": vision.get("needs_review", False)}
+    except Exception:
+        logger.exception("WEB API | photo inspection failed")
+        raise HTTPException(status_code=500, detail="Не удалось выполнить фотоинспекцию.")
+
+
+@app.post("/api/prescription")
+async def create_prescription(request: PrescriptionRequest):
+    confirmed = [x for x in request.findings if x.get("status") == "confirmed" and x.get("legal_basis")]
+    if not confirmed:
+        raise HTTPException(status_code=400, detail="Нет подтверждённых нарушений с проверенным нормативным основанием.")
+    try:
+        content = build_draft_prescription(
+            findings=confirmed, enterprise=request.enterprise, subdivision=request.subdivision,
+            workplace=request.workplace, recipient=request.recipient,
+            prescription_number=request.prescription_number, deadline=request.deadline or None,
+            issuer_name=request.issuer_name, issuer_position=request.issuer_position,
+            recipient_name=request.recipient_name, recipient_position=request.recipient_position,
+        )
+        return StreamingResponse(BytesIO(content),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="proekt_predpisaniya.docx"'})
+    except Exception:
+        logger.exception("WEB API | prescription generation failed")
+        raise HTTPException(status_code=500, detail="Не удалось сформировать проект предписания.")
