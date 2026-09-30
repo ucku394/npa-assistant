@@ -15,6 +15,8 @@ import time
 from typing import Any, Dict, List
 
 from openai import OpenAI
+from google import genai
+from google.genai import types
 
 from config import (
     OPENROUTER_API_KEY,
@@ -22,6 +24,8 @@ from config import (
     OPENROUTER_VISION_FALLBACK_MODEL,
     DEEPSEEK_API_KEY,
     DEEPSEEK_VISION_MODEL,
+    GEMINI_API_KEY,
+    CHAT_MODEL,
     VISION_MAX_OUTPUT_TOKENS,
 )
 from prompts import VISION_STRUCTURED_PROMPT
@@ -37,6 +41,8 @@ _client = OpenAI(
         "X-Title": "Belarus OHS Safety Assistant - Vision",
     },
 ) if OPENROUTER_API_KEY else None
+
+_gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 _deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -313,6 +319,34 @@ def _call_model(
     }
 
     raw_text = ""
+    if model.startswith("gemini-"):
+        if _gemini_client is None:
+            raise RuntimeError("Gemini API is not configured for vision.")
+        for attempt in range(2):
+            try:
+                response = _gemini_client.models.generate_content(
+                    model=model,
+                    contents=[
+                        types.Part.from_text(text=prompt + ("\n" + extra_user_text if extra_user_text else "")),
+                        types.Part.from_bytes(data=base64.b64decode(image_b64), mime_type=mime_type),
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        max_output_tokens=VISION_MAX_OUTPUT_TOKENS,
+                        response_mime_type="application/json",
+                    ),
+                )
+                raw_text = str(getattr(response, "text", "") or "").strip()
+                if raw_text:
+                    return raw_text
+                logger.warning("VISION | Gemini empty response model=%s attempt=%s", model, attempt + 1)
+            except Exception as exc:
+                logger.warning("VISION | Gemini request failed model=%s attempt=%s | error=%s", model, attempt + 1, exc)
+                if attempt == 1:
+                    raise
+                time.sleep(1.5)
+        raise ValueError("Gemini vision returned an empty response.")
+
     client = _deepseek_client if model.startswith("deepseek-") else _client
     if client is None:
         raise RuntimeError(f"Vision provider is not configured for model={model}")
@@ -393,9 +427,10 @@ def analyze_image(
     # его суточная free-квота не должна блокировать всю инспекцию.
     models: List[str] = []
     for model in (
+        CHAT_MODEL if GEMINI_API_KEY else "",
         DEEPSEEK_VISION_MODEL if DEEPSEEK_API_KEY else "",
-        OPENROUTER_VISION_MODEL,
-        OPENROUTER_VISION_FALLBACK_MODEL,
+        OPENROUTER_VISION_MODEL if OPENROUTER_VISION_MODEL and OPENROUTER_VISION_MODEL != "openrouter/free" else "",
+        OPENROUTER_VISION_FALLBACK_MODEL if OPENROUTER_VISION_FALLBACK_MODEL and OPENROUTER_VISION_FALLBACK_MODEL != "openrouter/free" else "",
     ):
         model = str(model or "").strip()
         if model and model not in models:
