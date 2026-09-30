@@ -616,3 +616,10 @@ footer a:hover { text-decoration: underline; }
 @keyframes progress-pulse {
   50% { transform: scale(.88); opacity: .65; }
 }
+
+.inspection-panel{margin:0 0 18px;padding:18px;border:1px solid #dbe3ef;border-radius:16px;background:#fff}
+.inspection-head{display:flex;align-items:center;justify-content:space-between;gap:16px}.inspection-subtitle{font-size:13px;color:#667085;margin-top:4px}
+.upload-button,.prescription-button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;background:#175cd3;color:#fff;font-weight:600}
+.inspection-result{margin-top:16px;padding-top:14px;border-top:1px solid #eaecf0;line-height:1.55}.inspection-title{margin-top:14px;font-weight:700}
+.inspection-title.confirmed{color:#b42318}.inspection-title.potential{color:#b54708}.finding{margin:8px 0;padding:10px 12px;border-radius:10px;background:#f8fafc}.finding.confirmed{border-left:4px solid #d92d20}
+.inspection-note,.inspection-loading{margin-top:12px;color:#667085;font-size:13px}.inspection-error{color:#b42318;padding:10px;background:#fef3f2;border-radius:10px}.prescription-button{margin-top:14px}.prescription-button:disabled{opacity:.6;cursor:wait}
