@@ -91,6 +91,21 @@ PRESCRIPTION_DEFAULT_DEADLINE_DAYS = int(
     os.getenv("PRESCRIPTION_DEFAULT_DEADLINE_DAYS", "10")
 )
 
+PRESCRIPTION_ORGANIZATION = os.getenv(
+    "PRESCRIPTION_ORGANIZATION",
+    'ОАО "Организация"',
+).strip()
+
+PRESCRIPTION_SERVICE_NAME = os.getenv(
+    "PRESCRIPTION_SERVICE_NAME",
+    "Служба ОТиПрБ",
+).strip()
+
+PRESCRIPTION_DEFAULT_RESPONSIBLE = os.getenv(
+    "PRESCRIPTION_DEFAULT_RESPONSIBLE",
+    "",
+).strip()
+
 
 # ============================================================
 # SUPABASE
