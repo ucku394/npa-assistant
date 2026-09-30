@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from core.chat_service import chat_service
 from inspection_service import verify_findings
 from prescription_service import build_draft_prescription
-from vision_service import analyze_image
+from vision_service import analyze_image, VisionUnavailableError
 
 
 logging.basicConfig(
@@ -199,6 +199,18 @@ async def inspect_photo(file: UploadFile = File(...)):
         return {"success": True, "scene": vision.get("scene",""), "category": vision.get("category",""),
                 "observations": vision.get("observations", []), "findings": findings,
                 "needs_review": vision.get("needs_review", False)}
+    except VisionUnavailableError as exc:
+        logger.warning("WEB API | photo inspection unavailable | error=%s", exc)
+        return {
+            "success": False,
+            "error": "vision_unavailable",
+            "scene": "",
+            "category": "unknown",
+            "observations": [],
+            "findings": [],
+            "needs_review": True,
+            "message": "Автоматический анализ фотографии временно недоступен. Повторите попытку позже.",
+        }
     except Exception:
         logger.exception("WEB API | photo inspection failed")
         raise HTTPException(status_code=500, detail="Не удалось выполнить фотоинспекцию.")
