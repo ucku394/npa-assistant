@@ -629,32 +629,42 @@ def _search_chunks(
 # TARGETED SEARCH (СГРУППИРОВАННЫЙ В ОДИН ЗАПРОС)
 # ============================================================
 def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
-    """Точечный нормативный набор для обучения 1 группы по работам на высоте.
+    """Нормативно полный набор именно для алгоритма обучения 1 группы.
 
-    Для алгоритмических запросов одной семантической близости недостаточно:
-    нужны одновременно нормы Правил № 11 о допуске, группах, содержании
-    обучения и порядке обучения/проверки знаний, а также связанные нормы
-    Инструкции № 175.
+    Не используем общий поиск по всему НПА № 11: он часто вытесняет
+    нужные пункты 48-51 нерелевантным п. 17 о наряде-допуске.
     """
-    queries = [
-        "doc_name.ilike.%11%",
-        "content.ilike.%Правила по охране труда при выполнении работ на высоте%",
-        "content.ilike.%работающие 1 группы%",
-        "content.ilike.%практически обучены способам оказания первой помощи%",
-        "content.ilike.%обучение, стажировка, инструктаж и проверка знаний%",
-        "doc_name.ilike.%175%",
-        "content.ilike.%обучение по вопросам охраны труда проводится%",
-        "content.ilike.%проверка знаний по вопросам охраны труда работающих проводится%",
-        "content.ilike.%допуск работающих к самостоятельной работе%",
-        "content.ilike.%периодическую проверку знаний не реже одного раза в 12 месяцев%",
-    ]
-    results = _execute_combined_targeted_search(supabase, queries, limit=TARGETED_SEARCH_LIMIT)
+    results: List[Dict[str, Any]] = []
+    try:
+        height = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%№ 11%")
+            .in_("point_num", ["48.", "49.", "50.", "51."])
+            .execute()
+        )
+        results.extend(height.data or [])
+    except Exception as exc:
+        logger.warning("RAG | height rules targeted search failed: %s", exc)
+
+    try:
+        training = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .in_("point_num", ["36.", "37.", "38.", "39.", "40.", "44.", "45."])
+            .execute()
+        )
+        results.extend(training.data or [])
+    except Exception as exc:
+        logger.warning("RAG | instruction 175 targeted search failed: %s", exc)
+
     results = _deduplicate_chunks(results)
     for chunk in results:
         chunk["_height_training_targeted"] = True
     return results
-
-
 
 def _execute_combined_targeted_search(
     supabase,
