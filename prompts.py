@@ -1141,6 +1141,9 @@ source_index. НИКОГДА не придумывай source_index.
 ПОТЕНЦИАЛЬНОЕ НАБЛЮДЕНИЕ:
 {finding}
 
+EVIDENCE MAP
+{evidence_map}
+
 НОРМАТИВНЫЙ КОНТЕКСТ:
 {retrieved_text}
 """
