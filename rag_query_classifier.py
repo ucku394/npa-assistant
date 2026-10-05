@@ -209,6 +209,19 @@ def detect_topic(user_query: str) -> str:
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_briefing_patterns):
         return "occupational_briefing"
 
+    # Специальный режим для работ на высоте: вопрос о 1 группе должен
+    # приоритетно искать нормы Правил № 11, а не только общую Инструкцию № 175.
+    height_work_training_patterns = [
+        r"\bработ\w*\s+на\s+высот\w*",
+        r"\bработающ\w*\s+1\s+групп\w*",
+        r"\b1[-–—]?й\s+групп\w*.*\bвысот\w*",
+        r"\bпервая\s+групп\w*.*\bвысот\w*",
+        r"\bпостановлен\w*\s+№\s*11\b.*\bвысот\w*",
+        r"\bобучен\w*.*\bработ\w*\s+на\s+высот\w*",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in height_work_training_patterns):
+        return "height_work_training"
+
     occupational_training_patterns = [
         r"\bстажиров\w*",
         r"\bпродолжительност\w*\s+стажиров\w*",
