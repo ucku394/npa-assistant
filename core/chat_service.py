@@ -189,6 +189,75 @@ class ChatService:
         answer = re.sub(r"\n{3,}", "\n\n", answer)
         return answer.strip()
 
+    @staticmethod
+    def _build_evidence_map(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Build a compact evidence map from the exact RAG chunks."""
+        evidence = []
+        for index, chunk in enumerate(chunks, start=1):
+            source_id = str(
+                chunk.get("_source_id") or build_source_id(chunk, index) or ""
+            ).strip()
+            if not source_id:
+                continue
+
+            document = str(
+                chunk.get("document")
+                or chunk.get("document_name")
+                or chunk.get("doc_name")
+                or chunk.get("title")
+                or chunk.get("npa_name")
+                or chunk.get("source")
+                or "Неизвестный НПА"
+            ).strip()
+            point = str(
+                chunk.get("point_num")
+                or chunk.get("point")
+                or chunk.get("point_number")
+                or chunk.get("article")
+                or chunk.get("article_number")
+                or chunk.get("paragraph")
+                or chunk.get("section")
+                or ""
+            ).strip()
+            text = str(
+                chunk.get("content")
+                or chunk.get("text")
+                or chunk.get("chunk_text")
+                or ""
+            ).strip()
+
+            evidence.append({
+                "index": index,
+                "source_id": source_id,
+                "document": document,
+                "point": point,
+                "legal_domain": str(chunk.get("legal_domain") or "").strip(),
+                "topic": str(chunk.get("topic") or "").strip(),
+                "source_url": str(
+                    chunk.get("source_url") or chunk.get("url") or ""
+                ).strip(),
+                "excerpt": text[:700],
+            })
+        return evidence
+
+    @staticmethod
+    def _format_evidence_map(evidence: List[Dict[str, Any]]) -> str:
+        if not evidence:
+            return "EVIDENCE MAP: отсутствует."
+
+        blocks = ["EVIDENCE MAP:"]
+        for item in evidence:
+            blocks.append(
+                f"[ИСТОЧНИК {item['index']}] "
+                f"SOURCE_ID={item['source_id']}\n"
+                f"НПА: {item['document']}\n"
+                f"Пункт/статья: {item['point'] or 'не указан'}\n"
+                f"Область: {item['legal_domain'] or 'не указана'}\n"
+                f"Тема: {item['topic'] or 'не указана'}\n"
+                f"Фрагмент: {item['excerpt']}"
+            )
+        return "\n\n".join(blocks)
+
     async def process_text(self, question: str) -> Dict[str, Any]:
         """Process one legal text question and return a transport-neutral result."""
         question = str(question or "").strip()
@@ -207,6 +276,9 @@ class ChatService:
         chunks = rag_result.get("chunks") or []
         npa_context = rag_result.get("retrieved_text") or ""
 
+        evidence_map = self._build_evidence_map(chunks)
+        evidence_map_text = self._format_evidence_map(evidence_map)
+
         logger.info(
             "CHAT | RAG candidates=%s | final=%s | domain=%s | topic=%s",
             rag_result.get("candidate_count"),
@@ -221,6 +293,7 @@ class ChatService:
             "final_count": rag_result.get("final_count", 0),
             "legal_domain": rag_result.get("legal_domain"),
             "topic": rag_result.get("topic"),
+            "evidence_count": len(evidence_map),
         }
 
         if not rag_meta["found"]:
@@ -231,10 +304,13 @@ class ChatService:
                 "answer": "",
                 "sources": [],
                 "rag": rag_meta,
+                "evidence_map": evidence_map,
+                "evidence_map_text": evidence_map_text,
             }
 
         prompt = LEGAL_ASSISTANT_PROMPT.format(
             retrieved_text=npa_context,
+            evidence_map=evidence_map_text,
             user_query=question,
         )
 
@@ -268,6 +344,8 @@ class ChatService:
             "answer_with_citations": answer_with_citations,
             "sources": sources,
             "rag": rag_meta,
+            "evidence_map": evidence_map,
+            "evidence_map_text": evidence_map_text,
         }
 
 
