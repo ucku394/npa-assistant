@@ -628,6 +628,33 @@ def _search_chunks(
 # ============================================================
 # TARGETED SEARCH (СГРУППИРОВАННЫЙ В ОДИН ЗАПРОС)
 # ============================================================
+def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный нормативный набор для обучения 1 группы по работам на высоте.
+
+    Для алгоритмических запросов одной семантической близости недостаточно:
+    нужны одновременно нормы Правил № 11 о допуске, группах, содержании
+    обучения и порядке обучения/проверки знаний, а также связанные нормы
+    Инструкции № 175.
+    """
+    queries = [
+        "doc_name.ilike.%11%",
+        "content.ilike.%Правила по охране труда при выполнении работ на высоте%",
+        "content.ilike.%работающие 1 группы%",
+        "content.ilike.%практически обучены способам оказания первой помощи%",
+        "content.ilike.%обучение, стажировка, инструктаж и проверка знаний%",
+        "doc_name.ilike.%175%",
+        "content.ilike.%обучение по вопросам охраны труда проводится%",
+        "content.ilike.%проверка знаний по вопросам охраны труда работающих проводится%",
+        "content.ilike.%допуск работающих к самостоятельной работе%",
+        "content.ilike.%периодическую проверку знаний не реже одного раза в 12 месяцев%",
+    ]
+    results = _execute_combined_targeted_search(supabase, queries, limit=TARGETED_SEARCH_LIMIT)
+    results = _deduplicate_chunks(results)
+    for chunk in results:
+        chunk["_height_training_targeted"] = True
+    return results
+
+
 
 def _execute_combined_targeted_search(
     supabase,
@@ -1386,6 +1413,8 @@ async def _get_targeted_chunks(
             if work_break_results:
                 return work_break_results
 
+    if topic == "height_work_training":
+        return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
     if topic == "ppe_nonprovision":
         return await asyncio.to_thread(_targeted_ppe_nonprovision_search, supabase)
     if topic == "medical_examinations":
@@ -2575,6 +2604,33 @@ def _select_legal_diverse_chunks(
             points_seen.add(point_key)
         return True
 
+    if topic == "height_work_training":
+        # Алгоритм обучения должен быть нормативно полным, а не состоять
+        # из пяти наиболее похожих фрагментов. Сначала фиксируем ключевые
+        # пункты Правил № 11 (48-51), затем добираем процедурные нормы № 175.
+        height_pool = [chunk for chunk in ranked_chunks if chunk.get("_height_training_targeted")]
+        priority_11 = {"48": 100, "49": 95, "50": 90, "51": 85}
+        priority_175 = {"10": 80, "44": 78, "45": 76, "46": 74, "50": 72, "51": 70}
+
+        def _height_priority(chunk):
+            doc = _get_document_name(chunk).lower()
+            point = _get_point_number(chunk).strip().rstrip(".")
+            if re.search(r"№\\s*11\\b", doc) or "работ на высоте" in doc:
+                base = priority_11.get(point, 40)
+            elif re.search(r"№\\s*175\\b", doc) or "инструкци" in doc and "175" in doc:
+                base = priority_175.get(point, 20)
+            else:
+                base = 10
+            return (base, _safe_float(chunk.get("_combined_score")))
+
+        height_pool.sort(key=_height_priority, reverse=True)
+        for chunk in height_pool:
+            if _add(chunk, max_per_document=5, max_per_point=1):
+                if len(selected) >= min(limit, 9):
+                    return selected
+        if selected:
+            return selected
+
     if accident_mode == "worker_did_not_report":
         # Для этого intent финальный отбор идёт из узкого targeted-пула.
         # Общий vector/hybrid-поиск не должен вытеснять нужные нормы
@@ -3247,7 +3303,9 @@ async def retrieve_context(
         )
 
     final_limit = (
-        max(RAG_FINAL_COUNT, 7)
+        max(RAG_FINAL_COUNT, 9)
+        if topic == "height_work_training"
+        else max(RAG_FINAL_COUNT, 7)
         if cross_reference
         else RAG_FINAL_COUNT
     )
