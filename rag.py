@@ -641,10 +641,13 @@ def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
             .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
             .eq("legal_domain", "occupational_safety")
             .ilike("doc_name", "%№ 11%")
-            .in_("point_num", ["48.", "49.", "50.", "51."])
+            .limit(120)
             .execute()
         )
-        results.extend(height.data or [])
+        for chunk in (height.data or []):
+            point = _get_point_number(chunk).strip().rstrip(".")
+            if point in {"48", "49", "50", "51"}:
+                results.append(chunk)
     except Exception as exc:
         logger.warning("RAG | height rules targeted search failed: %s", exc)
 
@@ -654,10 +657,13 @@ def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
             .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
             .eq("legal_domain", "occupational_safety")
             .ilike("doc_name", "%175%")
-            .in_("point_num", ["36.", "37.", "38.", "39.", "40.", "44.", "45."])
+            .limit(160)
             .execute()
         )
-        results.extend(training.data or [])
+        for chunk in (training.data or []):
+            point = _get_point_number(chunk).strip().rstrip(".")
+            if point in {"36", "37", "38", "39", "40", "44", "45"}:
+                results.append(chunk)
     except Exception as exc:
         logger.warning("RAG | instruction 175 targeted search failed: %s", exc)
 
@@ -2619,15 +2625,15 @@ def _select_legal_diverse_chunks(
         # из пяти наиболее похожих фрагментов. Сначала фиксируем ключевые
         # пункты Правил № 11 (48-51), затем добираем процедурные нормы № 175.
         height_pool = [chunk for chunk in ranked_chunks if chunk.get("_height_training_targeted")]
-        priority_11 = {"48": 100, "49": 95, "50": 90, "51": 85}
-        priority_175 = {"10": 80, "44": 78, "45": 76, "46": 74, "50": 72, "51": 70}
+        priority_11 = {"48": 1000, "49": 990, "50": 980, "51": 970}
+        priority_175 = {"36": 900, "37": 890, "38": 880, "39": 870, "40": 860, "44": 850, "45": 840}
 
         def _height_priority(chunk):
             doc = _get_document_name(chunk).lower()
             point = _get_point_number(chunk).strip().rstrip(".")
-            if re.search(r"№\\s*11\\b", doc) or "работ на высоте" in doc:
+            if re.search(r"№\s*11\b", doc) or "работ на высоте" in doc:
                 base = priority_11.get(point, 40)
-            elif re.search(r"№\\s*175\\b", doc) or "инструкци" in doc and "175" in doc:
+            elif re.search(r"№\s*175\b", doc) or "инструкци" in doc and "175" in doc:
                 base = priority_175.get(point, 20)
             else:
                 base = 10
