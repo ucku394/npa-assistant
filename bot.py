@@ -549,15 +549,6 @@ async def text_handler(
 
     try:
         async with continuous_typing(update.effective_chat):
-            if status_message:
-                try:
-                    await status_message.edit_text(
-                        "🔍 <i>Ищу в базе НПА Республики Беларусь...</i>",
-                        parse_mode="HTML",
-                    )
-                except Exception as e:
-                    logger.debug("Не удалось обновить статус поиска: %s", e)
-
             # Единый AI Core: RAG -> prompt -> AI -> SOURCE_ID.
             result = await chat_service.process_text(question)
 
