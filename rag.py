@@ -137,6 +137,10 @@ def _extract_query_terms(user_query: str) -> List[str]:
         r"\bтехническ\w*\s+устройств\w*",
         r"\bавари\w*",
         r"\bинцидент\w*",
+        r"\bработ\w*\s+на\s+высот\w*",
+        r"\bработающ\w*\s+1\s+групп\w*",
+        r"\bпервая\s+групп\w*",
+        r"\bпостановлен\w*\s+№\s*11\b",
         r"\bпожарн\w*\s+безопасност\w*",
         r"\bпожар\w*",
         r"\bогнетушител\w*",
@@ -304,6 +308,24 @@ def _topic_relevance_score(
             "аттестаци" in document_name or "аттестаци" in content or "рабоч" in content
         ):
             score += 1.50
+
+    elif topic == "height_work_training":
+        if db_topic == "height_work_training":
+            score += 1.50
+        if re.search(r"№\s*11\b", document_name, flags=re.IGNORECASE):
+            score += 1.40
+        if "работ" in document_name and "высот" in document_name:
+            score += 0.90
+        if "работающ" in content and "1 группы" in content:
+            score += 1.00
+        if "первая группа" in content or "1 группы" in content:
+            score += 0.70
+        if "обучен" in content:
+            score += 0.35
+        if "первая помощь" in content:
+            score += 0.50
+        if re.search(r"\b50\b", str(chunk.get("point_num") or ""), flags=re.IGNORECASE):
+            score += 1.20
 
     elif topic == "accident_investigation":
         if db_topic == "accident_investigation":
