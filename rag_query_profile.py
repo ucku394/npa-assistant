@@ -337,6 +337,30 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "периодический медицинский осмотр",
         ])
 
+    # Работы на высоте — отдельный профиль запроса.
+    height_training_pattern = (
+        r"\bработ\w*\s+на\s+высот\w*|"
+        r"\bработающ\w*\s+1\s+групп\w*|"
+        r"\bпервая\s+групп\w*.*\bвысот\w*|"
+        r"\b1[-–—]?й\s+групп\w*.*\bвысот\w*"
+    )
+    if re.search(height_training_pattern, query, re.IGNORECASE):
+        profile.update({
+            "subject": "height_work_group_1",
+            "event": "height_work_training",
+            "object": "training_and_knowledge_check",
+            "action": "train",
+        })
+        profile["legal_phrases"].extend([
+            "Правила по охране труда при выполнении работ на высоте постановление № 11",
+            "работающие 1 группы непосредственно выполняющие работы на высоте",
+            "обучение работающих 1 группы",
+            "проверка знаний работающих 1 группы",
+            "практическое обучение способам оказания первой помощи пострадавшим",
+        ])
+        if re.search(r"\bалгоритм\w*|\bпорядок\w*|\bкак\s+организ\w*|\bобучен\w*", query, re.IGNORECASE):
+            profile["question_type"] = "what_to_do"
+
     if re.search(r"\bинструктаж\w*", query, re.IGNORECASE):
         profile["event"] = "occupational_briefing"
         profile["object"] = "occupational_briefing"
