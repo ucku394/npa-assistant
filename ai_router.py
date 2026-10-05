@@ -1583,11 +1583,19 @@ def generate_answer(
                         time.time() + GEMINI_FALLBACK_COOLDOWN_SECONDS
                     )
 
-        else:
-            remaining = max(
-                0,
-                int(_gemini_fallback_disabled_until - now),
+        elif _gemini_fallback_disabled_until == GEMINI_CONFIG_DISABLED:
+            # Configuration/authentication error: Gemini fallback is disabled
+            # until process restart. Do not convert infinity to int; doing so
+            # raises OverflowError and can abort the entire provider chain.
+            logger.info(
+                "AI | Gemini fallback disabled until process restart "
+                "(configuration/access error) | model=%s",
+                GEMINI_FALLBACK_MODEL,
             )
+
+        else:
+            remaining_seconds = _gemini_fallback_disabled_until - now
+            remaining = max(0, int(remaining_seconds))
 
             logger.info(
                 "AI | Gemini fallback cooldown | model=%s | remaining=%ss",
