@@ -72,8 +72,8 @@ OPENROUTER_EXTRA_FALLBACK_MODELS = [
         "OPENROUTER_EXTRA_FALLBACK_MODELS",
         ",".join(
             [
-                "qwen/qwen3.8-27b:free",
                 "nvidia/nemotron-3-super-120b-a12b:free",
+                "qwen/qwen3.8-27b:free",
                 "openrouter/free",
             ]
         ),
@@ -1522,9 +1522,14 @@ def generate_answer(
     # --------------------------------------------------------
     # 2. GEMINI 3.8 FALLBACK
     # --------------------------------------------------------
+    # Если основной Gemini уже получил конфигурационную/авторизационную
+    # ошибку, тот же ключ не станет рабочим на другой модели. Не тратим
+    # второй сетевой запрос и сразу переходим к OpenRouter.
+    primary_config_error = _gemini_disabled_until == GEMINI_CONFIG_DISABLED
 
     if (
         gemini_client is not None
+        and not primary_config_error
         and GEMINI_FALLBACK_MODEL
         and GEMINI_FALLBACK_MODEL != CHAT_MODEL
     ):
