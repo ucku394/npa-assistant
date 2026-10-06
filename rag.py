@@ -1021,41 +1021,123 @@ def _targeted_occupational_briefing_search(
     supabase,
     user_query: str = "",
 ) -> List[Dict[str, Any]]:
+    """Точечный сбор нормативного каркаса для процедурных вопросов об инструктажах."""
     target_mode = _is_target_briefing_query(user_query)
-    responsible_mode = not target_mode and _is_responsible_briefing_query(user_query)
+    normalized_query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    procedure_mode = bool(
+        re.search(
+            r"\b(алгоритм|порядок|пошагов|что делать|как провести|как организовать|"
+            r"последовательност|процедур)\b",
+            normalized_query,
+        )
+    )
 
-    if target_mode:
-        queries = [
-            "doc_name.ilike.%175%",
-            "doc_name.ilike.%Инструкци%",
-            "content.ilike.%целевой инструктаж%",
-            "content.ilike.%разовых работ%",
-            "content.ilike.%не связанных с прямыми обязанностями%",
-            "content.ilike.%прямыми обязанностями%",
-            "content.ilike.%наряд-допуск%",
-            "content.ilike.%наряду-допуску%",
-            "content.ilike.%наряд допуск%",
-        ]
-    elif responsible_mode:
-        queries = [
-            "doc_name.ilike.%175%",
-            "doc_name.ilike.%Инструкци%",
-            "content.ilike.%вводный инструктаж%",
-            "content.ilike.%проводит специалист по охране труда%",
-            "content.ilike.%специалист по охране труда%",
-            "content.ilike.%уполномоченное должностное лицо%",
-            "content.ilike.%руководитель организации%",
-            "content.ilike.%руководитель структурного подразделения%",
-        ]
-    else:
-        queries = [
-            "doc_name.ilike.%175%",
-            "doc_name.ilike.%Инструкци%",
-            "content.ilike.%инструктаж%",
-        ]
+    try:
+        # Ключевой блок действующей Инструкции № 175. Забираем пункты
+        # адресно, чтобы semantic search не вытеснил этапы процедуры.
+        point_values = []
+        for point in range(16, 36):
+            point_values.extend([str(point), f"{point}."])
 
-    results = _execute_combined_targeted_search(supabase, queries)
-    return _deduplicate_chunks(results)
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .in_("point_num", point_values)
+            .limit(100)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+
+        # Резерв, если point_num в загрузке хранится нестандартно.
+        if not results:
+            results = _execute_combined_targeted_search(
+                supabase,
+                [
+                    "doc_name.ilike.%175%",
+                    "content.ilike.%вводный инструктаж%",
+                    "content.ilike.%первичный инструктаж%",
+                    "content.ilike.%повторный инструктаж%",
+                    "content.ilike.%внеплановый инструктаж%",
+                    "content.ilike.%целевой инструктаж%",
+                    "content.ilike.%проверка знаний%",
+                    "content.ilike.%регистрац%",
+                ],
+                limit=80,
+            )
+
+        priority_points = {
+            "16": 1000, "17": 980, "18": 960, "20": 940,
+            "22": 1000, "26": 900, "27": 880, "28": 860,
+            "29": 840, "30": 820, "31": 980, "35": 960,
+        }
+
+        def briefing_priority(chunk: Dict[str, Any]) -> tuple:
+            point = _normalize_point_identifier(_get_point_number(chunk))
+            content = str(chunk.get("content") or "").lower()
+            score = priority_points.get(point, 500)
+            for marker, bonus in (
+                ("вводный инструктаж", 80),
+                ("первичный инструктаж", 80),
+                ("повторный инструктаж", 70),
+                ("внеплановый инструктаж", 70),
+                ("целевой инструктаж", 70),
+                ("проверка знаний", 60),
+                ("регистрац", 50),
+            ):
+                if marker in content:
+                    score += bonus
+            return score, point
+
+        results.sort(key=briefing_priority, reverse=True)
+
+        for chunk in results:
+            chunk["_occupational_briefing_targeted"] = True
+            chunk["_procedure_targeted"] = procedure_mode
+
+        # Только для запроса именно о целевом инструктаже добавляем
+        # специальные нормы о разовых работах/наряде-допуске.
+        if target_mode:
+            extra = (
+                supabase.table("npa_chunks")
+                .select(
+                    "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+                )
+                .eq("legal_domain", "occupational_safety")
+                .ilike("doc_name", "%175%")
+                .or_(
+                    "content.ilike.%целевой инструктаж%,"
+                    "content.ilike.%разовых работ%,"
+                    "content.ilike.%ликвидации последствий аварий%,"
+                    "content.ilike.%наряд-допуск%"
+                )
+                .limit(30)
+                .execute()
+            )
+            extra_results = _deduplicate_chunks(extra.data or [])
+            for chunk in extra_results:
+                chunk["_occupational_briefing_targeted"] = True
+                chunk["_procedure_targeted"] = procedure_mode
+            results = _deduplicate_chunks(results + extra_results)
+
+        logger.info(
+            "RAG | occupational briefing targeted | procedure=%s | points=%s",
+            procedure_mode,
+            [
+                f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
+                for chunk in results[:30]
+            ],
+        )
+        return results
+    except Exception as exc:
+        logger.warning(
+            "RAG | occupational briefing targeted search failed: %s",
+            exc,
+        )
+        return []
 
 
 def _targeted_accident_worker_not_report_search(supabase) -> List[Dict[str, Any]]:
