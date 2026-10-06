@@ -1580,34 +1580,6 @@ async def _get_targeted_chunks(
             if work_break_results:
                 return work_break_results
 
-    if topic == "portable_ladder":
-        # Для лестниц действующая норма № 11 п. 54 должна быть
-        # нормативным ядром. Не позволяем общему score вытеснить её.
-        ladder_pool = [chunk for chunk in ranked_chunks if chunk.get("_portable_ladder_targeted")]
-        ladder_pool.sort(
-            key=lambda chunk: (
-                1 if _normalize_point_identifier(_get_point_number(chunk)) == "54" else 0,
-                1 if _normalize_point_identifier(_get_point_number(chunk)) == "53" else 0,
-                _safe_float(chunk.get("_combined_score")),
-            ),
-            reverse=True,
-        )
-        for required_point in ("54", "53"):
-            for chunk in ladder_pool:
-                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
-                    _add(chunk, max_per_document=4, max_per_point=1)
-                    break
-        for chunk in ladder_pool:
-            if len(selected) >= min(limit, 3):
-                break
-            _add(chunk, max_per_document=4, max_per_point=1)
-        if selected:
-            logger.info(
-                "RAG | portable ladder final | sources=%s",
-                [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
-            )
-            return selected
-
     if topic == "height_work_training":
         return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
     if topic == "ppe_nonprovision":
@@ -2804,6 +2776,35 @@ def _select_legal_diverse_chunks(
         if point_key is not None:
             points_seen.add(point_key)
         return True
+
+    if topic == "portable_ladder":
+        # Для лестниц действующая норма № 11 п. 54 должна быть
+        # нормативным ядром. Не позволяем общему score вытеснить её.
+        ladder_pool = [chunk for chunk in ranked_chunks if chunk.get("_portable_ladder_targeted")]
+        ladder_pool.sort(
+            key=lambda chunk: (
+                1 if _normalize_point_identifier(_get_point_number(chunk)) == "54" else 0,
+                1 if _normalize_point_identifier(_get_point_number(chunk)) == "53" else 0,
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for required_point in ("54", "53"):
+            for chunk in ladder_pool:
+                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
+                    _add(chunk, max_per_document=4, max_per_point=1)
+                    break
+        for chunk in ladder_pool:
+            if len(selected) >= min(limit, 3):
+                break
+            _add(chunk, max_per_document=4, max_per_point=1)
+        if selected:
+            logger.info(
+                "RAG | portable ladder final | sources=%s",
+                [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
+            )
+            return selected
+
 
     if topic == "height_work_training":
         # Алгоритм обучения должен быть нормативно полным, а не состоять
