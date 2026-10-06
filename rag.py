@@ -1580,6 +1580,8 @@ async def _get_targeted_chunks(
             if work_break_results:
                 return work_break_results
 
+    if topic == "portable_ladder":
+        return await asyncio.to_thread(_targeted_portable_ladder_search, supabase, user_query)
     if topic == "height_work_training":
         return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
     if topic == "ppe_nonprovision":
