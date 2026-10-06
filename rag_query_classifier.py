@@ -102,6 +102,10 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bсрок\w*\s+носк\w*",
         r"\bаттестаци\w*\s+рабоч\w*\s+мест\w*",
         r"\bуслов\w*\s+труд\w*",
+        r"\bпереносн\w*\s+лестниц\w*",
+        r"\bприставн\w*\s+лестниц\w*",
+        r"\bлестниц\w*[-–—]?стремянк\w*",
+        r"\bстремянк\w*",
     ]
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_patterns):
@@ -216,6 +220,22 @@ def detect_topic(user_query: str) -> str:
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_briefing_patterns):
         return "occupational_briefing"
+
+    # Отдельный режим для переносных/приставных лестниц и стремянок.
+    # В действующих Правилах № 11 ключевое требование п. 54 — ОСМОТР,
+    # а не автоматическое периодическое статическое ИСПЫТАНИЕ.
+    portable_ladder_patterns = [
+        r"\bпереносн\w*\s+лестниц\w*",
+        r"\bприставн\w*\s+лестниц\w*",
+        r"\bлестниц\w*[-–—]?стремянк\w*",
+        r"\bстремянк\w*",
+        r"\bлестниц\w*.*\bиспытан\w*",
+        r"\bиспытан\w*.*\bлестниц\w*",
+        r"\bлестниц\w*.*\bосмотр\w*",
+        r"\bосмотр\w*.*\bлестниц\w*",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in portable_ladder_patterns):
+        return "portable_ladder"
 
     # Специальный режим для работ на высоте: вопрос о 1 группе должен
     # приоритетно искать нормы Правил № 11, а не только общую Инструкцию № 175.
