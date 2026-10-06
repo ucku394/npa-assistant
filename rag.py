@@ -190,6 +190,19 @@ def _topic_relevance_score(
 
     score = 0.0
 
+    if topic == "portable_ladder":
+        for phrase, weight in (
+            ("переносная лестница", 0.85),
+            ("приставная лестница", 0.80),
+            ("лестница-стремянка", 0.80),
+            ("стремянка", 0.75),
+            ("испытание лестницы", 0.70),
+            ("осмотр лестницы", 0.85),
+            ("не реже одного раза в шесть месяцев", 0.95),
+        ):
+            if phrase in text:
+                score += weight
+
     if topic == "occupational_briefing":
         if db_topic == "occupational_briefing":
             score += 1.0
@@ -308,6 +321,25 @@ def _topic_relevance_score(
             "аттестаци" in document_name or "аттестаци" in content or "рабоч" in content
         ):
             score += 1.50
+
+    elif topic == "portable_ladder":
+        if db_topic == "portable_ladder":
+            score += 1.50
+        if re.search(r"№\s*11\b", document_name, flags=re.IGNORECASE):
+            score += 1.60
+        if "работ на высоте" in document_name:
+            score += 0.90
+        point = _normalize_point_identifier(_get_point_number(chunk))
+        if point == "53":
+            score += 1.20
+        if point == "54":
+            score += 1.60
+        if "осмотр" in content:
+            score += 0.60
+        if "исправн" in content:
+            score += 0.35
+        if "испытан" in content:
+            score += 0.15
 
     elif topic == "height_work_training":
         if db_topic == "height_work_training":
@@ -628,6 +660,43 @@ def _search_chunks(
 # ============================================================
 # TARGETED SEARCH (СГРУППИРОВАННЫЙ В ОДИН ЗАПРОС)
 # ============================================================
+def _targeted_portable_ladder_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
+    """Адресный поиск действующих требований к лестницам по Правилам № 11."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%№ 11%")
+            .or_(
+                "point_num.ilike.%53%,point_num.ilike.%54%,"
+                "content.ilike.%лестниц%,content.ilike.%стремянк%"
+            )
+            .limit(30)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        for chunk in results:
+            point = _get_point_number(chunk).strip().rstrip(".")
+            if point in {"53", "54"}:
+                chunk["_portable_ladder_targeted"] = True
+        results.sort(
+            key=lambda chunk: (
+                1 if _get_point_number(chunk).strip().rstrip(".") == "54" else 0,
+                1 if _get_point_number(chunk).strip().rstrip(".") == "53" else 0,
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        logger.info(
+            "RAG | portable ladder targeted | points=%s",
+            [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in results],
+        )
+        return results
+    except Exception as exc:
+        logger.warning("RAG | portable ladder targeted search failed: %s", exc)
+        return []
+
 def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
     """Нормативно полный набор именно для алгоритма обучения 1 группы.
 
@@ -1510,6 +1579,34 @@ async def _get_targeted_chunks(
             )
             if work_break_results:
                 return work_break_results
+
+    if topic == "portable_ladder":
+        # Для лестниц действующая норма № 11 п. 54 должна быть
+        # нормативным ядром. Не позволяем общему score вытеснить её.
+        ladder_pool = [chunk for chunk in ranked_chunks if chunk.get("_portable_ladder_targeted")]
+        ladder_pool.sort(
+            key=lambda chunk: (
+                1 if _normalize_point_identifier(_get_point_number(chunk)) == "54" else 0,
+                1 if _normalize_point_identifier(_get_point_number(chunk)) == "53" else 0,
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for required_point in ("54", "53"):
+            for chunk in ladder_pool:
+                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
+                    _add(chunk, max_per_document=4, max_per_point=1)
+                    break
+        for chunk in ladder_pool:
+            if len(selected) >= min(limit, 3):
+                break
+            _add(chunk, max_per_document=4, max_per_point=1)
+        if selected:
+            logger.info(
+                "RAG | portable ladder final | sources=%s",
+                [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
+            )
+            return selected
 
     if topic == "height_work_training":
         return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
