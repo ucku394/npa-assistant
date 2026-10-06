@@ -637,6 +637,31 @@ def _validate_source_grounding(prompt: str, text: str) -> list[str]:
     return used_source_ids
 
 
+def _build_grounding_retry_prompt(prompt: str, error: Exception) -> str:
+    """
+    Усиливает юридический prompt после провала SOURCE_ID-проверки.
+    Повторная попытка получает тот же нормативный контекст и те же
+    разрешённые источники — новые источники не добавляются.
+    """
+    return (
+        prompt
+        + "\n\n"
+        + "КРИТИЧЕСКАЯ ПОВТОРНАЯ ПРОВЕРКА ЮРИДИЧЕСКОГО ОТВЕТА:\n"
+        + "Предыдущая генерация не прошла техническую проверку привязки "
+        + "к нормативным источникам. Сформируй ответ заново.\n"
+        + "1. Используй только SOURCE_ID, которые уже присутствуют "
+        + "в нормативном контексте.\n"
+        + "2. Не создавай, не изменяй и не сокращай SOURCE_ID.\n"
+        + "3. Для каждого существенного юридического утверждения укажи "
+        + "подтверждающий SOURCE_ID рядом с утверждением.\n"
+        + "4. Если утверждение нельзя подтвердить представленным контекстом, "
+        + "не добавляй его.\n"
+        + "5. Не добавляй отдельный список источников вместо привязки "
+        + "SOURCE_ID к утверждениям.\n"
+        + f"Причина технической проверки: {error}\n"
+    )
+
+
 # ============================================================
 # SOURCE BLOCK
 # ============================================================
@@ -1194,8 +1219,26 @@ def generate_with_openrouter(
             # юридического ответа. Для vision/inspection он не является
             # частью контракта результата.
             if enforce_source_grounding:
-                if enforce_source_grounding:
+                try:
                     _validate_source_grounding(prompt, result)
+                except _SourceGroundingError as grounding_error:
+                    logger.warning(
+                        "LEGAL | OpenRouter grounding retry | model=%s",
+                        model,
+                    )
+                    retry_prompt = _build_grounding_retry_prompt(
+                        prompt,
+                        grounding_error,
+                    )
+                    retry_result = _openrouter_request(
+                        retry_prompt,
+                        model,
+                    )
+                    _validate_source_grounding(
+                        prompt,
+                        retry_result,
+                    )
+                    result = retry_result
 
             logger.info(
                 "AI | OpenRouter success | model=%s | chars=%s",
@@ -1434,7 +1477,26 @@ def generate_answer(
                     )
 
                     if enforce_source_grounding:
-                        _validate_source_grounding(prompt, result)
+                        try:
+                            _validate_source_grounding(prompt, result)
+                        except _SourceGroundingError as grounding_error:
+                            logger.warning(
+                                "LEGAL | Gemini primary grounding retry | model=%s",
+                                CHAT_MODEL,
+                            )
+                            retry_prompt = _build_grounding_retry_prompt(
+                                prompt,
+                                grounding_error,
+                            )
+                            retry_result = generate_with_gemini(
+                                retry_prompt,
+                                CHAT_MODEL,
+                            )
+                            _validate_source_grounding(
+                                prompt,
+                                retry_result,
+                            )
+                            result = retry_result
                     _gemini_disabled_until = 0.0
                     return result
 
@@ -1548,7 +1610,26 @@ def generate_answer(
                 )
 
                 if enforce_source_grounding:
-                    _validate_source_grounding(prompt, result)
+                    try:
+                        _validate_source_grounding(prompt, result)
+                    except _SourceGroundingError as grounding_error:
+                        logger.warning(
+                            "LEGAL | Gemini fallback grounding retry | model=%s",
+                            GEMINI_FALLBACK_MODEL,
+                        )
+                        retry_prompt = _build_grounding_retry_prompt(
+                            prompt,
+                            grounding_error,
+                        )
+                        retry_result = generate_with_gemini(
+                            retry_prompt,
+                            GEMINI_FALLBACK_MODEL,
+                        )
+                        _validate_source_grounding(
+                            prompt,
+                            retry_result,
+                        )
+                        result = retry_result
                 _gemini_fallback_disabled_until = 0.0
 
                 logger.info(
