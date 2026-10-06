@@ -2641,11 +2641,39 @@ def _select_legal_diverse_chunks(
                 base = 10
             return (base, _safe_float(chunk.get("_combined_score")))
 
+        # Для этого сценария пп. 48-51 Правил № 11 являются обязательным
+        # нормативным ядром. Сначала добавляем их детерминированно по одному,
+        # чтобы общий score/лимит документа не мог вытеснить, например, п. 51.
+        logger.info(
+            "RAG | height training targeted points=%s",
+            [
+                f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
+                for chunk in height_pool
+            ],
+        )
+
         height_pool.sort(key=_height_priority, reverse=True)
+
+        for required_point in ("48", "49", "50", "51"):
+            for chunk in height_pool:
+                doc = _get_document_name(chunk).lower()
+                point = _get_point_number(chunk).strip().rstrip(".")
+                if required_point != point:
+                    continue
+                if not (
+                    re.search(r"№\s*11\b", doc)
+                    or "работ на высоте" in doc
+                ):
+                    continue
+                _add(chunk, max_per_document=5, max_per_point=1)
+                break
+
+        # После обязательного ядра добираем процедурные нормы Инструкции №175.
         for chunk in height_pool:
             if _add(chunk, max_per_document=5, max_per_point=1):
                 if len(selected) >= min(limit, 9):
                     return selected
+
         if selected:
             return selected
 
