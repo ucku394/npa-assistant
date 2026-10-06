@@ -3015,6 +3015,34 @@ def _select_legal_diverse_chunks(
                 if _ppe_refusal_relevance_score(chunk) >= 0.45:
                     _add(chunk, max_per_document=3, max_per_point=1)
 
+    # Процедурные вопросы по инструктажам: сначала сохраняем
+    # нормативный каркас из точечного поиска № 175.
+    if topic == "occupational_briefing":
+        briefing_pool = [
+            chunk for chunk in ranked_chunks
+            if chunk.get("_occupational_briefing_targeted")
+        ]
+        priority = {"16": 1000, "22": 1000, "31": 980, "35": 960}
+        briefing_pool.sort(
+            key=lambda chunk: (
+                priority.get(
+                    _normalize_point_identifier(_get_point_number(chunk)),
+                    500,
+                ),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for required_point in ("16", "22", "31", "35"):
+            for chunk in briefing_pool:
+                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
+                    _add(chunk, max_per_document=4, max_per_point=1)
+                    break
+        for chunk in briefing_pool:
+            if len(selected) >= min(limit, 5):
+                break
+            _add(chunk, max_per_document=4, max_per_point=1)
+
     # Для вопросов о периодичности проверки знаний приоритет имеет
     # соответствующая категория пп. 42/43 или 51 Инструкции № 175.
     frequency_qualifiers = (query_profile or {}).get("qualifiers") or []
