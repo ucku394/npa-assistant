@@ -9,6 +9,7 @@ from embedding import get_query_embeddings
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_universal_search_queries, build_search_queries
 from legal_query_planner import build_legal_query_plan
+from legal_target_discovery import discover_legal_targets
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
 from rag_query_classifier import (
     detect_legal_domain,
@@ -3623,11 +3624,26 @@ async def retrieve_context(
         query_roles,
     )
 
+    # Universal legal target discovery: find real NPA/article candidates
+    # directly in the indexed corpus. This is augmentation, not an answer
+    # generator; it cannot invent legal targets.
+    discovered_targets = await asyncio.to_thread(
+        discover_legal_targets,
+        supabase,
+        legal_query_plan,
+    )
+
     targeted_chunks = await _get_targeted_chunks(
         supabase,
         topic,
         user_query,
     )
+
+    if discovered_targets:
+        candidate_chunks = _merge_search_results(
+            [candidate_chunks, discovered_targets],
+            ["merged", "legal_target"],
+        )
 
     if targeted_chunks:
         accident_worker_not_report_mode = (
