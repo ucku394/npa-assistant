@@ -504,12 +504,43 @@ class ChatService:
                 valid_source_ids.append(str(source_id))
 
         grounding = self._grounding_check(answer, valid_source_ids)
+
+        # Для запросов об отстранении за нарушения ОТ обязательным первичным
+        # источником является ст. 49 ТК РБ. Даже если модель формально сослалась
+        # на другие валидные SOURCE_ID, без этой нормы ответ не считается
+        # достаточно подтвержденным: ст. 223/47 регулируют другие вопросы.
+        query_profile = rag_result.get("query_profile") or {}
+        required_article_49 = "suspension_for_osh_violation" in (query_profile.get("qualifiers") or [])
+        article_49_source_ids = [
+            chunk.get("_source_id") or build_source_id(chunk, index)
+            for index, chunk in enumerate(chunks, start=1)
+            if "трудовой кодекс" in str(chunk.get("doc_name") or "").lower()
+            and str(chunk.get("point_num") or "").strip().lower() in {"статья 49", "49", "статья 49."}
+        ]
+        required_source_missing = required_article_49 and not article_49_source_ids
+        required_source_not_cited = required_article_49 and bool(article_49_source_ids) and not any(
+            source_id in self._extract_source_ids(answer) for source_id in article_49_source_ids
+        )
+        if required_source_missing:
+            logger.warning("LEGAL | Required source missing | Article 49 TK RB not retrieved")
+        elif required_source_not_cited:
+            logger.warning("LEGAL | Required source not cited | Article 49 TK RB source_ids=%s", article_49_source_ids)
+
         claim_evidence = self._claim_evidence_check(
             answer=answer,
             evidence_map=evidence_map,
             query_profile=rag_result.get("query_profile") or {},
             topic=str(rag_result.get("topic") or ""),
         )
+
+        if required_source_missing or required_source_not_cited:
+            claim_evidence["passed"] = False
+            claim_evidence["required_source_gate"] = {
+                "required": True,
+                "article_49_source_ids": article_49_source_ids,
+                "missing": required_source_missing,
+                "not_cited": required_source_not_cited,
+            }
 
         if not grounding["passed"] or not claim_evidence["passed"]:
             retry_reason = {
