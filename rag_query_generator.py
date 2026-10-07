@@ -222,10 +222,12 @@ def build_search_queries(
     topic: str,
     legal_domain: str,
     intents: List[str],
+    universal_profile: Dict[str, Any] | None = None,
+    legal_plan: Dict[str, Any] | None = None,
 ) -> List[str]:
     original = str(user_query or "").strip()
-    universal_profile = build_universal_query_profile(original)
-    legal_plan = build_legal_query_plan(original, universal_profile, topic, legal_domain)
+    universal_profile = universal_profile or build_universal_query_profile(original)
+    legal_plan = legal_plan or build_legal_query_plan(original, universal_profile, topic, legal_domain)
     universal_profile["legal_query_plan"] = legal_plan
     queries: List[str] = [original]
 
