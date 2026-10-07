@@ -2413,6 +2413,50 @@ def _legal_authority_relevance_score(
     return score
 
 
+def _legal_precision_score(
+    chunk: Dict[str, Any],
+    user_query: str,
+    query_profile: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Оценивает юридическую пригодность фрагмента, а не только семантическое сходство."""
+    content = str(chunk.get("content") or chunk.get("text") or "").lower()
+    document = _get_document_name(chunk).lower()
+    point = _get_point_number(chunk)
+    profile = query_profile or {}
+    qtype = str(profile.get("question_type") or "").lower()
+    score = 0.0
+
+    # Точный нормативный идентификатор и структурная привязка — сильный сигнал.
+    if point:
+        score += 0.18
+    if re.search(r"№\\s*[0-9]+", document, re.IGNORECASE):
+        score += 0.12
+
+    direct_markers = {
+        "frequency": ("не реже", "не чаще", "один раз", "каждые", "периодич", "срок"),
+        "who": ("проводит", "обязан", "ответствен", "назначается", "руководитель"),
+        "what_to_do": ("порядок", "действия", "сообщить", "уведомить", "оформ", "допустить"),
+        "whether": ("вправе", "имеет право", "допускается", "не допускается", "запрещается"),
+        "kind": ("вид инструктажа", "вводный", "первичный", "повторный", "внеплановый", "целевой"),
+        "limit": ("не более", "не менее", "предельно", "кг", "метр", "час"),
+    }
+    markers = direct_markers.get(qtype, ())
+    if markers:
+        hits = sum(1 for marker in markers if marker in content)
+        score += min(hits * 0.10, 0.30)
+
+    # Фрагмент, содержащий действие/обязанность/условие, обычно полезнее общего описания НПА.
+    operative_markers = (
+        "обязан", "должен", "необходимо", "запрещается", "допускается",
+        "не реже", "не позднее", "вправе", "имеет право", "проводится",
+        "назначается", "сообщить", "уведомить",
+    )
+    operative_hits = sum(1 for marker in operative_markers if marker in content)
+    score += min(operative_hits * 0.035, 0.21)
+
+    return min(score, 1.0)
+
+
 def _legal_relevance_score(
     chunk: Dict[str, Any],
     query_terms: List[str],
@@ -3547,7 +3591,7 @@ async def retrieve_context(
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(
-            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | authority=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
+            "RAG | candidate | rank=%s | score=%.4f | sim=%.4f | exact=%.4f | universal=%.4f | authority=%.4f | precision=%.4f | scope=%.4f | topic=%.4f | intent=%.4f | primary=%.4f | briefing=%.4f | special=%.4f | doc=%s | point=%s",
             rank,
             _safe_float(chunk.get("_combined_score")),
             _safe_float(chunk.get("_best_similarity", _semantic_score(chunk))),
