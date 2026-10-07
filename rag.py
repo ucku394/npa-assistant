@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from embedding import get_query_embeddings
 from rag_query_profile import build_universal_query_profile
 from rag_query_generator import build_universal_search_queries, build_search_queries
+from legal_query_planner import build_legal_query_plan
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
 from rag_query_classifier import (
     detect_legal_domain,
@@ -3465,12 +3466,21 @@ async def retrieve_context(
     special_category = detect_special_category(user_query)
     special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
     query_profile = build_universal_query_profile(user_query)
+    legal_query_plan = build_legal_query_plan(
+        user_query,
+        query_profile,
+        topic,
+        legal_domain,
+    )
+    query_profile["legal_query_plan"] = legal_query_plan
 
     search_queries = build_search_queries(
         user_query,
         topic,
         legal_domain,
         intents,
+        universal_profile=query_profile,
+        legal_plan=legal_query_plan,
     )
 
     logger.info(
@@ -3505,6 +3515,14 @@ async def retrieve_context(
         constraint.get("action"),
         constraint.get("scope"),
         constraint.get("scope_signals"),
+    )
+    logger.info(
+        "RAG | legal_plan | source=%s | intent=%s | action=%s | concepts=%s | targets=%s",
+        legal_query_plan.get("planner_source"),
+        legal_query_plan.get("intent"),
+        legal_query_plan.get("action"),
+        legal_query_plan.get("legal_concepts"),
+        legal_query_plan.get("legal_targets"),
     )
     logger.info(
         "RAG | search_queries | count=%s | queries=%s",
