@@ -224,7 +224,41 @@ def _topic_relevance_score(
         if "испытан" in content:
             score += 0.15
 
-    if topic == "occupational_briefing":
+    if topic == "occupational_training":
+        # Для стажировки повышаем связанные пункты № 175 и, главное,
+        # различаем нормативные роли: допуск, руководитель, срок, результат,
+        # исключение. Это не заменяет targeted selection, а стабилизирует
+        # ranking для остальных кандидатов.
+        if db_topic == "occupational_training":
+            score += 0.80
+        if "175" in document_name:
+            score += 0.90
+
+        internship_markers = [
+            "к самостоятельной работе допускаются после прохождения стажировки",
+            "руководитель стажировки",
+            "не более двух рабочих",
+            "не менее двух рабочих дней",
+            "не менее двух рабочих смен",
+            "продлена",
+            "результаты проведения стажировки регистрируются",
+            "производственное обучение",
+        ]
+        marker_matches = sum(1 for marker in internship_markers if marker in content)
+        score += min(marker_matches * 0.45, 1.80)
+
+        point = _normalize_point_identifier(_get_point_number(chunk))
+        point_bonus = {
+            "36": 0.95,
+            "37": 0.95,
+            "38": 0.55,
+            "39": 1.20,
+            "40": 0.90,
+            "41": 0.75,
+        }
+        score += point_bonus.get(point, 0.0)
+
+    elif topic == "occupational_briefing":
         if db_topic == "occupational_briefing":
             score += 1.0
 
@@ -965,22 +999,61 @@ def _targeted_osh_knowledge_frequency_search(
 
 
 def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
-    queries = [
-        "doc_name.ilike.%175%",
-        "doc_name.ilike.%Инструкци%",
-        "content.ilike.%стажиров%",
-        "content.ilike.%продолжительн%стажиров%",
-        "content.ilike.%срок%стажиров%",
-        "content.ilike.%не менее двух%",
-        "content.ilike.%рабочих дней%",
-        "content.ilike.%рабочих смен%",
-        "content.ilike.%повышенной опасностью%",
-        "content.ilike.%допуск к самостоятельной работе%",
-        "content.ilike.%самостоятельной работе%",
-        "content.ilike.%проверка знаний%",
-    ]
-    results = _execute_combined_targeted_search(supabase, queries)
-    return _deduplicate_chunks(results)
+    """Точечный нормативный пул для вопросов о стажировке.
+
+    Для процедурных вопросов важна не максимальная семантическая похожесть
+    пяти chunks, а связанная последовательность норм № 175: допуск к
+    стажировке -> руководство стажировкой -> продолжительность -> фиксация
+    результата -> исключение. Поэтому сначала забираем именно эти пункты.
+    """
+    results: List[Dict[str, Any]] = []
+
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .in_(
+                "point_num",
+                [
+                    "36", "36.", "37", "37.", "38", "38.",
+                    "39", "39.", "40", "40.", "41", "41.",
+                ],
+            )
+            .limit(60)
+            .execute()
+        )
+        results.extend(response.data or [])
+    except Exception as exc:
+        logger.warning(
+            "RAG | occupational training point search failed: %s",
+            exc,
+        )
+
+    # Резервный lexical-search, если point_num хранится нестандартно.
+    if not results:
+        queries = [
+            "doc_name.ilike.%175%",
+            "content.ilike.%стажиров%",
+            "content.ilike.%продолжительн%стажиров%",
+            "content.ilike.%не менее двух%",
+            "content.ilike.%рабочих дней%",
+            "content.ilike.%рабочих смен%",
+            "content.ilike.%руководитель стажировки%",
+            "content.ilike.%допуск к самостоятельной работе%",
+            "content.ilike.%результаты проведения стажировки%",
+        ]
+        results = _execute_combined_targeted_search(supabase, queries)
+
+    results = _deduplicate_chunks(results)
+
+    for chunk in results:
+        chunk["_occupational_training_targeted"] = True
+
+    return results
 
 
 def _targeted_ppe_refusal_search(
@@ -1584,6 +1657,119 @@ async def _get_targeted_chunks(
 
     if topic == "portable_ladder":
         return await asyncio.to_thread(_targeted_portable_ladder_search, supabase, user_query)
+    if topic == "occupational_training":
+        # Процедурный вопрос о стажировке должен получать нормативно
+        # связанный набор, а не пять случайных semantic-top chunks.
+        training_pool = [
+            chunk for chunk in ranked_chunks
+            if chunk.get("_occupational_training_targeted")
+        ]
+
+        def _training_point(chunk):
+            return _normalize_point_identifier(_get_point_number(chunk))
+
+        # Для общего вопроса "как проводится стажировка" нормативное ядро:
+        # 36 — когда требуется стажировка;
+        # 37 — как организуется и кто руководит;
+        # 39 — перечень и продолжительность;
+        # 40 — фиксация результата;
+        # 41 — предусмотренное исключение.
+        # П. 38 добавляется только если вопрос касается специалистов.
+        query_lower = str(
+            (query_profile or {}).get("original_query")
+            or ""
+        ).lower()
+        if not query_lower:
+            query_lower = " ".join(
+                str(x) for x in (
+                    (query_profile or {}).values()
+                    if isinstance(query_profile, dict)
+                    else []
+                )
+            ).lower()
+
+        specialist_query = any(
+            marker in query_lower
+            for marker in (
+                "специалист",
+                "служащ",
+                "инженер",
+                "технолог",
+                "руководител",
+            )
+        )
+
+        priority_points = ["36", "37", "39", "40", "41"]
+        if specialist_query:
+            priority_points = ["36", "37", "38", "39", "40", "41"]
+
+        # Внутри одного point_num выбираем именно содержательный chunk,
+        # а не одноимённый chunk с перечнем работ.
+        def _training_content_score(chunk):
+            content = str(chunk.get("content") or "").lower()
+            point = _training_point(chunk)
+            score = _safe_float(chunk.get("_combined_score"))
+
+            markers = {
+                "36": ("к самостоятельной работе допускаются", "стажировки", "первичной проверки знаний"),
+                "37": ("руководитель стажировки", "не более двух рабочих", "ознакомлены с приказом"),
+                "38": ("специалисты", "перед допуском к самостоятельной работе", "проходят стажировку"),
+                "39": ("перечень должностей", "продолжительность", "не менее двух рабочих дней", "не менее двух рабочих смен"),
+                "40": ("результаты проведения стажировки регистрируются", "журнал регистрации"),
+                "41": ("производственное обучение", "может не проводиться"),
+            }.get(point, ())
+
+            score += sum(0.80 for marker in markers if marker in content)
+            return score
+
+        training_pool.sort(
+            key=lambda chunk: (
+                _training_content_score(chunk),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+
+        for required_point in priority_points:
+            candidates = [
+                chunk for chunk in training_pool
+                if _training_point(chunk) == required_point
+            ]
+            if candidates:
+                candidates.sort(
+                    key=_training_content_score,
+                    reverse=True,
+                )
+                _add(
+                    candidates[0],
+                    max_per_document=6,
+                    max_per_point=1,
+                )
+
+        # Если каких-то точек нет в БД, аккуратно добираем только
+        # непосредственно относящиеся к стажировке chunks.
+        for chunk in training_pool:
+            if len(selected) >= limit:
+                break
+            if _training_content_score(chunk) < 0.45:
+                continue
+            _add(
+                chunk,
+                max_per_document=6,
+                max_per_point=1,
+            )
+
+        if selected:
+            logger.info(
+                "RAG | occupational training final | sources=%s",
+                [
+                    f"{_get_document_name(x)}#{_get_point_number(x)}"
+                    for x in selected
+                ],
+            )
+            return selected[:limit]
+
+
     if topic == "height_work_training":
         return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
     if topic == "ppe_nonprovision":
