@@ -113,6 +113,27 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "отстранить от работы в соответствующий день смену",
         ])
 
+    # Общий запрос об отстранении за нарушения ОТ должен приоритетно искать ст. 49 ТК РБ.
+    if (
+        re.search(r"\bотстран\w*", query, re.IGNORECASE)
+        and (
+            re.search(r"\bнаруш\w*", query, re.IGNORECASE)
+            or re.search(r"\bохран\w*\s+труд\w*", query, re.IGNORECASE)
+            or re.search(r"\bбезопасност\w*", query, re.IGNORECASE)
+        )
+    ):
+        if "suspension_for_osh_violation" not in profile["qualifiers"]:
+            profile["qualifiers"].append("suspension_for_osh_violation")
+        profile["action"] = "suspend_work"
+        profile["legal_phrases"].extend([
+            "Трудовой кодекс Республики Беларусь статья 49 Отстранение от работы",
+            "наниматель обязан не допускать к работе отстранить от работы работника",
+            "не прошедшего инструктаж стажировку и проверку знаний по вопросам охраны труда",
+            "не использующего средства индивидуальной защиты непосредственно обеспечивающие безопасность труда",
+            "не прошедшего медицинский осмотр",
+            "допущенных нарушений производственно-технологической исполнительской или трудовой дисциплины",
+        ])
+
     if re.search(r"\bне\s+сообщил\w*\b|\bне\s+сообщила\w*\b|\bне\s+выдан\w*\b|\bне\s+обеспечен\w*\b|\bне\s+прошел\w*\b|\bне\s+приступ\w*\b", query, re.IGNORECASE):
         profile["action_state"] = "not_done"
 
