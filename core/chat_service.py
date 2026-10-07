@@ -211,9 +211,9 @@ class ChatService:
     ) -> str:
         """Компактный формат ответа для Telegram без потери юридических ссылок."""
         result = str(answer or "").strip()
-        result = re.sub(r"\\n{3,}", "\\n\\n", result)
-        result = re.sub(r"[ \\t]+", " ", result)
-        result = re.sub(r"\\n +", "\\n", result)
+        result = re.sub(r"\n{3,}", "\n\n", result)
+        result = re.sub(r"[ \t]+", " ", result)
+        result = re.sub(r"\n +", "\n", result)
 
         if sources:
             source_lines = []
@@ -223,7 +223,7 @@ class ChatService:
                 source_lines.append(
                     f"• {document}" + (f" — пункт/статья {point}" if point else "")
                 )
-            result += "\\n\\n📎 <b>Источники</b>\\n" + "\\n".join(source_lines)
+            result += "\n\n📎 <b>Источники</b>\n" + "\n".join(source_lines)
         return result.strip()
 
     @staticmethod
