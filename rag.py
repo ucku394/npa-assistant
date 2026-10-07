@@ -187,6 +187,9 @@ def _topic_relevance_score(
     document_name = str(chunk.get("doc_name") or chunk.get("document") or "").lower()
     content = str(chunk.get("content") or chunk.get("text") or "").lower()
     db_topic = str(chunk.get("topic") or "").lower()
+    point = str(chunk.get("point_num") or "").lower()
+
+    text = f"{document_name} {content} {db_topic} {point}"
 
     score = 0.0
 
@@ -202,6 +205,24 @@ def _topic_relevance_score(
         ):
             if phrase in text:
                 score += weight
+
+        if db_topic == "portable_ladder":
+            score += 1.50
+        if re.search(r"№\s*11\b", document_name, flags=re.IGNORECASE):
+            score += 1.60
+        if "работ на высоте" in document_name:
+            score += 0.90
+        point = _normalize_point_identifier(_get_point_number(chunk))
+        if point == "53":
+            score += 1.20
+        if point == "54":
+            score += 1.60
+        if "осмотр" in content:
+            score += 0.60
+        if "исправн" in content:
+            score += 0.35
+        if "испытан" in content:
+            score += 0.15
 
     if topic == "occupational_briefing":
         if db_topic == "occupational_briefing":
@@ -321,25 +342,6 @@ def _topic_relevance_score(
             "аттестаци" in document_name or "аттестаци" in content or "рабоч" in content
         ):
             score += 1.50
-
-    elif topic == "portable_ladder":
-        if db_topic == "portable_ladder":
-            score += 1.50
-        if re.search(r"№\s*11\b", document_name, flags=re.IGNORECASE):
-            score += 1.60
-        if "работ на высоте" in document_name:
-            score += 0.90
-        point = _normalize_point_identifier(_get_point_number(chunk))
-        if point == "53":
-            score += 1.20
-        if point == "54":
-            score += 1.60
-        if "осмотр" in content:
-            score += 0.60
-        if "исправн" in content:
-            score += 0.35
-        if "испытан" in content:
-            score += 0.15
 
     elif topic == "height_work_training":
         if db_topic == "height_work_training":
