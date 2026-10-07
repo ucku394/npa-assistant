@@ -406,6 +406,8 @@ class ChatService:
                 answer = str(retry_answer).strip()
                 grounding = self._grounding_check(answer, valid_source_ids)
 
+        rag_meta["grounding"] = grounding
+
         if not grounding["passed"]:
             logger.warning(
                 "LEGAL | Evidence Gate failed | cited=%s | unknown=%s | claims=%s",
