@@ -52,6 +52,77 @@ class ChatService:
         return result
 
     @staticmethod
+    def _grounding_check(
+        answer: str,
+        valid_source_ids: List[str],
+    ) -> Dict[str, Any]:
+        """Evidence Gate: legal claims must be traceable to returned RAG sources."""
+        text = str(answer or "").strip()
+        valid = {str(x).strip() for x in valid_source_ids if str(x).strip()}
+        cited = ChatService._extract_source_ids(text)
+        valid_cited = [source_id for source_id in cited if source_id in valid]
+
+        legal_markers = (
+            "обязан", "должен", "необходимо", "запрещ", "допуска", "вправе",
+            "имеет право", "не реже", "не позднее", "срок", "периодич",
+            "пункт", "статья", "ответствен",
+        )
+        legal_claims = sum(1 for marker in legal_markers if marker in text.lower())
+        citation_ratio = len(valid_cited) / max(len(cited), 1)
+
+        passed = bool(valid_cited) and citation_ratio >= 1.0
+        if legal_claims >= 2 and not valid_cited:
+            passed = False
+
+        return {
+            "passed": passed,
+            "cited_source_ids": valid_cited,
+            "unknown_source_ids": [source_id for source_id in cited if source_id not in valid],
+            "legal_claim_markers": legal_claims,
+            "citation_ratio": round(citation_ratio, 3),
+        }
+
+    @staticmethod
+    def _build_grounding_retry_prompt(
+        base_prompt: str,
+        reason: Dict[str, Any],
+    ) -> str:
+        return (
+            base_prompt
+            + "\\n\\n============================================================\\n"
+            + "СТРОГИЙ РЕЖИМ ДОКАЗАТЕЛЬНОСТИ\\n"
+            + "============================================================\\n"
+            + "Предыдущий вариант не прошёл Evidence Gate. Переформулируй ответ. "
+            + "Каждое юридически значимое утверждение должно иметь [SOURCE:SOURCE_ID]. "
+            + "Используй только SOURCE_ID из EVIDENCE MAP и фактический текст RAG. "
+            + "Не добавляй нормы по памяти. Если доказательств недостаточно, прямо укажи, "
+            + "что в предоставленных фрагментах НПА требование не раскрыто.\\n"
+            + f"Причина проверки: {reason}"
+        )
+
+    @staticmethod
+    def _format_telegram_answer(
+        answer: str,
+        sources: List[Dict[str, Any]],
+    ) -> str:
+        """Компактный формат ответа для Telegram без потери юридических ссылок."""
+        result = str(answer or "").strip()
+        result = re.sub(r"\\n{3,}", "\\n\\n", result)
+        result = re.sub(r"[ \\t]+", " ", result)
+        result = re.sub(r"\\n +", "\\n", result)
+
+        if sources:
+            source_lines = []
+            for source in sources[:6]:
+                document = str(source.get("document") or "Неизвестный НПА").strip()
+                point = str(source.get("point") or "").strip()
+                source_lines.append(
+                    f"• {document}" + (f" — пункт/статья {point}" if point else "")
+                )
+            result += "\\n\\n📎 <b>Источники</b>\\n" + "\\n".join(source_lines)
+        return result.strip()
+
+    @staticmethod
     def _build_sources(chunks: List[Dict[str, Any]], used_ids: List[str]) -> List[Dict[str, Any]]:
         """Build sources in the same order in which the AI cited them.
 
@@ -327,12 +398,39 @@ class ChatService:
                 chunk["_source_id"] = source_id
                 valid_source_ids.append(str(source_id))
 
+        grounding = self._grounding_check(answer, valid_source_ids)
+        if not grounding["passed"]:
+            retry_prompt = self._build_grounding_retry_prompt(prompt, grounding)
+            retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
+            if retry_answer:
+                answer = str(retry_answer).strip()
+                grounding = self._grounding_check(answer, valid_source_ids)
+
+        if not grounding["passed"]:
+            logger.warning(
+                "LEGAL | Evidence Gate failed | cited=%s | unknown=%s | claims=%s",
+                grounding.get("cited_source_ids"),
+                grounding.get("unknown_source_ids"),
+                grounding.get("legal_claim_markers"),
+            )
+            return {
+                "success": False,
+                "error": "grounding_failed",
+                "question": question,
+                "answer": "",
+                "sources": [],
+                "rag": {**rag_meta, "grounding": grounding},
+                "evidence_map": evidence_map,
+                "evidence_map_text": evidence_map_text,
+            }
+
         used_source_ids = self._extract_source_ids(answer)
         sources = self._build_sources(chunks, used_source_ids)
         answer_with_citations = self._build_citation_answer(
             answer=answer,
             sources=sources,
         )
+        telegram_answer = self._format_telegram_answer(answer_with_citations, sources)
 
         answer = self._remove_source_markers(answer, valid_source_ids)
 
