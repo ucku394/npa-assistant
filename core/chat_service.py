@@ -83,6 +83,110 @@ class ChatService:
         }
 
     @staticmethod
+    def _claim_evidence_check(
+        answer: str,
+        evidence_map: List[Dict[str, Any]],
+        query_profile: Dict[str, Any],
+        topic: str = "",
+    ) -> Dict[str, Any]:
+        """Проверяет не только наличие цитаты, но и содержательную опору утверждения на НПА."""
+        text = str(answer or "").strip().lower()
+        qtype = str((query_profile or {}).get("question_type") or "general").strip().lower()
+
+        cited_ids = set(ChatService._extract_source_ids(answer))
+        cited_evidence = [
+            item for item in evidence_map
+            if str(item.get("source_id") or "").strip() in cited_ids
+        ]
+
+        frequency_markers = (
+            "не реже", "не чаще", "один раз", "раза в", "раз в ",
+            "каждые", "периодически", "срок", "не позднее", "до ",
+            "в течение", "ежегодно", "ежемесячно", "ежеквартально",
+        )
+        responsibility_markers = (
+            "ответствен", "отвечает", "ответственными являются",
+            "обязан", "должен", "назнач",
+        )
+        prohibition_markers = (
+            "запрещается", "запрещено", "не допускается", "не допускается",
+        )
+        permission_markers = (
+            "допускается", "разрешается", "вправе", "имеет право",
+        )
+
+        excerpts = " ".join(
+            str(item.get("excerpt") or "").lower()
+            for item in cited_evidence
+        )
+
+        contradiction_absent = bool(
+            re.search(
+                r"(?:не\s+установлен\w*|не\s+определен\w*|"
+                r"не\s+раскрыт\w*|отсутств\w*\s+(?:требован\w*|норм\w*|"
+                r"периодичност\w*|срок\w*))",
+                text,
+            )
+        )
+
+        if qtype == "frequency":
+            evidence_has_frequency = any(marker in excerpts for marker in frequency_markers)
+            answer_has_frequency = any(marker in text for marker in frequency_markers)
+
+            # Критическая защита: нельзя утверждать отсутствие периодичности,
+            # если процитированный фрагмент содержит прямую временную норму.
+            if contradiction_absent and evidence_has_frequency:
+                return {
+                    "passed": False,
+                    "reason": "answer_denies_frequency_but_cited_evidence_contains_frequency",
+                    "question_type": qtype,
+                    "cited_evidence_count": len(cited_evidence),
+                }
+
+            # Если ассистент сообщает периодичность, она должна быть подтверждена
+            # хотя бы одним процитированным фрагментом.
+            if answer_has_frequency and not evidence_has_frequency:
+                return {
+                    "passed": False,
+                    "reason": "frequency_claim_has_no_temporal_marker_in_cited_evidence",
+                    "question_type": qtype,
+                    "cited_evidence_count": len(cited_evidence),
+                }
+
+        elif qtype in {"who", "responsibility"}:
+            evidence_has_actor = any(marker in excerpts for marker in responsibility_markers)
+            if evidence_has_actor and contradiction_absent:
+                # Отрицательные ответы о наличии ответственного лица также
+                # запрещены, когда цитата прямо содержит норму об ответственности.
+                return {
+                    "passed": False,
+                    "reason": "answer_denies_responsibility_but_cited_evidence_contains_actor",
+                    "question_type": qtype,
+                    "cited_evidence_count": len(cited_evidence),
+                }
+
+        elif qtype == "whether":
+            evidence_has_legal_rule = any(
+                marker in excerpts
+                for marker in prohibition_markers + permission_markers
+            )
+            if contradiction_absent and evidence_has_legal_rule:
+                return {
+                    "passed": False,
+                    "reason": "answer_denies_rule_but_cited_evidence_contains_permission_or_prohibition",
+                    "question_type": qtype,
+                    "cited_evidence_count": len(cited_evidence),
+                }
+
+        return {
+            "passed": True,
+            "reason": "supported_or_not_applicable",
+            "question_type": qtype,
+            "cited_evidence_count": len(cited_evidence),
+            "topic": topic,
+        }
+
+    @staticmethod
     def _build_grounding_retry_prompt(
         base_prompt: str,
         reason: Dict[str, Any],
@@ -364,6 +468,7 @@ class ChatService:
             "final_count": rag_result.get("final_count", 0),
             "legal_domain": rag_result.get("legal_domain"),
             "topic": rag_result.get("topic"),
+            "query_profile": rag_result.get("query_profile") or {},
             "evidence_count": len(evidence_map),
         }
 
@@ -399,16 +504,43 @@ class ChatService:
                 valid_source_ids.append(str(source_id))
 
         grounding = self._grounding_check(answer, valid_source_ids)
-        if not grounding["passed"]:
-            retry_prompt = self._build_grounding_retry_prompt(prompt, grounding)
+        claim_evidence = self._claim_evidence_check(
+            answer=answer,
+            evidence_map=evidence_map,
+            query_profile=rag_result.get("query_profile") or {},
+            topic=str(rag_result.get("topic") or ""),
+        )
+
+        if not grounding["passed"] or not claim_evidence["passed"]:
+            retry_reason = {
+                "grounding": grounding,
+                "claim_evidence": claim_evidence,
+            }
+            retry_prompt = self._build_grounding_retry_prompt(prompt, retry_reason)
+            retry_prompt += (
+                "\\n\\nДОПОЛНИТЕЛЬНОЕ ПРАВИЛО ПРОВЕРКИ СОДЕРЖАНИЯ:\\n"
+                "Если в EVIDENCE MAP есть прямая норма по вопросу, нельзя утверждать, "
+                "что такая норма отсутствует. Для вопросов о периодичности укажи только "
+                "срок/периодичность, которая прямо следует из процитированного фрагмента. "
+                "Для вопросов о том, кто отвечает, укажи только лицо/субъект, прямо "
+                "названный в норме. Для вопросов 'можно ли' различай прямой запрет и "
+                "прямое разрешение.\\n"
+            )
             retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
             if retry_answer:
                 answer = str(retry_answer).strip()
                 grounding = self._grounding_check(answer, valid_source_ids)
+                claim_evidence = self._claim_evidence_check(
+                    answer=answer,
+                    evidence_map=evidence_map,
+                    query_profile=rag_result.get("query_profile") or {},
+                    topic=str(rag_result.get("topic") or ""),
+                )
 
         rag_meta["grounding"] = grounding
+        rag_meta["claim_evidence"] = claim_evidence
 
-        if not grounding["passed"]:
+        if not grounding["passed"] or not claim_evidence["passed"]:
             logger.warning(
                 "LEGAL | Evidence Gate failed | cited=%s | unknown=%s | claims=%s",
                 grounding.get("cited_source_ids"),
@@ -421,7 +553,7 @@ class ChatService:
                 "question": question,
                 "answer": "",
                 "sources": [],
-                "rag": {**rag_meta, "grounding": grounding},
+                "rag": {**rag_meta, "grounding": grounding, "claim_evidence": claim_evidence},
                 "evidence_map": evidence_map,
                 "evidence_map_text": evidence_map_text,
             }
@@ -442,6 +574,7 @@ class ChatService:
             "question": question,
             "answer": answer,
             "answer_with_citations": answer_with_citations,
+            "telegram_answer": telegram_answer,
             "sources": sources,
             "rag": rag_meta,
             "evidence_map": evidence_map,
