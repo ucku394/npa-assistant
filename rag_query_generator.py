@@ -5,6 +5,63 @@ from rag_query_classifier import detect_special_category, _minor_special_issue, 
 from rag_query_profile import build_universal_query_profile
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
 
+def _normalize_legal_query(query: str) -> str:
+    """Нормализует бытовые формулировки без изменения юридического смысла."""
+    text = re.sub(r"\s+", " ", str(query or "").strip().lower())
+    replacements = (
+        ("не выдали", "не предоставили"),
+        ("не выдано", "не предоставлено"),
+        ("как часто", "периодичность"),
+        ("кто должен", "кто обязан"),
+        ("можно ли", "допускается ли"),
+        ("что делать", "порядок действий"),
+        ("лестница-стремянка", "лестница стремянка"),
+        ("медосмотр", "медицинский осмотр"),
+    )
+    for source, target in replacements:
+        text = text.replace(source, target)
+    return text
+
+
+def _generic_legal_expansions(original: str, profile: Dict[str, Any]) -> List[str]:
+    """Добавляет 3–5 устойчивых нормативных поисковых формулировок."""
+    normalized = _normalize_legal_query(original)
+    qtype = str(profile.get("question_type") or "")
+    event = str(profile.get("event") or "")
+    variants = [normalized]
+    if qtype == "frequency":
+        variants.extend([
+            f"периодичность и сроки {event} {normalized}".strip(),
+            f"срок проведения {event} {normalized}".strip(),
+            f"не реже не чаще {event} {normalized}".strip(),
+        ])
+    elif qtype == "who":
+        variants.extend([
+            f"кто обязан кто проводит {event} {normalized}".strip(),
+            f"ответственный за {event} {normalized}".strip(),
+            f"полномочия и обязанности {event} {normalized}".strip(),
+        ])
+    elif qtype == "what_to_do":
+        variants.extend([
+            f"порядок действий {event} {normalized}".strip(),
+            f"обязанности работника и нанимателя {event} {normalized}".strip(),
+            f"порядок оформления {event} {normalized}".strip(),
+        ])
+    elif qtype == "whether":
+        variants.extend([
+            f"допускается ли {event} {normalized}".strip(),
+            f"запрещается ли {event} {normalized}".strip(),
+            f"право работника {event} {normalized}".strip(),
+        ])
+    else:
+        variants.extend([
+            f"нормативное требование {normalized}".strip(),
+            f"порядок и требования {event} {normalized}".strip(),
+            f"обязанности и условия применения нормы {normalized}".strip(),
+        ])
+    return list(dict.fromkeys(x for x in variants if x))[:5]
+
+
 def build_universal_search_queries(profile: Dict[str, Any], original: str) -> List[str]:
     """Генерирует нормативные формулировки независимо от конкретной темы."""
     event = profile.get("event")
@@ -171,6 +228,9 @@ def build_search_queries(
 
     if universal_profile.get("event") == "law_scope":
         queries.extend(build_universal_search_queries(universal_profile, original))
+    # Короткие/бытовые вопросы получают устойчивые нормативные варианты.
+    # Это не LLM-expansion: формулировки детерминированы и воспроизводимы.
+    queries.extend(_generic_legal_expansions(original, universal_profile))
         target = universal_profile.get("target_document")
         if target == "356-з":
             queries.extend([
