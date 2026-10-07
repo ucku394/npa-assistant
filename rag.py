@@ -1756,6 +1756,8 @@ def _merge_search_results(
                 item["_accident_worker_not_report_targeted"] = True
             if chunk.get("_height_training_targeted"):
                 item["_height_training_targeted"] = True
+            if chunk.get("_portable_ladder_targeted"):
+                item["_portable_ladder_targeted"] = True
             if chunk.get("_occupational_briefing_targeted"):
                 item["_occupational_briefing_targeted"] = True
             if chunk.get("_procedure_targeted"):
