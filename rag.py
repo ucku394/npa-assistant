@@ -2429,7 +2429,7 @@ def _legal_precision_score(
     # Точный нормативный идентификатор и структурная привязка — сильный сигнал.
     if point:
         score += 0.18
-    if re.search(r"№\\s*[0-9]+", document, re.IGNORECASE):
+    if re.search(r"№\s*[0-9]+", document, re.IGNORECASE):
         score += 0.12
 
     direct_markers = {
@@ -2560,6 +2560,13 @@ def _legal_relevance_score(
     )
     chunk["_legal_authority_score"] = authority_score
 
+    precision_score = _legal_precision_score(
+        chunk,
+        user_query,
+        query_profile,
+    )
+    chunk["_legal_precision_score"] = precision_score
+
     return (
         semantic * 0.27
         + hybrid_score * 0.12
@@ -2570,6 +2577,7 @@ def _legal_relevance_score(
         + intent_score * 0.05
         + primary_score * 0.10
         + authority_score * 0.13
+        + precision_score * 0.10
         + briefing_mode_bonus
         + labor_code_bonus
         + special_category_bonus
@@ -3598,6 +3606,7 @@ async def retrieve_context(
             _safe_float(_exact_match_score(chunk, user_query, topic)),
             _safe_float(chunk.get("_universal_score")),
             _safe_float(chunk.get("_legal_authority_score")),
+            _safe_float(chunk.get("_legal_precision_score")),
             _safe_float(chunk.get("_constraint_scope_score")),
             _safe_float(_topic_relevance_score(chunk, topic)),
             _safe_float(_intent_relevance_score(chunk, intents)),
