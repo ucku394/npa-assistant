@@ -1,7 +1,7 @@
 """Universal legal query planner for the Belarusian legal RAG."""
 from __future__ import annotations
 import json, logging, re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ def _clean(values: Any, limit: int = 8) -> List[str]:
     if not isinstance(values, list): return []
     out, seen = [], set()
     for value in values:
-        value = re.sub(r"\\s+", " ", str(value or "")).strip()
+        value = re.sub(r"\s+", " ", str(value or "")).strip()
         if value and value.lower() not in seen:
             seen.add(value.lower()); out.append(value)
         if len(out) >= limit: break
@@ -18,8 +18,8 @@ def _clean(values: Any, limit: int = 8) -> List[str]:
 def _json(text: str) -> Dict[str, Any]:
     text = str(text or "").strip()
     if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\\s*", "", text, flags=re.I)
-        text = re.sub(r"\\s*```$", "", text)
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+        text = re.sub(r"\s*```$", "", text)
     try: return json.loads(text)
     except Exception: pass
     start, end = text.find("{"), text.rfind("}")
@@ -49,7 +49,7 @@ def _prompt(original: str, profile: Dict[str, Any], topic: str, domain: str) -> 
             "Поля: domain, intent, action, subject, actor, object, condition, question_type, legal_concepts, legal_phrases, search_queries, keywords, legal_targets, confidence.")
 
 def build_legal_query_plan(original: str, profile: Dict[str, Any], topic: str, legal_domain: str) -> Dict[str, Any]:
-    original = re.sub(r"\\s+", " ", str(original or "").strip())
+    original = re.sub(r"\s+", " ", str(original or "").strip())
     fallback = fallback_plan(original, profile, topic, legal_domain)
     if not original: return fallback
     try:
