@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from rag_query_classifier import detect_special_category, _minor_special_issue, _is_labor_code_query, _is_target_briefing_query, _is_responsible_briefing_query
 from rag_query_profile import build_universal_query_profile
@@ -238,30 +238,31 @@ def build_search_queries(
     queries.extend(legal_plan.get("search_queries") or [])
     queries.extend(legal_plan.get("legal_phrases") or [])
     queries.extend(legal_plan.get("legal_concepts") or [])
-    target = universal_profile.get("target_document")
-    if target == "356-з":
-        queries.extend([
-            "Закон № 356-З статья 3 сфера действия настоящего Закона",
-            "Закон Об охране труда 356-З статья 3 на кого распространяется",
-            "применяется в отношении всех работодателей работающих граждан Республики Беларусь иностранных граждан лиц без гражданства",
-        ])
-    elif target == "трудовой кодекс":
-        queries.extend([
-            "Трудовой кодекс Республики Беларусь сфера действия",
-            "Трудовой кодекс Республики Беларусь на кого распространяется действие",
-        ])
-    elif target == "правила по охране труда 53":
-        queries.extend([
-            "Правила по охране труда № 53 пункт 2 сфера действия",
-            "Правила по охране труда № 53 пункт 2 распространяются на работодателей",
-            "Правила по охране труда № 53 независимо от организационно-правовых форм и форм собственности",
-        ])
-    else:
-        queries.extend([
-            f"сфера действия {original}",
-            f"на кого распространяется действие {original}",
-        ])
-    return list(dict.fromkeys(q for q in queries if q))[:8]
+    if universal_profile.get("event") == "law_scope":
+        target = universal_profile.get("target_document")
+        if target == "356-з":
+            queries.extend([
+                "Закон № 356-З статья 3 сфера действия настоящего Закона",
+                "Закон Об охране труда 356-З статья 3 на кого распространяется",
+                "применяется в отношении всех работодателей работающих граждан Республики Беларусь иностранных граждан лиц без гражданства",
+            ])
+        elif target == "трудовой кодекс":
+            queries.extend([
+                "Трудовой кодекс Республики Беларусь сфера действия",
+                "Трудовой кодекс Республики Беларусь на кого распространяется действие",
+            ])
+        elif target == "правила по охране труда 53":
+            queries.extend([
+                "Правила по охране труда № 53 пункт 2 сфера действия",
+                "Правила по охране труда № 53 пункт 2 распространяются на работодателей",
+                "Правила по охране труда № 53 независимо от организационно-правовых форм и форм собственности",
+            ])
+        else:
+            queries.extend([
+                f"сфера действия {original}",
+                f"на кого распространяется действие {original}",
+            ])
+        return list(dict.fromkeys(q for q in queries if q))[:8]
 
     queries.extend(build_universal_search_queries(universal_profile, original))
 
