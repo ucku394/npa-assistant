@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 
 from rag_query_classifier import detect_special_category, _minor_special_issue, _is_labor_code_query, _is_target_briefing_query, _is_responsible_briefing_query
 from rag_query_profile import build_universal_query_profile
+from legal_query_planner import build_legal_query_plan
 from rag_query_modes import _attestation_query_mode, _accident_query_mode
 
 def _normalize_legal_query(query: str) -> str:
@@ -224,10 +225,17 @@ def build_search_queries(
 ) -> List[str]:
     original = str(user_query or "").strip()
     universal_profile = build_universal_query_profile(original)
+    legal_plan = build_legal_query_plan(original, universal_profile, topic, legal_domain)
+    universal_profile["legal_query_plan"] = legal_plan
     queries: List[str] = [original]
 
     if universal_profile.get("event") == "law_scope":
         queries.extend(build_universal_search_queries(universal_profile, original))
+    # Универсальный planner добавляет юридические формулировки без удаления
+    # существующих специализированных режимов.
+    queries.extend(legal_plan.get("search_queries") or [])
+    queries.extend(legal_plan.get("legal_phrases") or [])
+    queries.extend(legal_plan.get("legal_concepts") or [])
         target = universal_profile.get("target_document")
         if target == "356-з":
             queries.extend([
