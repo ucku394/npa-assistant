@@ -697,8 +697,7 @@ def _build_grounding_retry_prompt(prompt: str, error: Exception) -> str:
 def _build_allowed_sources_block(prompt: str) -> str:
     allowed_source_ids = _extract_source_ids(prompt)
 
-    if not allowed_source_ids:
-        return """
+    if not allowed_source_ids:        return """
 РАЗРЕШЁННЫЕ SOURCE_ID:
 В текущем нормативном контексте SOURCE_ID не обнаружены.
 
@@ -977,10 +976,11 @@ def _openrouter_request(
             "OpenRouter returned empty response after cleanup"
         )
 
-    # --------------------------------------------------------
-    # SOURCE_ID VALIDATION
-    # --------------------------------------------------------
-    _validate_source_grounding(prompt, text)
+    # SOURCE_ID validation is intentionally handled by
+    # generate_with_openrouter() after the first model response.
+    # Keeping validation here would raise before the dedicated grounding
+    # retry can run, so a model that simply omitted SOURCE_ID would be
+    # incorrectly treated as a hard provider failure.
 
     return text
 
@@ -1397,7 +1397,6 @@ def _classify_gemini_error(
 ) -> str:
     """
     Классифицирует ошибку Gemini.
-
     temporary:
         429/quota/503 и другие кратковременные сбои.
 
