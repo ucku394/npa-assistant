@@ -228,9 +228,6 @@ def build_search_queries(
 
     if universal_profile.get("event") == "law_scope":
         queries.extend(build_universal_search_queries(universal_profile, original))
-    # Короткие/бытовые вопросы получают устойчивые нормативные варианты.
-    # Это не LLM-expansion: формулировки детерминированы и воспроизводимы.
-    queries.extend(_generic_legal_expansions(original, universal_profile))
         target = universal_profile.get("target_document")
         if target == "356-з":
             queries.extend([
@@ -471,6 +468,11 @@ def build_search_queries(
             "Трудовой кодекс Республики Беларусь охрана труда работник наниматель",
             "Трудовой кодекс Республики Беларусь безопасные условия труда",
         ])
+
+    # Сначала сохраняем специализированные topic/query-mode запросы.
+    # Общие варианты добавляем только как резерв, чтобы не вытеснять точные НПА/пункты.
+    if len(queries) < 6:
+        queries.extend(_generic_legal_expansions(original, universal_profile))
 
     result: List[str] = []
     seen = set()
