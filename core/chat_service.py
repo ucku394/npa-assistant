@@ -567,6 +567,18 @@ class ChatService:
                     query_profile=rag_result.get("query_profile") or {},
                     topic=str(rag_result.get("topic") or ""),
                 )
+                if required_article_49:
+                    required_source_not_cited = bool(article_49_source_ids) and not any(
+                        source_id in self._extract_source_ids(answer) for source_id in article_49_source_ids
+                    )
+                    if required_source_missing or required_source_not_cited:
+                        claim_evidence["passed"] = False
+                    claim_evidence["required_source_gate"] = {
+                        "required": True,
+                        "article_49_source_ids": article_49_source_ids,
+                        "missing": required_source_missing,
+                        "not_cited": required_source_not_cited,
+                    }
 
         rag_meta["grounding"] = grounding
         rag_meta["claim_evidence"] = claim_evidence
