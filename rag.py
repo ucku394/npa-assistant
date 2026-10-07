@@ -1620,7 +1620,10 @@ async def _get_targeted_chunks(
             if frequency_results:
                 return frequency_results
 
-        if "suspension_for_unpassed_osh_training" in (query_profile.get("qualifiers") or []):
+        if (
+            "suspension_for_unpassed_osh_training" in (query_profile.get("qualifiers") or [])
+            or "suspension_for_osh_violation" in (query_profile.get("qualifiers") or [])
+        ):
             suspension_results = await asyncio.to_thread(
                 _targeted_training_suspension_search,
                 supabase,
