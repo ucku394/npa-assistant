@@ -566,9 +566,15 @@ async def text_handler(
                         "поэтому не буду придумывать нормативное требование."
                     )
                 else:
-                    await update.effective_message.reply_text(
-                        "Не удалось обработать вопрос."
-                    )
+                    if error == "grounding_failed":
+                        await update.effective_message.reply_text(
+                            "⚠️ Не удалось получить ответ, который можно надёжно подтвердить найденными фрагментами НПА. "
+                            "Я не буду подменять это предположением. Попробуйте уточнить вопрос."
+                        )
+                    else:
+                        await update.effective_message.reply_text(
+                            "Не удалось обработать вопрос."
+                        )
                 return
 
             if status_message:
@@ -580,27 +586,18 @@ async def text_handler(
                 except Exception as e:
                     logger.debug("Не удалось обновить статус анализа: %s", e)
 
-            answer = clean_ai_markup(result.get("answer") or "")
+            answer = clean_ai_markup(
+                result.get("telegram_answer")
+                or result.get("answer_with_citations")
+                or result.get("answer")
+                or ""
+            )
             answer = ensure_numbered_list_spacing(answer)
 
             sources = result.get("sources") or []
-            if sources:
-                answer += "\n\n📎 ИСТОЧНИКИ\n\n"
-                answer += "\n\n".join(
-                    (
-                        f"• {source.get('document', 'Неизвестный НПА')}"
-                        + (
-                            f" — пункт/статья {source.get('point')}"
-                            if source.get("point")
-                            else ""
-                        )
-                    )
-                    for source in sources
-                )
-            else:
+            if not sources:
                 logger.warning(
-                    "LEGAL | AI did not provide valid SOURCE_IDs. "
-                    "No automatic sources will be added."
+                    "LEGAL | Evidence Gate passed but no validated sources were returned."
                 )
 
             answer = clean_ai_markup(answer)
