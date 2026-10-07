@@ -88,7 +88,10 @@ _openrouter_model_disabled_until = {}
 gemini_client = None
 if GEMINI_API_KEY:
     try:
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY,
+            http_options=types.HttpOptions(timeout=20_000),
+        )
         logger.info("AI | Gemini client initialized")
     except Exception as e:
         logger.exception(
@@ -106,6 +109,7 @@ if OPENROUTER_API_KEY:
             # Для OpenRouter это неэффективно: при rate-limit нужно
             # сразу переходить к следующей модели цепочки.
             max_retries=0,
+            timeout=20.0,
             default_headers={
                 "HTTP-Referer": "https://openrouter.ai/",
                 "X-Title": "Belarus OHS Safety Assistant",
