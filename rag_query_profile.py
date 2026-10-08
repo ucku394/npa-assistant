@@ -204,6 +204,40 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
 
         profile["constraint"].update(constraint_data)
 
+
+    # Кто непосредственно разрабатывает инструкции по охране труда.
+    # Первичная норма — п.14 постановления №176: разработчиками являются
+    # руководители структурных подразделений. П.11 регулирует перечень
+    # инструкций и организационное участие службы ОТ/аккредитованных лиц.
+    instruction_developer_pattern = (
+        r"(?:кто|кем)\s+(?:разрабатыва\w*|должен\s+разрабатыва\w*|"
+        r"разрабатыва\w*)\s+.{0,80}?"
+        r"(?:инструкци\w*\s+по\s+охран\w*\s+труд\w*|"
+        r"инструкци\w*\s+по\s+от)"
+        r"|"
+        r"(?:кто|кем)\s+(?:разрабатыва\w*|составля\w*)\s+"
+        r"(?:инструкци\w*\s+по\s+охран\w*\s+труд\w*)"
+        r"|"
+        r"(?:кто\s+разрабатывает|кем\s+разрабатываются)\s+"
+        r"(?:инструкци\w*\s+по\s+охран\w*\s+труд\w*)"
+    )
+    if re.search(instruction_developer_pattern, query, re.IGNORECASE):
+        profile["qualifiers"].append("instruction_developer")
+        profile["subject"] = "osh_instruction"
+        profile["event"] = "instruction_development"
+        profile["action"] = "document"
+        profile["object"] = "osh_instruction"
+        profile["target_document"] = "176"
+        profile["target_article"] = "14"
+        profile["legal_phrases"].extend([
+            "пункт 14 постановления № 176 инструкции по охране труда разрабатываются руководителями структурных подразделений",
+            "инструкции по охране труда разрабатываются руководителями структурных подразделений организации",
+            "с участием профессиональных союзов при их наличии",
+            "на основании приказов руководителя организации или иных локальных правовых актов",
+            "руководство работами по разработке инструкций по охране труда осуществляет руководитель организации или его заместитель",
+            "пункт 11 перечень инструкций по охране труда служба охраны труда",
+        ])
+
     if re.search(r"\bаттестаци\w*\s+рабоч\w*\s+мест", query, re.IGNORECASE):
         profile.update({"subject": "workplace", "event": "workplace_attestation", "action": "attest", "object": "working_conditions"})
         profile["legal_phrases"].extend([
