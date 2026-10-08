@@ -3462,9 +3462,9 @@ async def retrieve_context(
 
     # Deterministic backstop for concrete legal objects that the classifier
     # may miss. Target discovery must stay inside the correct BY NPA domain.
-    _q_lower = re.sub(r"\\s+", " ", str(user_query or "").strip().lower())
+    _q_lower = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
     if topic == "general" and re.search(
-        r"\\bлестниц\\w*\\b|\\bстремянк\\w*\\b|\\bприставн\\w*\\s+лестниц\\w*\\b",
+        r"\bлестниц\w*\b|\bстремянк\w*\b|\bприставн\w*\s+лестниц\w*\b",
         _q_lower,
         re.IGNORECASE,
     ):
