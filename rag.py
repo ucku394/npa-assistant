@@ -1000,6 +1000,39 @@ def _targeted_osh_knowledge_frequency_search(
         return []
 
 
+
+def _targeted_instruction_developer_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный нормативный пул для вопроса, кто разрабатывает инструкции по ОТ.
+
+    Приоритет: п.14 постановления №176. П.11 добавляется как вторичный
+    организационный контекст, но не должен подменять непосредственного разработчика.
+    """
+    try:
+        rows = supabase.table("npa_chunks").select("*").ilike(
+            "doc_name", "%№ 176%"
+        ).in_("point_num", ["14", "14.", "пункт 14", "11", "11.", "пункт 11"]).limit(20).execute().data or []
+        results = []
+        for row in rows:
+            chunk = dict(row)
+            point = str(chunk.get("point_num") or "").strip().lower()
+            content = str(chunk.get("content") or chunk.get("text") or "").lower()
+            if point in {"14", "14.", "пункт 14"}:
+                chunk["_instruction_developer_targeted"] = True
+                chunk["_instruction_developer_primary"] = True
+                chunk["_instruction_developer_score"] = 10.0
+                results.append(chunk)
+            elif point in {"11", "11.", "пункт 11"}:
+                if "перечень инструкций" in content or "службой охраны труда" in content:
+                    chunk["_instruction_developer_targeted"] = True
+                    chunk["_instruction_developer_primary"] = False
+                    chunk["_instruction_developer_score"] = 4.0
+                    results.append(chunk)
+        return results
+    except Exception:
+        logger.exception("RAG | targeted instruction developer search failed")
+        return []
+
+
 def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     """Точечный нормативный пул для вопросов о стажировке.
 
@@ -1664,6 +1697,14 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if "instruction_developer" in (query_profile.get("qualifiers") or []):
+            instruction_results = await asyncio.to_thread(
+                _targeted_instruction_developer_search,
+                supabase,
+            )
+            if instruction_results:
+                return instruction_results
 
         if "osh_knowledge_check_procedure" in (query_profile.get("qualifiers") or []):
             knowledge_check_results = await asyncio.to_thread(
