@@ -1751,14 +1751,16 @@ async def _get_targeted_chunks(
                 _targeted_instruction_list_compiler_search,
                 supabase,
             )
-            candidate_chunks = _merge_unique_chunks(candidate_chunks, instruction_list_results)
+            if instruction_list_results:
+                return instruction_list_results
 
         if "instruction_osh_service_role" in (query_profile.get("qualifiers") or []):
             instruction_role_results = await asyncio.to_thread(
                 _targeted_instruction_osh_service_role_search,
                 supabase,
             )
-            candidate_chunks = _merge_unique_chunks(candidate_chunks, instruction_role_results)
+            if instruction_role_results:
+                return instruction_role_results
 
         if "instruction_developer" in (query_profile.get("qualifiers") or []):
             instruction_results = await asyncio.to_thread(
