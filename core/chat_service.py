@@ -613,7 +613,23 @@ class ChatService:
                         "not_cited": required_source_not_cited,
                     }
 
-        # Повторно проверяем обязательный п.14 после grounding-retry:\n        # финальный ответ может уже содержать нужную ссылку, поэтому старый\n        # результат проверки нельзя переносить без пересчета.\n        if required_instruction_developer:\n            instruction_source_not_cited = bool(instruction_source_ids) and not any(\n                source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids\n            )\n            if instruction_source_missing or instruction_source_not_cited:\n                claim_evidence["passed"] = False\n            claim_evidence["required_instruction_source_gate"] = {\n                "required": True,\n                "source_ids": instruction_source_ids,\n                "missing": instruction_source_missing,\n                "not_cited": instruction_source_not_cited,\n            }\n\n        rag_meta["grounding"] = grounding
+        # Повторно проверяем обязательный п.14 после grounding-retry:
+        # финальный ответ может уже содержать нужную ссылку, поэтому старый
+        # результат проверки нельзя переносить без пересчета.
+        if required_instruction_developer:
+            instruction_source_not_cited = bool(instruction_source_ids) and not any(
+                source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids
+            )
+            if instruction_source_missing or instruction_source_not_cited:
+                claim_evidence["passed"] = False
+            claim_evidence["required_instruction_source_gate"] = {
+                "required": True,
+                "source_ids": instruction_source_ids,
+                "missing": instruction_source_missing,
+                "not_cited": instruction_source_not_cited,
+            }
+
+        rag_meta["grounding"] = grounding
         rag_meta["claim_evidence"] = claim_evidence
 
         if not grounding["passed"] or not claim_evidence["passed"]:
