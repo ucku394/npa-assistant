@@ -526,6 +526,29 @@ class ChatService:
         elif required_source_not_cited:
             logger.warning("LEGAL | Required source not cited | Article 49 TK RB source_ids=%s", article_49_source_ids)
 
+        # Для вопросов о праве на отказ/действиях при непредоставлении СИЗ
+        # обязательным первичным источником является ст. 11 Закона № 356-З.
+        # Ст. 28 подтверждает обязанность обеспечить СИЗ, но сама не отвечает
+        # на вопрос о последующих действиях работника.
+        required_article_11 = any(
+            qualifier in (query_profile.get("qualifiers") or [])
+            for qualifier in ("refusal_due_to_no_ppe", "ppe_nonprovision_action")
+        )
+        article_11_source_ids = [
+            chunk.get("_source_id") or build_source_id(chunk, index)
+            for index, chunk in enumerate(chunks, start=1)
+            if "356-з" in str(chunk.get("doc_name") or "").lower()
+            and str(chunk.get("point_num") or "").strip().lower() in {"статья 11", "11", "статья 11."}
+        ]
+        required_article_11_missing = required_article_11 and not article_11_source_ids
+        required_article_11_not_cited = required_article_11 and bool(article_11_source_ids) and not any(
+            source_id in self._extract_source_ids(answer) for source_id in article_11_source_ids
+        )
+        if required_article_11_missing:
+            logger.warning("LEGAL | Required source missing | Article 11 Law 356-Z not retrieved")
+        elif required_article_11_not_cited:
+            logger.warning("LEGAL | Required source not cited | Article 11 Law 356-Z source_ids=%s", article_11_source_ids)
+
         claim_evidence = self._claim_evidence_check(
             answer=answer,
             evidence_map=evidence_map,
@@ -533,13 +556,16 @@ class ChatService:
             topic=str(rag_result.get("topic") or ""),
         )
 
-        if required_source_missing or required_source_not_cited:
+        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited:
             claim_evidence["passed"] = False
             claim_evidence["required_source_gate"] = {
                 "required": True,
                 "article_49_source_ids": article_49_source_ids,
-                "missing": required_source_missing,
-                "not_cited": required_source_not_cited,
+                "article_49_missing": required_source_missing,
+                "article_49_not_cited": required_source_not_cited,
+                "article_11_source_ids": article_11_source_ids,
+                "article_11_missing": required_article_11_missing,
+                "article_11_not_cited": required_article_11_not_cited,
             }
 
         if not grounding["passed"] or not claim_evidence["passed"]:
