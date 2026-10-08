@@ -1058,6 +1058,64 @@ def _targeted_occupational_training_search(supabase) -> List[Dict[str, Any]]:
     return results
 
 
+def _targeted_osh_knowledge_check_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный нормативный пул для процедурных вопросов о проверке знаний.
+    
+    Для общего вопроса о случаях и порядке проверки знаний нужны связанные
+    нормы №175, а не только периодичность: первичная проверка (п.36, п.42),
+    комиссия и объем проверки (пп.44-46), уведомление и оформление (пп.47-50),
+    периодическая, повторная и уважительные причины (пп.51, 53-55).
+    """
+    try:
+        point_values = []
+        for point in [36, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55]:
+            point_values.extend([str(point), f"{point}."])
+
+        response = (
+            supabase.table("npa_chunks")
+            .select(
+                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+            )
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%175%")
+            .in_("point_num", point_values)
+            .limit(80)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+
+        if not results:
+            response = (
+                supabase.table("npa_chunks")
+                .select(
+                    "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+                )
+                .eq("legal_domain", "occupational_safety")
+                .ilike("doc_name", "%175%")
+                .or_(
+                    "content.ilike.%первичную проверку знаний%,"
+                    "content.ilike.%периодическую проверку знаний%,"
+                    "content.ilike.%повторно не позднее одного месяца%,"
+                    "content.ilike.%комиссиями для проверки знаний%,"
+                    "content.ilike.%составляется протокол проверки знаний%"
+                )
+                .limit(80)
+                .execute()
+            )
+            results = _deduplicate_chunks(response.data or [])
+
+        for chunk in results:
+            chunk["_osh_knowledge_check_targeted"] = True
+
+        return results
+    except Exception as exc:
+        logger.warning(
+            "RAG | occupational knowledge check targeted search failed: %s",
+            exc,
+        )
+        return []
+
+
 def _targeted_ppe_refusal_search(
     supabase,
 ) -> List[Dict[str, Any]]:
@@ -1606,6 +1664,14 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if "osh_knowledge_check_procedure" in (query_profile.get("qualifiers") or []):
+            knowledge_check_results = await asyncio.to_thread(
+                _targeted_osh_knowledge_check_search,
+                supabase,
+            )
+            if knowledge_check_results:
+                return knowledge_check_results
 
         frequency_qualifiers = query_profile.get("qualifiers") or []
         if (
