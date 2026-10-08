@@ -549,6 +549,24 @@ class ChatService:
         elif required_article_11_not_cited:
             logger.warning("LEGAL | Required source not cited | Article 11 Law 356-Z source_ids=%s", article_11_source_ids)
 
+        # Для вопроса о том, кто составляет перечень инструкций,
+        # обязательным первичным источником является п.11 постановления №176.
+        required_instruction_list_compiler = "instruction_list_compiler" in (query_profile.get("qualifiers") or [])
+        instruction_list_source_ids = [
+            chunk.get("_source_id") or build_source_id(chunk, index)
+            for index, chunk in enumerate(chunks, start=1)
+            if "№ 176" in str(chunk.get("doc_name") or "")
+            and str(chunk.get("point_num") or "").strip().lower() in {"11", "11.", "пункт 11", "пункт 11."}
+        ]
+        instruction_list_source_missing = required_instruction_list_compiler and not instruction_list_source_ids
+        instruction_list_source_not_cited = required_instruction_list_compiler and bool(instruction_list_source_ids) and not any(
+            source_id in self._extract_source_ids(answer) for source_id in instruction_list_source_ids
+        )
+        if instruction_list_source_missing:
+            logger.warning("LEGAL | Required source missing | NPA 176 point 11 not retrieved for instruction list")
+        elif instruction_list_source_not_cited:
+            logger.warning("LEGAL | Required source not cited | NPA 176 point 11 source_ids=%s", instruction_list_source_ids)
+
         # Для вопроса о роли службы охраны труда при разработке инструкций
         # обязательным первичным источником является п.11 постановления №176.
         required_instruction_osh_service_role = "instruction_osh_service_role" in (query_profile.get("qualifiers") or [])
@@ -593,7 +611,7 @@ class ChatService:
             topic=str(rag_result.get("topic") or ""),
         )
 
-        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited or instruction_source_missing or instruction_source_not_cited or instruction_role_source_missing or instruction_role_source_not_cited:
+        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited or instruction_source_missing or instruction_source_not_cited or instruction_role_source_missing or instruction_role_source_not_cited or instruction_list_source_missing or instruction_list_source_not_cited:
             claim_evidence["passed"] = False
             claim_evidence["required_source_gate"] = {
                 "required": True,
@@ -609,6 +627,9 @@ class ChatService:
                 "instruction_role_source_ids": instruction_role_source_ids,
                 "instruction_role_source_missing": instruction_role_source_missing,
                 "instruction_role_source_not_cited": instruction_role_source_not_cited,
+                "instruction_list_source_ids": instruction_list_source_ids,
+                "instruction_list_source_missing": instruction_list_source_missing,
+                "instruction_list_source_not_cited": instruction_list_source_not_cited,
             }
 
         if not grounding["passed"] or not claim_evidence["passed"]:
