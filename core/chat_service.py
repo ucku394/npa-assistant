@@ -549,14 +549,14 @@ class ChatService:
         elif required_article_11_not_cited:
             logger.warning("LEGAL | Required source not cited | Article 11 Law 356-Z source_ids=%s", article_11_source_ids)
 
-        claim_evidence = self._claim_evidence_check(
+        # Для вопроса «кто разрабатывает инструкции по охране труда»\n        # обязательным первичным источником является п.14 постановления №176.\n        # П.11 используется только как вторичный организационный контекст.\n        required_instruction_developer = "instruction_developer" in (query_profile.get("qualifiers") or [])\n        instruction_source_ids = [\n            chunk.get("_source_id") or build_source_id(chunk, index)\n            for index, chunk in enumerate(chunks, start=1)\n            if "№ 176" in str(chunk.get("doc_name") or "")\n            and str(chunk.get("point_num") or "").strip().lower() in {"14", "14.", "пункт 14", "пункт 14."}\n        ]\n        instruction_source_missing = required_instruction_developer and not instruction_source_ids\n        instruction_source_not_cited = required_instruction_developer and bool(instruction_source_ids) and not any(\n            source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids\n        )\n        if instruction_source_missing:\n            logger.warning("LEGAL | Required source missing | NPA 176 point 14 not retrieved")\n        elif instruction_source_not_cited:\n            logger.warning("LEGAL | Required source not cited | NPA 176 point 14 source_ids=%s", instruction_source_ids)\n\n        claim_evidence = self._claim_evidence_check(
             answer=answer,
             evidence_map=evidence_map,
             query_profile=rag_result.get("query_profile") or {},
             topic=str(rag_result.get("topic") or ""),
         )
 
-        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited:
+        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited or instruction_source_missing or instruction_source_not_cited:
             claim_evidence["passed"] = False
             claim_evidence["required_source_gate"] = {
                 "required": True,
@@ -566,6 +566,9 @@ class ChatService:
                 "article_11_source_ids": article_11_source_ids,
                 "article_11_missing": required_article_11_missing,
                 "article_11_not_cited": required_article_11_not_cited,
+                "instruction_source_ids": instruction_source_ids,
+                "instruction_source_missing": instruction_source_missing,
+                "instruction_source_not_cited": instruction_source_not_cited,
             }
 
         if not grounding["passed"] or not claim_evidence["passed"]:
