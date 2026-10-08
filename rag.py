@@ -3459,6 +3459,18 @@ async def retrieve_context(
 
     legal_domain = detect_legal_domain(user_query)
     topic = detect_topic(user_query)
+
+    # Deterministic backstop for concrete legal objects that the classifier
+    # may miss. Target discovery must stay inside the correct BY NPA domain.
+    _q_lower = re.sub(r"\\s+", " ", str(user_query or "").strip().lower())
+    if topic == "general" and re.search(
+        r"\\bлестниц\\w*\\b|\\bстремянк\\w*\\b|\\bприставн\\w*\\s+лестниц\\w*\\b",
+        _q_lower,
+        re.IGNORECASE,
+    ):
+        topic = "portable_ladder"
+        legal_domain = "occupational_safety"
+
     query_terms = _extract_query_terms(user_query)
     intents = detect_query_intents(user_query)
     cross_reference = is_cross_reference_query(intents)
