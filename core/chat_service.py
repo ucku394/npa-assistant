@@ -557,7 +557,11 @@ class ChatService:
                 "названный в норме. Для вопросов 'можно ли' различай прямой запрет и "
                 "прямое разрешение.\\n"
             )
-            retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
+            try:
+                retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
+            except Exception as exc:
+                logger.exception("LEGAL | Grounding retry failed: %s", exc)
+                retry_answer = None
             if retry_answer:
                 answer = str(retry_answer).strip()
                 grounding = self._grounding_check(answer, valid_source_ids)
