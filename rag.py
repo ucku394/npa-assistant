@@ -1001,6 +1001,33 @@ def _targeted_osh_knowledge_frequency_search(
 
 
 
+def _targeted_instruction_osh_service_role_search(supabase) -> List[Dict[str, Any]]:
+    """Точечный нормативный пул для вопроса о роли службы ОТ по п.11 №176."""
+    try:
+        rows = (
+            supabase.table("npa_chunks")
+            .select("*")
+            .ilike("doc_name", "%№ 176%")
+            .in_("point_num", ["11", "11.", "пункт 11"])
+            .limit(10)
+            .execute()
+            .data or []
+        )
+        results = []
+        for row in rows:
+            chunk = dict(row)
+            content = str(chunk.get("content") or "").lower()
+            if "перечень инструкций" in content or "службой охраны труда" in content:
+                chunk["_instruction_osh_service_role_targeted"] = True
+                chunk["_instruction_osh_service_role_primary"] = True
+                chunk["_instruction_osh_service_role_score"] = 10.0
+                results.append(chunk)
+        return results
+    except Exception:
+        logger.exception("RAG | targeted instruction OHS service role search failed")
+        return []
+
+
 def _targeted_instruction_developer_search(supabase) -> List[Dict[str, Any]]:
     """Точечный нормативный пул для вопроса, кто разрабатывает инструкции по ОТ.
 
@@ -1691,6 +1718,13 @@ async def _get_targeted_chunks(
                 for chunk in lifting_results:
                     chunk["_lifting_constraint_targeted"] = True
                 return lifting_results
+
+        if "instruction_osh_service_role" in (query_profile.get("qualifiers") or []):
+            instruction_role_results = await asyncio.to_thread(
+                _targeted_instruction_osh_service_role_search,
+                supabase,
+            )
+            candidate_chunks = _merge_unique_chunks(candidate_chunks, instruction_role_results)
 
         if "instruction_developer" in (query_profile.get("qualifiers") or []):
             instruction_results = await asyncio.to_thread(
