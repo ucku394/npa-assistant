@@ -850,9 +850,42 @@ def get_document_id(
     return str(document_id)
 
 
+def ensure_document_record(
+    supabase,
+    doc_name: str,
+    legal_domain: str,
+    topic: str,
+) -> str:
+    """Гарантирует запись НПА в npa_documents и возвращает её UUID."""
+    try:
+        return get_document_id(supabase, doc_name)
+    except RuntimeError as exc:
+        if "не найдена запись" not in str(exc):
+            raise
+
+    payload = {
+        "doc_name": doc_name,
+        "legal_domain": legal_domain,
+        "status": "active",
+        "priority": 50,
+        "search_text": f"{doc_name} {topic}".strip(),
+        "metadata": {"topic": topic, "managed_by": "npa_loader"},
+    }
+
+    def operation():
+        return (
+            supabase.table("npa_documents")
+            .insert(payload)
+            .execute()
+        )
+
+    supabase_execute(operation, f"CREATE DOCUMENT RECORD | {doc_name}")
+    return get_document_id(supabase, doc_name)
+
+
 # ============================================================
 # DOCUMENT COUNT
-# ============================================================
+============================================================
 
 def count_document_rows(
     supabase,
@@ -1238,6 +1271,7 @@ def build_rows(
     embeddings: Sequence[
         Sequence[float]
     ],
+    document_id: Optional[str] = None,
 ) -> List[dict]:
 
     validate_embeddings(
@@ -1247,22 +1281,23 @@ def build_rows(
 
     rows: List[dict] = []
 
-    for item, embedding in zip(
-        prepared_chunks,
-        embeddings,
+    for chunk_no, (item, embedding) in enumerate(
+        zip(prepared_chunks, embeddings),
+        start=1,
     ):
-
-        rows.append(
-            {
-                "doc_name": item["doc_name"],
-                "doc_type": item["doc_type"],
-                "point_num": item["point_num"],
-                "content": item["content"],
-                "legal_domain": item["legal_domain"],
-                "topic": item["topic"],
-                "embedding": embedding,
-            }
-        )
+        row = {
+            "doc_name": item["doc_name"],
+            "doc_type": item["doc_type"],
+            "point_num": item["point_num"],
+            "content": item["content"],
+            "legal_domain": item["legal_domain"],
+            "topic": item["topic"],
+            "chunk_no": chunk_no,
+            "embedding": embedding,
+        }
+        if document_id:
+            row["document_id"] = document_id
+        rows.append(row)
 
     return rows
 
@@ -1437,8 +1472,7 @@ def replace_document_safely(
         )
 
     # npa_chunks.document_id — обязательный FK.
-    # Для replace используем тот же document_id, который
-    # уже принадлежит существующей записи npa_documents.
+    # Для replace используем UUID существующей записи НПА.
     document_id = get_document_id(
         supabase,
         doc_name,
@@ -1461,21 +1495,32 @@ def replace_document_safely(
         f"{uuid4().hex}"
     )
 
-    staging_rows = []
-
-    for row in rows:
-
-        staged_row = dict(
-            row
+    # UNIQUE(document_id, chunk_no): staging-фрагменты временно
+    # получают номера выше максимального номера старой редакции.
+    def max_chunk_operation():
+        return (
+            supabase.table("npa_chunks")
+            .select("chunk_no")
+            .eq("document_id", document_id)
+            .order("chunk_no", desc=True)
+            .limit(1)
+            .execute()
         )
 
-        staged_row[
-            "doc_name"
-        ] = staging_doc_name
+    max_chunk_response = supabase_execute(
+        max_chunk_operation,
+        f"MAX CHUNK NO | {doc_name}",
+    )
+    max_chunk_data = getattr(max_chunk_response, "data", None) or []
+    max_chunk_no = int(max_chunk_data[0]["chunk_no"]) if max_chunk_data else 0
 
-        staged_row[
-            "document_id"
-        ] = document_id
+    staging_rows = []
+
+    for offset, row in enumerate(rows, start=1):
+        staged_row = dict(row)
+        staged_row["doc_name"] = staging_doc_name
+        staged_row["document_id"] = document_id
+        staged_row["chunk_no"] = max_chunk_no + offset
 
         if not staged_row.get("document_id"):
             raise RuntimeError(
@@ -1569,6 +1614,42 @@ def replace_document_safely(
             staging_doc_name,
             doc_name,
         )
+
+        # После удаления старой редакции можно вернуть нумерацию
+        # chunks к 1..N, сохраняя UNIQUE(document_id, chunk_no).
+        def staged_ids_operation():
+            return (
+                supabase.table("npa_chunks")
+                .select("id,chunk_no")
+                .eq("doc_name", doc_name)
+                .eq("document_id", document_id)
+                .order("chunk_no")
+                .execute()
+            )
+
+        staged_ids_response = supabase_execute(
+            staged_ids_operation,
+            f"RENUMBER CHUNKS | {doc_name}",
+        )
+        staged_ids = getattr(staged_ids_response, "data", None) or []
+        if len(staged_ids) != expected_count:
+            raise RuntimeError(
+                "RENUMBER COUNT MISMATCH: "
+                f"expected {expected_count}, found {len(staged_ids)}"
+            )
+
+        for new_chunk_no, staged_item in enumerate(staged_ids, start=1):
+            def renumber_operation(item_id=staged_item["id"], number=new_chunk_no):
+                return (
+                    supabase.table("npa_chunks")
+                    .update({"chunk_no": number})
+                    .eq("id", item_id)
+                    .execute()
+                )
+            supabase_execute(
+                renumber_operation,
+                f"RENUMBER CHUNK | {new_chunk_no}/{expected_count}",
+            )
 
         # ====================================================
         # 5. ФИНАЛЬНАЯ ПРОВЕРКА
@@ -1878,9 +1959,19 @@ def process_file(
     # BUILD ROWS
     # --------------------------------------------------------
 
+    document_id = None
+    if not dry_run:
+        document_id = ensure_document_record(
+            supabase,
+            doc_name,
+            legal_domain,
+            topic,
+        )
+
     rows = build_rows(
         prepared_chunks,
         embeddings,
+        document_id=document_id,
     )
 
     if len(rows) != len(
