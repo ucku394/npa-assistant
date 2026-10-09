@@ -450,32 +450,26 @@ def split_text_into_chunks(
     overlap_chars: int = 180,
 ) -> List[Tuple[str, str]]:
     """
-    Разбивает нормативный текст по юридической структуре.
-
-    1. Сначала сохраняет границы главы/статьи/пункта.
-    2. Если один пункт длиннее max_chars, делит его по абзацам
-       и предложениям, сохраняя номер пункта в каждом чанке.
-    3. Добавляет небольшой overlap только внутри одного пункта,
-       чтобы поиск не терял связь между соседними фрагментами.
-    4. Возвращает (point_num, content), совместимый с текущей схемой БД.
+    Делит НПА сначала по структурным единицам, а длинные пункты —
+    по абзацам/предложениям. Номер пункта сохраняется у каждого чанка.
     """
-    text = str(text or "").replace("\\r\\n", "\\n").replace("\\r", "\\n").strip()
+    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     if not text:
         return []
 
     paragraphs = [
-        re.sub(r"[ \\t]+", " ", p).strip()
-        for p in re.split(r"\\n+", text)
+        re.sub(r"[ \t]+", " ", p).strip()
+        for p in re.split(r"\n+", text)
         if p.strip()
     ]
     if not paragraphs:
         return []
 
     marker_pattern = re.compile(
-        r"^(ГЛАВА\\s+\\d+[А-ЯA-Z]?|"
-        r"Статья\\s+\\d+(?:\\.\\d+)*|"
-        r"Пункт\\s+\\d+(?:\\.\\d+)*|"
-        r"\\d+(?:\\.\\d+)*\\.)\\s*",
+        r"^(ГЛАВА\s+\d+[А-ЯA-Z]?|"
+        r"Статья\s+\d+(?:\.\d+)*|"
+        r"Пункт\s+\d+(?:\.\d+)*|"
+        r"\d+(?:\.\d+)*\.)\s*",
         re.IGNORECASE,
     )
 
@@ -502,18 +496,17 @@ def split_text_into_chunks(
     def split_long_paragraph(paragraph: str, limit: int) -> List[str]:
         if len(paragraph) <= limit:
             return [paragraph]
-        # Prefer sentence boundaries; fall back to whitespace for very long sentences.
-        sentences = re.split(r"(?<=[.!?;])\\s+", paragraph)
+        sentences = re.split(r"(?<=[.!?;])\s+", paragraph)
         parts: List[str] = []
-        buf = ""
+        buffer = ""
         for sentence in sentences:
             sentence = sentence.strip()
             if not sentence:
                 continue
             if len(sentence) > limit:
-                if buf:
-                    parts.append(buf)
-                    buf = ""
+                if buffer:
+                    parts.append(buffer)
+                    buffer = ""
                 rest = sentence
                 while len(rest) > limit:
                     cut = rest.rfind(" ", 0, limit + 1)
@@ -521,43 +514,39 @@ def split_text_into_chunks(
                         cut = limit
                     parts.append(rest[:cut].strip())
                     rest = rest[cut:].strip()
-                if rest:
-                    buf = rest
-            elif not buf:
-                buf = sentence
-            elif len(buf) + 1 + len(sentence) <= limit:
-                buf += " " + sentence
+                buffer = rest
+            elif not buffer:
+                buffer = sentence
+            elif len(buffer) + 1 + len(sentence) <= limit:
+                buffer += " " + sentence
             else:
-                parts.append(buf)
-                buf = sentence
-        if buf:
-            parts.append(buf)
+                parts.append(buffer)
+                buffer = sentence
+        if buffer:
+            parts.append(buffer)
         return parts
 
     chunks: List[Tuple[str, str]] = []
     for point_num, lines in units:
-        heading = lines[0]
-        body_lines = lines[1:]
-        # Keep a numbered point's text together unless it exceeds the limit.
-        unit_text = "\\n".join(lines).strip()
+        unit_text = "\n".join(lines).strip()
         if len(unit_text) <= max_chars:
             chunks.append((point_num, unit_text))
             continue
 
-        # For oversized units, pack paragraph/sentence pieces. The first chunk
-        # includes the original numbered heading, and each continuation repeats
-        # a compact heading so it remains intelligible when retrieved alone.
-        heading_prefix = heading[:300].strip()
+        heading = lines[0].strip()
+        body_lines = lines[1:]
+        heading_prefix = heading[:250]
+        content_limit = max(400, max_chars - min(len(heading_prefix) + 30, 350))
         pieces: List[str] = []
         for line in body_lines:
-            pieces.extend(split_long_paragraph(line, max_chars - min(len(heading_prefix) + 40, 400)))
+            pieces.extend(split_long_paragraph(line, content_limit))
         if not pieces:
             pieces = split_long_paragraph(unit_text, max_chars)
 
         current = heading_prefix
         previous_tail = ""
         for piece in pieces:
-            candidate = (current + "\\n" + piece).strip() if current else piece
+            candidate = (current + "\n" + piece).strip() if current else piece
             if len(candidate) <= max_chars:
                 current = candidate
                 continue
@@ -565,30 +554,25 @@ def split_text_into_chunks(
             if current.strip():
                 chunks.append((point_num, current.strip()))
                 previous_tail = current[-overlap_chars:].strip() if overlap_chars else ""
-            prefix = heading_prefix
-            overlap = previous_tail
-            current = "\\n".join(part for part in (prefix, overlap, piece) if part).strip()
+
+            parts = [heading_prefix]
+            if previous_tail:
+                parts.append(previous_tail)
+            parts.append(piece)
+            current = "\n".join(parts).strip()
             if len(current) > max_chars:
-                current = current[:max_chars].rstrip()
+                current = "\n".join([heading_prefix, piece]).strip()
+                if len(current) > max_chars:
+                    current = current[:max_chars].rstrip()
 
         if current.strip():
             chunks.append((point_num, current.strip()))
 
-    # Defensive size bound: no chunk should exceed the configured maximum.
-    final_chunks: List[Tuple[str, str]] = []
-    for point_num, chunk in chunks:
-        if len(chunk) <= max_chars:
-            final_chunks.append((point_num, chunk))
-        else:
-            for piece in split_long_paragraph(chunk, max_chars):
-                if piece:
-                    final_chunks.append((point_num, piece))
-
     logger.info(
         "CHUNKING | chunks=%s | max_chars=%s | overlap_chars=%s",
-        len(final_chunks), max_chars, overlap_chars,
+        len(chunks), max_chars, overlap_chars,
     )
-    return final_chunks
+    return chunks
 
 # ============================================================
 # SOURCE FILE DISCOVERY
