@@ -9,6 +9,7 @@ Telegram formatting, typing indicators and photo analysis stay in bot.py.
 import asyncio
 import logging
 import re
+import uuid
 from typing import Any, Dict, List
 
 from supabase import create_client
@@ -435,18 +436,21 @@ class ChatService:
 
     async def process_text(self, question: str) -> Dict[str, Any]:
         """Process one legal text question and return a transport-neutral result."""
+        request_id = uuid.uuid4().hex[:12]
         question = str(question or "").strip()
+        logger.info("CHAT | request_id=%s | start | question_length=%s", request_id, len(question))
         if not question:
             return {
                 "success": False,
                 "error": "empty_question",
+                "request_id": request_id,
                 "question": "",
                 "answer": "",
                 "sources": [],
                 "rag": {},
             }
 
-        rag_result = await retrieve_context(question, self.supabase)
+        rag_result = await retrieve_context(question, self.supabase, request_id=request_id)
 
         chunks = rag_result.get("chunks") or []
         npa_context = rag_result.get("retrieved_text") or ""
@@ -455,7 +459,8 @@ class ChatService:
         evidence_map_text = self._format_evidence_map(evidence_map)
 
         logger.info(
-            "CHAT | RAG candidates=%s | final=%s | domain=%s | topic=%s",
+            "CHAT | request_id=%s | RAG candidates=%s | final=%s | domain=%s | topic=%s",
+            request_id,
             rag_result.get("candidate_count"),
             rag_result.get("final_count"),
             rag_result.get("legal_domain"),
@@ -463,7 +468,11 @@ class ChatService:
         )
 
         rag_meta = {
+            "request_id": request_id,
             "found": bool(rag_result.get("found") and npa_context),
+            "failure_reason": rag_result.get("failure_reason"),
+            "search_diagnostics": rag_result.get("search_diagnostics") or [],
+            "final_source_diagnostics": rag_result.get("final_source_diagnostics") or [],
             "candidate_count": rag_result.get("candidate_count", 0),
             "final_count": rag_result.get("final_count", 0),
             "legal_domain": rag_result.get("legal_domain"),
@@ -473,9 +482,15 @@ class ChatService:
         }
 
         if not rag_meta["found"]:
+            logger.warning(
+                "CHAT | request_id=%s | stopped | reason=no_relevant_context | search_diagnostics=%s",
+                request_id,
+                rag_meta.get("search_diagnostics"),
+            )
             return {
                 "success": False,
                 "error": "no_relevant_context",
+                "request_id": request_id,
                 "question": question,
                 "answer": "",
                 "sources": [],
@@ -484,17 +499,29 @@ class ChatService:
                 "evidence_map_text": evidence_map_text,
             }
 
+        logger.info(
+            "CHAT | request_id=%s | context_ready | evidence_count=%s | sources=%s",
+            request_id,
+            len(evidence_map),
+            [
+                f"{item.get('source_id')}:{item.get('document')}#{item.get('point')}"
+                for item in evidence_map
+            ],
+        )
+
         prompt = LEGAL_ASSISTANT_PROMPT.format(
             retrieved_text=npa_context,
             evidence_map=evidence_map_text,
             user_query=question,
         )
 
+        logger.info("CHAT | request_id=%s | generation_start", request_id)
         answer = await asyncio.to_thread(generate_answer, prompt)
         if not answer:
             raise RuntimeError("AI returned empty answer.")
 
         answer = str(answer).strip()
+        logger.info("CHAT | request_id=%s | generation_complete | answer_length=%s", request_id, len(answer))
 
         valid_source_ids: List[str] = []
         for index, chunk in enumerate(chunks, start=1):
@@ -632,6 +659,15 @@ class ChatService:
                 "instruction_list_source_not_cited": instruction_list_source_not_cited,
             }
 
+        logger.info(
+            "CHAT | request_id=%s | evidence_gate_initial | grounding_passed=%s | claim_evidence_passed=%s | unknown_sources=%s | claim_reason=%s",
+            request_id,
+            grounding.get("passed"),
+            claim_evidence.get("passed"),
+            grounding.get("unknown_source_ids"),
+            claim_evidence.get("reason"),
+        )
+
         if not grounding["passed"] or not claim_evidence["passed"]:
             retry_reason = {
                 "grounding": grounding,
@@ -650,7 +686,7 @@ class ChatService:
             try:
                 retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
             except Exception as exc:
-                logger.exception("LEGAL | Grounding retry failed: %s", exc)
+                logger.exception("LEGAL | request_id=%s | Grounding retry failed: %s", request_id, exc)
                 retry_answer = None
             if retry_answer:
                 answer = str(retry_answer).strip()
@@ -695,14 +731,17 @@ class ChatService:
 
         if not grounding["passed"] or not claim_evidence["passed"]:
             logger.warning(
-                "LEGAL | Evidence Gate failed | cited=%s | unknown=%s | claims=%s",
+                "LEGAL | request_id=%s | Evidence Gate failed | cited=%s | unknown=%s | claims=%s | claim_reason=%s",
+                request_id,
                 grounding.get("cited_source_ids"),
                 grounding.get("unknown_source_ids"),
                 grounding.get("legal_claim_markers"),
+                claim_evidence.get("reason"),
             )
             return {
                 "success": False,
                 "error": "grounding_failed",
+                "request_id": request_id,
                 "question": question,
                 "answer": "",
                 "sources": [],
@@ -724,6 +763,7 @@ class ChatService:
         return {
             "success": True,
             "error": None,
+            "request_id": request_id,
             "question": question,
             "answer": answer,
             "answer_with_citations": answer_with_citations,
