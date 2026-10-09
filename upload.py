@@ -147,6 +147,9 @@ DOC_NAME_MAP: Dict[str, str] = {
     "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78":
         "Об утверждении Правил по охране труда при эксплуатации автомобильного и городского электрического транспорта от 6 декабря 2022 г. № 78",
 
+    "Об утверждении Правил по охране труда при эксплуатации конвейерных, трубопроводных и других транспортных средств непрерывного действия от 29 августа 2025 г. № 88":
+        "Об утверждении Правил по охране труда при эксплуатации конвейерных, трубопроводных и других транспортных средств непрерывного действия от 29 августа 2025 г. № 88",
+
     "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42":
         "Об утверждении специфических санитарно-эпидемиологических требований от 24 января 2020 г. № 42",
 
@@ -443,92 +446,149 @@ def read_docx(
 
 def split_text_into_chunks(
     text: str,
+    max_chars: int = 1800,
+    overlap_chars: int = 180,
 ) -> List[Tuple[str, str]]:
+    """
+    Разбивает нормативный текст по юридической структуре.
 
-    text = str(
-        text or ""
-    ).strip()
-
+    1. Сначала сохраняет границы главы/статьи/пункта.
+    2. Если один пункт длиннее max_chars, делит его по абзацам
+       и предложениям, сохраняя номер пункта в каждом чанке.
+    3. Добавляет небольшой overlap только внутри одного пункта,
+       чтобы поиск не терял связь между соседними фрагментами.
+    4. Возвращает (point_num, content), совместимый с текущей схемой БД.
+    """
+    text = str(text or "").replace("\\r\\n", "\\n").replace("\\r", "\\n").strip()
     if not text:
         return []
 
     paragraphs = [
-        paragraph.strip()
-        for paragraph in re.split(
-            r"\n+",
-            text,
-        )
-        if paragraph.strip()
+        re.sub(r"[ \\t]+", " ", p).strip()
+        for p in re.split(r"\\n+", text)
+        if p.strip()
     ]
-
     if not paragraphs:
         return []
 
-    chunks: List[
-        Tuple[str, str]
-    ] = []
-
-    current_point = "general"
-
-    current_lines: List[str] = []
-
     marker_pattern = re.compile(
-        r"^(Статья\s+\d+(?:\.\d+)*"
-        r"|Пункт\s+\d+(?:\.\d+)*"
-        r"|\d+(?:\.\d+)*\.)",
+        r"^(ГЛАВА\\s+\\d+[А-ЯA-Z]?|"
+        r"Статья\\s+\\d+(?:\\.\\d+)*|"
+        r"Пункт\\s+\\d+(?:\\.\\d+)*|"
+        r"\\d+(?:\\.\\d+)*\\.)\\s*",
         re.IGNORECASE,
     )
 
-    def flush_current() -> None:
+    units: List[Tuple[str, List[str]]] = []
+    current_point = "general"
+    current_lines: List[str] = []
 
+    def flush_unit() -> None:
         nonlocal current_lines
-
-        if not current_lines:
-            return
-
-        content = "\n".join(
-            current_lines
-        ).strip()
-
-        if content:
-
-            chunks.append(
-                (
-                    current_point,
-                    content,
-                )
-            )
-
-        current_lines = []
+        if current_lines:
+            units.append((current_point, current_lines))
+            current_lines = []
 
     for paragraph in paragraphs:
-
-        match = marker_pattern.match(
-            paragraph
-        )
-
+        match = marker_pattern.match(paragraph)
         if match:
-
-            flush_current()
-
-            current_point = (
-                match.group(1).strip()
-            )
-
-            current_lines = [
-                paragraph
-            ]
-
+            flush_unit()
+            current_point = match.group(1).strip()
+            current_lines = [paragraph]
         else:
+            current_lines.append(paragraph)
+    flush_unit()
 
-            current_lines.append(
-                paragraph
-            )
+    def split_long_paragraph(paragraph: str, limit: int) -> List[str]:
+        if len(paragraph) <= limit:
+            return [paragraph]
+        # Prefer sentence boundaries; fall back to whitespace for very long sentences.
+        sentences = re.split(r"(?<=[.!?;])\\s+", paragraph)
+        parts: List[str] = []
+        buf = ""
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            if len(sentence) > limit:
+                if buf:
+                    parts.append(buf)
+                    buf = ""
+                rest = sentence
+                while len(rest) > limit:
+                    cut = rest.rfind(" ", 0, limit + 1)
+                    if cut < int(limit * 0.55):
+                        cut = limit
+                    parts.append(rest[:cut].strip())
+                    rest = rest[cut:].strip()
+                if rest:
+                    buf = rest
+            elif not buf:
+                buf = sentence
+            elif len(buf) + 1 + len(sentence) <= limit:
+                buf += " " + sentence
+            else:
+                parts.append(buf)
+                buf = sentence
+        if buf:
+            parts.append(buf)
+        return parts
 
-    flush_current()
+    chunks: List[Tuple[str, str]] = []
+    for point_num, lines in units:
+        heading = lines[0]
+        body_lines = lines[1:]
+        # Keep a numbered point's text together unless it exceeds the limit.
+        unit_text = "\\n".join(lines).strip()
+        if len(unit_text) <= max_chars:
+            chunks.append((point_num, unit_text))
+            continue
 
-    return chunks
+        # For oversized units, pack paragraph/sentence pieces. The first chunk
+        # includes the original numbered heading, and each continuation repeats
+        # a compact heading so it remains intelligible when retrieved alone.
+        heading_prefix = heading[:300].strip()
+        pieces: List[str] = []
+        for line in body_lines:
+            pieces.extend(split_long_paragraph(line, max_chars - min(len(heading_prefix) + 40, 400)))
+        if not pieces:
+            pieces = split_long_paragraph(unit_text, max_chars)
 
+        current = heading_prefix
+        previous_tail = ""
+        for piece in pieces:
+            candidate = (current + "\\n" + piece).strip() if current else piece
+            if len(candidate) <= max_chars:
+                current = candidate
+                continue
+
+            if current.strip():
+                chunks.append((point_num, current.strip()))
+                previous_tail = current[-overlap_chars:].strip() if overlap_chars else ""
+            prefix = heading_prefix
+            overlap = previous_tail
+            current = "\\n".join(part for part in (prefix, overlap, piece) if part).strip()
+            if len(current) > max_chars:
+                current = current[:max_chars].rstrip()
+
+        if current.strip():
+            chunks.append((point_num, current.strip()))
+
+    # Defensive size bound: no chunk should exceed the configured maximum.
+    final_chunks: List[Tuple[str, str]] = []
+    for point_num, chunk in chunks:
+        if len(chunk) <= max_chars:
+            final_chunks.append((point_num, chunk))
+        else:
+            for piece in split_long_paragraph(chunk, max_chars):
+                if piece:
+                    final_chunks.append((point_num, piece))
+
+    logger.info(
+        "CHUNKING | chunks=%s | max_chars=%s | overlap_chars=%s",
+        len(final_chunks), max_chars, overlap_chars,
+    )
+    return final_chunks
 
 # ============================================================
 # SOURCE FILE DISCOVERY
