@@ -3870,7 +3870,7 @@ async def retrieve_context(
             "cross_reference": cross_reference,
             "domain_specific_count": 0,
             "topic_specific_count": 0,
-            "search_diagnostics": search_diagnostics,
+            "search_diagnostics": [],
             "failure_reason": "all_embeddings_empty",
         }
 
