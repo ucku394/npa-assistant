@@ -159,7 +159,21 @@ class ChatService:
                 kind_pattern + r"\s*" + re.escape(number) + r"(?!\d)",
                 re.IGNORECASE,
             )
-            if not reference_re.search(evidence_reference_text):
+            metadata_match = False
+            for item in cited_evidence:
+                point_text = str(item.get("point") or "").strip().lower()
+                point_numbers = re.findall(r"\\d+(?:[.\\-]\\d+)*", point_text)
+                if number not in [value.rstrip(".") for value in point_numbers]:
+                    continue
+                point_is_article = bool(re.search(r"стать", point_text))
+                point_is_paragraph = bool(re.search(r"пункт|^п\\.", point_text))
+                if kind.startswith("пункт") or kind == "п.":
+                    metadata_match = not point_is_article or point_is_paragraph
+                else:
+                    metadata_match = not point_is_paragraph or point_is_article
+                if metadata_match:
+                    break
+            if not reference_re.search(evidence_reference_text) and not metadata_match:
                 unsupported_references.append(f"{kind} {number}")
 
         if unsupported_references:
