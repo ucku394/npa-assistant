@@ -106,6 +106,12 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bприставн\w*\s+лестниц\w*",
         r"\bлестниц\w*[-–—]?стремянк\w*",
         r"\bстремянк\w*",
+        # Conveyor and continuous-transport equipment safety belongs to OHS.
+        r"\bконвейер\w*",
+        r"\bленточн\w*\s+конвейер\w*",
+        r"\bтранспортирующ\w*\s+устройств\w*",
+        r"\bтранспортн\w*\s+средств\w*\s+непрерывн\w*",
+        r"\bаварийн\w*\s+останов\w*",
     ]
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_patterns):
