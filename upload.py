@@ -2166,7 +2166,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    return parser
+    return parser.parse_args()
 
 
 def run(
