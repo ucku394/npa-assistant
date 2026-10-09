@@ -3820,21 +3820,6 @@ async def retrieve_context(
         query_roles,
     )
 
-    if conveyor_query and candidate_chunks:
-        # Avoid citing semantically adjacent but unrelated records (e.g. driver
-        # health checks) when no conveyor-specific evidence was retrieved.
-        conveyor_evidence = re.compile(
-            r"конвейер\w*|ленточн\w*|транспортирующ\w*\s+устройств\w*|"
-            r"транспортн\w*\s+средств\w*\s+непрерывн\w*|"
-            r"аварийн\w*\s+останов\w*|огражден\w*\s+движущ\w*",
-            re.IGNORECASE,
-        )
-        candidate_chunks = [
-            chunk for chunk in candidate_chunks
-            if conveyor_evidence.search(str(chunk))
-        ]
-        logger.info("RAG | conveyor evidence gate | retained=%s", len(candidate_chunks))
-
     # Universal legal target discovery: find real NPA/article candidates
     # directly in the indexed corpus. This is augmentation, not an answer
     # generator; it cannot invent legal targets.
@@ -3871,6 +3856,21 @@ async def retrieve_context(
             [candidate_chunks, targeted_merged],
             ["merged", "targeted"],
         )
+
+    if conveyor_query and candidate_chunks:
+        # Avoid citing semantically adjacent but unrelated records (e.g. driver
+        # health checks) when no conveyor-specific evidence was retrieved.
+        conveyor_evidence = re.compile(
+            r"конвейер\w*|ленточн\w*|транспортирующ\w*\s+устройств\w*|"
+            r"транспортн\w*\s+средств\w*\s+непрерывн\w*|"
+            r"аварийн\w*\s+останов\w*|огражден\w*\s+движущ\w*",
+            re.IGNORECASE,
+        )
+        candidate_chunks = [
+            chunk for chunk in candidate_chunks
+            if conveyor_evidence.search(str(chunk))
+        ]
+        logger.info("RAG | conveyor evidence gate | retained=%s", len(candidate_chunks))
 
     candidate_count = len(candidate_chunks)
 
