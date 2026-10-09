@@ -580,9 +580,46 @@ class ChatService:
         )
 
         logger.info("CHAT | request_id=%s | generation_start", request_id)
-        answer = await asyncio.to_thread(generate_answer, prompt)
+        try:
+            answer = await asyncio.to_thread(
+                generate_answer,
+                prompt,
+                request_id=request_id,
+            )
+        except Exception as exc:
+            logger.exception(
+                "CHAT | request_id=%s | generation_failed | error_type=%s",
+                request_id,
+                type(exc).__name__,
+            )
+            rag_meta["failure_reason"] = "ai_generation_failed"
+            rag_meta["ai_failure_type"] = type(exc).__name__
+            return {
+                "success": False,
+                "error": "ai_generation_failed",
+                "request_id": request_id,
+                "question": question,
+                "answer": "",
+                "sources": [],
+                "rag": rag_meta,
+                "evidence_map": evidence_map,
+                "evidence_map_text": evidence_map_text,
+            }
+
         if not answer:
-            raise RuntimeError("AI returned empty answer.")
+            logger.error("CHAT | request_id=%s | generation_failed | reason=empty_answer", request_id)
+            rag_meta["failure_reason"] = "ai_empty_answer"
+            return {
+                "success": False,
+                "error": "ai_empty_answer",
+                "request_id": request_id,
+                "question": question,
+                "answer": "",
+                "sources": [],
+                "rag": rag_meta,
+                "evidence_map": evidence_map,
+                "evidence_map_text": evidence_map_text,
+            }
 
         answer = str(answer).strip()
         logger.info("CHAT | request_id=%s | generation_complete | answer_length=%s", request_id, len(answer))
@@ -748,7 +785,11 @@ class ChatService:
                 "прямое разрешение.\\n"
             )
             try:
-                retry_answer = await asyncio.to_thread(generate_answer, retry_prompt)
+                retry_answer = await asyncio.to_thread(
+                    generate_answer,
+                    retry_prompt,
+                    request_id=request_id,
+                )
             except Exception as exc:
                 logger.exception("LEGAL | request_id=%s | Grounding retry failed: %s", request_id, exc)
                 retry_answer = None
