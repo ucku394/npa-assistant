@@ -86,3 +86,129 @@ def test_claim_evidence_does_not_confuse_article_and_paragraph_numbers():
     )
     assert result["passed"] is False
     assert result["reason"] == "legal_reference_not_found_in_cited_evidence"
+
+
+
+def test_claim_evidence_rejects_categorical_absence_claim():
+    result = ChatService._claim_evidence_check(
+        answer="Законодательство не предусматривает такого требования [SOURCE:NPA_RULE_1].",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1",
+            "excerpt": "Работник обязан соблюдать требования безопасности.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Есть ли такое требование?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "categorical_absence_claim_exceeds_retrieved_context"
+
+
+def test_claim_evidence_rejects_unverified_currentness_claim():
+    result = ChatService._claim_evidence_check(
+        answer="Это актуальная редакция правил [SOURCE:NPA_RULE_1].",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1",
+            "excerpt": "Работник обязан соблюдать требования безопасности.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Какая редакция действует?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "current_legal_status_not_verified"
+
+
+def test_claim_evidence_rejects_permission_as_duty():
+    result = ChatService._claim_evidence_check(
+        answer="Работодатель обязан выполнить это действие [SOURCE:NPA_RULE_1].",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1",
+            "excerpt": "Работодатель вправе выполнить это действие.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Что вправе сделать работодатель?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "duty_claim_supported_only_by_permission_language"
+
+
+def test_claim_evidence_rejects_russian_law_for_belarus_question():
+    result = ChatService._claim_evidence_check(
+        answer="Согласно норме [SOURCE:NPA_RULE_1] применяется следующее правило.",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Трудовой кодекс Российской Федерации",
+            "point": "1",
+            "excerpt": "Правило.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Каковы требования в Республике Беларусь?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "non_belarusian_legal_source_used"
+
+
+def test_claim_evidence_rejects_unverified_equipment_scope():
+    result = ChatService._claim_evidence_check(
+        answer="При работе на токарном станке следует учитывать требования безопасности [SOURCE:NPA_RULE_1].",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Общие правила",
+            "point": "1",
+            "excerpt": "Следует соблюдать общие требования безопасности.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Какие требования при работе с переносной лестницей?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "answer_introduces_unverified_work_or_equipment_scope"
+
+
+def test_claim_evidence_allows_currentness_with_verified_metadata():
+    result = ChatService._claim_evidence_check(
+        answer="Это актуальная редакция правил [SOURCE:NPA_RULE_1].",
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1",
+            "excerpt": "Работник обязан соблюдать требования безопасности.",
+            "is_current": True,
+            "last_verified_at": "2026-10-01",
+            "source_url": "https://example.by/npa/1",
+        }],
+        query_profile={"question_type": "general"},
+        question="Какая редакция действует?",
+    )
+    assert result["passed"] is True
+
+
+def test_claim_evidence_does_not_mix_point_from_another_act():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Дополнительный источник [SOURCE:NPA_DOC_B]. "
+            "Согласно пункту 84 требуется выполнить действие [SOURCE:NPA_DOC_A]."
+        ),
+        evidence_map=[
+            {
+                "source_id": "NPA_DOC_A",
+                "document": "Правила по охране труда",
+                "point": "85.",
+                "excerpt": "Работник обязан соблюдать требования безопасности.",
+            },
+            {
+                "source_id": "NPA_DOC_B",
+                "document": "Другой нормативный акт",
+                "point": "84.",
+                "excerpt": "Работник обязан соблюдать требования безопасности.",
+            },
+        ],
+        query_profile={"question_type": "general"},
+        question="Что установлено пунктом 84?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "legal_reference_not_found_in_cited_evidence"

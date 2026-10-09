@@ -89,8 +89,9 @@ class ChatService:
         evidence_map: List[Dict[str, Any]],
         query_profile: Dict[str, Any],
         topic: str = "",
+        question: str = "",
     ) -> Dict[str, Any]:
-        """Проверяет не только наличие цитаты, но и содержательную опору утверждения на НПА."""
+        """Проверяет цитаты, отдельные юридические маркеры и границы применимости доказательств."""
         text = str(answer or "").strip().lower()
         qtype = str((query_profile or {}).get("question_type") or "general").strip().lower()
 
@@ -159,8 +160,48 @@ class ChatService:
                 kind_pattern + r"\s*" + re.escape(number) + r"(?!\d)",
                 re.IGNORECASE,
             )
+            # Bind an explicit legal reference to a nearby SOURCE marker. When
+            # multiple acts are cited, a different source elsewhere in the answer
+            # must not be allowed to validate this claim by accident.
+            sentence_starts = [
+                text.rfind(".", 0, match.start()),
+                text.rfind("!", 0, match.start()),
+                text.rfind("?", 0, match.start()),
+                text.rfind("\n", 0, match.start()),
+            ]
+            sentence_start = max(sentence_starts) + 1
+            sentence_ends = [
+                position for position in (
+                    text.find(".", match.end()),
+                    text.find("!", match.end()),
+                    text.find("?", match.end()),
+                    text.find("\n", match.end()),
+                )
+                if position >= 0
+            ]
+            sentence_end = min(sentence_ends) + 1 if sentence_ends else len(text)
+            local_ids = set(
+                ChatService._extract_source_ids(str(answer or "")[sentence_start:sentence_end])
+            )
+            cited_documents = {
+                str(item.get("document") or "").strip()
+                for item in cited_evidence
+                if str(item.get("document") or "").strip()
+            }
+            if len(cited_documents) > 1 and not local_ids:
+                unsupported_references.append(f"{kind} {number} (no nearby source citation)")
+                continue
+            reference_evidence = (
+                [item for item in cited_evidence if str(item.get("source_id") or "").strip() in local_ids]
+                if local_ids else cited_evidence
+            )
+            reference_evidence_text = " ".join(
+                str(item.get("point") or "") + " " + str(item.get("document") or "") + " "
+                + str(item.get("excerpt") or "")
+                for item in reference_evidence
+            ).lower()
             metadata_match = False
-            for item in cited_evidence:
+            for item in reference_evidence:
                 point_text = str(item.get("point") or "").strip().lower()
                 point_numbers = re.findall(r"\d+(?:[.\-]\d+)*", point_text)
                 if number not in [value.rstrip(".") for value in point_numbers]:
@@ -173,7 +214,7 @@ class ChatService:
                     metadata_match = not point_is_paragraph or point_is_article
                 if metadata_match:
                     break
-            if not reference_re.search(evidence_reference_text) and not metadata_match:
+            if not reference_re.search(reference_evidence_text) and not metadata_match:
                 unsupported_references.append(f"{kind} {number}")
 
         if unsupported_references:
@@ -242,6 +283,161 @@ class ChatService:
                     "question_type": qtype,
                     "cited_evidence_count": len(cited_evidence),
                 }
+
+        # A RAG miss must not be promoted into a categorical statement about all law.
+        absence_claim = bool(re.search(
+            r"(?:законодательств\w*|нормативн\w+\s+акт\w*|нпа|правил\w*)"
+            r".{0,70}(?:не\s+предусматривает|не\s+устанавливает|не\s+содержит|"
+            r"не\s+требует|отсутствует|не\s+установлено)"
+            r"|(?:такого\s+требования|такой\s+обязанности|соответствующ\w+\s+норм\w*)"
+            r"\s+(?:нет|не\s+существует|не\s+установлено)",
+            text,
+        ))
+        scoped_absence = bool(re.search(
+            r"(?:в\s+представленн\w+(?:\s+\w+){0,2}\s+(?:контекст\w+|фрагмент\w+|материал\w+)|"
+            r"среди\s+предоставленн\w+\s+фрагмент\w+|в\s+найденн\w+\s+фрагмент\w+)",
+            text,
+        ))
+        if absence_claim and not scoped_absence:
+            return {
+                "passed": False,
+                "reason": "categorical_absence_claim_exceeds_retrieved_context",
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+
+        # Explicit claims that an act is currently in force require current-status
+        # metadata; a title and a matching paragraph number do not prove validity.
+        currentness_claim = bool(re.search(
+            r"(?:действует\s+(?:в\s+настоящее\s+время|на\s+текущую\s+дату|сейчас)|"
+            r"действующ\w+\s+редакци\w*|актуальн\w+\s+редакци\w*|"
+            r"по\s+состоянию\s+на\s+\d{4}|в\s+силе\s+на\s+текущ\w+\s+дату)",
+            text,
+        ))
+        current_status_values = {"in_force", "current", "действует", "действующий", "действует в настоящее время"}
+        validity_confirmed = any(
+            (
+                item.get("is_current") is True
+                or str(item.get("current_status") or "").strip().lower() in current_status_values
+            )
+            and bool(item.get("last_verified_at") or item.get("source_url"))
+            for item in cited_evidence
+        )
+        if currentness_claim and not validity_confirmed:
+            return {
+                "passed": False,
+                "reason": "current_legal_status_not_verified",
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+
+        # Do not silently apply a Russian legal act as Belarusian law.
+        comparison_requested = bool(re.search(
+            r"(?:сравнени\w*|сравнить|российск\w+\s+и\s+белорусск\w+|"
+            r"рф\s+и\s+рб|законодательств\w+\s+россии)",
+            str(question or "").lower(),
+        ))
+        russian_act = re.compile(
+            r"(?:трудов\w+\s+кодекс\w+\s+российск\w+\s+федераци\w+|"
+            r"\bтк\s*рф\b|\bкоап\s*рф\b|федеральн\w+\s+закон\w+|"
+            r"законодательств\w+\s+российск\w+\s+федераци\w+)",
+            re.IGNORECASE,
+        )
+        russian_sources = [
+            str(item.get("document") or "")
+            for item in cited_evidence
+            if russian_act.search(str(item.get("document") or ""))
+            or str(item.get("jurisdiction") or "").strip().lower() in {"ru", "rf", "россия", "российская федерация"}
+        ]
+        if russian_sources and not comparison_requested:
+            return {
+                "passed": False,
+                "reason": "non_belarusian_legal_source_used",
+                "non_belarusian_sources": russian_sources[:5],
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+
+        # Conservative modality checks: permission is not a duty, and prohibition is not permission.
+        answer_has_duty = bool(re.search(
+            r"\b(?:обязан\w*|должен|должна|должны|должно|необходимо|подлежит|требуется)\b",
+            text,
+        ))
+        evidence_has_duty = bool(re.search(
+            r"\b(?:обязан\w*|должен|должна|должны|должно|необходимо|подлежит|требуется)\b",
+            excerpts,
+        ))
+        evidence_has_permission = bool(re.search(
+            r"\b(?:вправе|имеет право|разрешается|допускается|может)\b", excerpts
+        )) and not bool(re.search(r"\bне\s+(?:допускается|разрешается|может)\b", excerpts))
+        answer_has_permission = bool(re.search(
+            r"\b(?:вправе|имеет право|разрешается|допускается|может)\b", text
+        )) and not bool(re.search(r"\bне\s+(?:допускается|разрешается|может)\b", text))
+        evidence_has_prohibition = bool(re.search(
+            r"\b(?:запрещается|запрещено|не\s+допускается|не\s+разрешается)\b", excerpts
+        ))
+        answer_has_prohibition = bool(re.search(
+            r"\b(?:запрещается|запрещено|не\s+допускается|не\s+разрешается)\b", text
+        ))
+        if answer_has_duty and evidence_has_permission and not evidence_has_duty:
+            return {
+                "passed": False,
+                "reason": "duty_claim_supported_only_by_permission_language",
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+        if answer_has_permission and evidence_has_prohibition and not evidence_has_permission:
+            return {
+                "passed": False,
+                "reason": "permission_claim_conflicts_with_cited_prohibition",
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+        if answer_has_prohibition and evidence_has_permission and not evidence_has_prohibition:
+            return {
+                "passed": False,
+                "reason": "prohibition_claim_supported_only_by_permission_language",
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+
+        # Detect answer scope drift into a different work/equipment category.
+        object_patterns = {
+            "ladder": r"лестниц\w*",
+            "lathe": r"токарн\w+\s+станк\w*",
+            "scaffold": r"(?:строительн\w+\s+лес\w*|инвентарн\w+\s+лес\w*|подмост\w*)",
+            "height_work": r"работ\w*\s+на\s+высот\w*",
+            "electrical_installation": r"электроустановк\w*",
+            "welding": r"сварочн\w*\s+работ\w*",
+            "lifting_equipment": r"(?:кран\w*|тельфер\w*|грузоподъёмн\w+\s+механизм\w*)",
+            "confined_space": r"(?:замкнут\w+\s+пространств\w*|колодц\w*)",
+            "pressure_vessel": r"(?:сосуд\w*\s+под\s+давлени\w*|котел\w*|котёл\w*)",
+        }
+        question_text = str(question or "").lower()
+        evidence_scope = " ".join(
+            [
+                str(item.get("document") or "")
+                + " "
+                + str(item.get("point") or "")
+                + " "
+                + str(item.get("topic") or "")
+                + " "
+                + str(item.get("excerpt") or "")
+                for item in cited_evidence
+            ]
+        ).lower()
+        answer_objects = {key for key, pattern in object_patterns.items() if re.search(pattern, text)}
+        question_objects = {key for key, pattern in object_patterns.items() if re.search(pattern, question_text)}
+        evidence_objects = {key for key, pattern in object_patterns.items() if re.search(pattern, evidence_scope)}
+        unsupported_objects = sorted(answer_objects - question_objects - evidence_objects)
+        if unsupported_objects:
+            return {
+                "passed": False,
+                "reason": "answer_introduces_unverified_work_or_equipment_scope",
+                "unsupported_scope": unsupported_objects,
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
 
         return {
             "passed": True,
@@ -476,6 +672,12 @@ class ChatService:
                 "source_url": str(
                     chunk.get("source_url") or chunk.get("url") or ""
                 ).strip(),
+                "effective_from": chunk.get("effective_from"),
+                "effective_to": chunk.get("effective_to"),
+                "is_current": chunk.get("is_current"),
+                "current_status": str(chunk.get("current_status") or chunk.get("legal_status") or "").strip(),
+                "last_verified_at": chunk.get("last_verified_at"),
+                "jurisdiction": str(chunk.get("jurisdiction") or "").strip(),
                 "excerpt": text[:700],
             })
         return evidence
@@ -737,6 +939,7 @@ class ChatService:
             evidence_map=evidence_map,
             query_profile=rag_result.get("query_profile") or {},
             topic=str(rag_result.get("topic") or ""),
+            question=question,
         )
 
         if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited or instruction_source_missing or instruction_source_not_cited or instruction_role_source_missing or instruction_role_source_not_cited or instruction_list_source_missing or instruction_list_source_not_cited:
@@ -801,6 +1004,7 @@ class ChatService:
                     evidence_map=evidence_map,
                     query_profile=rag_result.get("query_profile") or {},
                     topic=str(rag_result.get("topic") or ""),
+            question=question,
                 )
                 if required_article_49:
                     required_source_not_cited = bool(article_49_source_ids) and not any(
