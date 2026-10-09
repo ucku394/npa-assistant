@@ -142,8 +142,8 @@ class ChatService:
             ]
         ).lower()
         reference_pattern = re.compile(
-            r"\\b(?P<kind>пункт(?:а|ом|е)?|п\\.|статья|статьи|статьёй|статье|ст\\.)"
-            r"\\s*(?P<number>\\d+(?:[.\\-]\\d+)*)",
+            r"\b(?P<kind>пункт(?:а|ом|е)?|п\.|статья|статьи|статьёй|статье|ст\.)"
+            r"\s*(?P<number>\d+(?:[.\-]\d+)*)",
             re.IGNORECASE,
         )
         unsupported_references = []
@@ -151,12 +151,12 @@ class ChatService:
             kind = match.group("kind").lower()
             number = match.group("number").rstrip(".")
             kind_pattern = (
-                r"(?:пункт(?:а|ом|е)?|п\\.)"
+                r"(?:пункт(?:а|ом|е)?|п\.)"
                 if kind.startswith("пункт") or kind == "п."
-                else r"(?:статья|статьи|статьёй|статье|ст\\.)"
+                else r"(?:статья|статьи|статьёй|статье|ст\.)"
             )
             reference_re = re.compile(
-                kind_pattern + r"\\s*" + re.escape(number) + r"(?!\\d)",
+                kind_pattern + r"\s*" + re.escape(number) + r"(?!\d)",
                 re.IGNORECASE,
             )
             if not reference_re.search(evidence_reference_text):
