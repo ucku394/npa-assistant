@@ -3930,17 +3930,28 @@ async def retrieve_context(
 
             results = result or []
             clean_groups.append(results)
-            top_results = [
-                {
+            def _search_result_summary(chunk: Dict[str, Any]) -> Dict[str, Any]:
+                return {
                     "document": _get_document_name(chunk),
                     "point": _get_point_number(chunk),
+                    "semantic_rank": chunk.get("semantic_rank"),
                     "semantic_score": round(_safe_float(chunk.get("semantic_score", chunk.get("similarity"))), 4),
                     "lexical_rank": chunk.get("lexical_rank"),
                     "rrf_score": round(_safe_float(chunk.get("rrf_score")), 6),
                     "search_mode": chunk.get("_search_mode", "hybrid"),
                 }
-                for chunk in results[:5]
-            ]
+
+            hybrid_top = [_search_result_summary(chunk) for chunk in results[:5]]
+            semantic_ranked = sorted(
+                [chunk for chunk in results if chunk.get("semantic_rank") is not None],
+                key=lambda chunk: _safe_float(chunk.get("semantic_rank"), float("inf")),
+            )[:5]
+            lexical_ranked = sorted(
+                [chunk for chunk in results if chunk.get("lexical_rank") is not None],
+                key=lambda chunk: _safe_float(chunk.get("lexical_rank"), float("inf")),
+            )[:5]
+            semantic_top = [_search_result_summary(chunk) for chunk in semantic_ranked]
+            lexical_top = [_search_result_summary(chunk) for chunk in lexical_ranked]
             search_mode = (
                 results[0].get("_search_mode", "hybrid")
                 if results else "hybrid"
@@ -3950,17 +3961,27 @@ async def retrieve_context(
                 "mode": search_mode,
                 "result_count": len(results),
                 "error": None,
-                "top_results": top_results,
+                "hybrid_top": hybrid_top,
+                "semantic_top": semantic_top,
+                "lexical_top": lexical_top,
             })
             logger.info(
-                "RAG | request_id=%s | search_result | query_index=%s | mode=%s | count=%s | top=%s",
+                "RAG | request_id=%s | search_result | query_index=%s | mode=%s | count=%s | hybrid_top=%s | semantic_top=%s | lexical_top=%s",
                 request_id,
                 index,
                 search_mode,
                 len(results),
                 [
-                    f"{item['document']}#{item['point']}|sem={item['semantic_score']}|lex={item['lexical_rank']}"
-                    for item in top_results
+                    f"{item['document']}#{item['point']}|score={item['rrf_score']}"
+                    for item in hybrid_top
+                ],
+                [
+                    f"{item['document']}#{item['point']}|rank={item['semantic_rank']}|score={item['semantic_score']}"
+                    for item in semantic_top
+                ],
+                [
+                    f"{item['document']}#{item['point']}|rank={item['lexical_rank']}"
+                    for item in lexical_top
                 ],
             )
 
