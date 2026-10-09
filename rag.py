@@ -3650,7 +3650,7 @@ async def retrieve_context(
         _q_lower,
         re.IGNORECASE,
     ))
-    if conveyor_query:
+    if conveyor_query and legal_domain == "general":
         # The indexed Belarusian rules on continuous-transport equipment are
         # stored in occupational_safety; never route these questions as general.
         legal_domain = "occupational_safety"
