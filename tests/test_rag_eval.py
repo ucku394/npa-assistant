@@ -23,9 +23,41 @@ def test_verified_reference_requires_official_url():
             "question": "Question?",
             "expected_topic": "general",
             "reference_verified": True,
+            "jurisdiction": "BY",
+            "verified_on": "2026-10-09",
         }
     ])
     assert any("reference_url is missing" in error for error in errors)
+
+
+def test_verified_reference_rejects_unapproved_domain_and_missing_date():
+    errors, _ = validate_dataset([
+        {
+            "id": "RAG-002",
+            "question": "Question?",
+            "expected_topic": "general",
+            "reference_verified": True,
+            "reference_url": "https://example.com/law",
+            "jurisdiction": "BY",
+        }
+    ])
+    assert any("approved Belarus legal-information domain" in error for error in errors)
+    assert any("requires verified_on" in error for error in errors)
+
+
+def test_verified_reference_accepts_official_belarus_domain():
+    errors, _ = validate_dataset([
+        {
+            "id": "RAG-003",
+            "question": "Question?",
+            "expected_topic": "general",
+            "reference_verified": True,
+            "reference_url": "https://pravo.by/document/example",
+            "verified_on": "2026-10-09",
+            "jurisdiction": "BY",
+        }
+    ])
+    assert errors == []
 
 
 def test_dataset_warns_when_no_retrieval_target_exists():
