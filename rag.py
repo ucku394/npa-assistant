@@ -3723,8 +3723,10 @@ def _select_legal_diverse_chunks(
 async def retrieve_context(
     user_query: str,
     supabase,
+    request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    logger.info("RAG | query=%s", user_query)
+    request_id = str(request_id or "untracked")
+    logger.info("RAG | request_id=%s | query=%s", request_id, user_query)
 
     legal_domain = detect_legal_domain(user_query)
     topic = detect_topic(user_query)
@@ -3787,11 +3789,13 @@ async def retrieve_context(
     )
 
     logger.info(
-        "RAG | query_input | %r",
+        "RAG | request_id=%s | query_input | %r",
+        request_id,
         user_query,
     )
     logger.info(
-        "RAG | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s | target_document=%s | target_article=%s",
+        "RAG | request_id=%s | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s | target_document=%s | target_article=%s",
+        request_id,
         legal_domain,
         topic,
         intents,
@@ -3949,7 +3953,8 @@ async def retrieve_context(
                 "top_results": top_results,
             })
             logger.info(
-                "RAG | search_result | query_index=%s | mode=%s | count=%s | top=%s",
+                "RAG | request_id=%s | search_result | query_index=%s | mode=%s | count=%s | top=%s",
+                request_id,
                 index,
                 search_mode,
                 len(results),
@@ -4133,7 +4138,8 @@ async def retrieve_context(
         for index, chunk in enumerate(final_chunks, start=1)
     ]
     logger.info(
-        "RAG | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
+        "RAG | request_id=%s | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
+        request_id,
         len(final_chunks),
         accident_mode,
         special_category,
