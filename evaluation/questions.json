@@ -1,22 +1,260 @@
 [
-  {"id":"RAG-001","question":"Как часто нужно осматривать переносную лестницу?","expected_topic":"portable_ladder","expected_documents":["№ 11"],"expected_points":["54"]},
-  {"id":"RAG-002","question":"Как часто проводят периодическую проверку знаний рабочих по охране труда?","expected_topic":"occupational_training","expected_documents":["№ 175"],"expected_points":[]},
-  {"id":"RAG-003","question":"Кто проводит вводный инструктаж по охране труда?","expected_topic":"occupational_briefing","expected_documents":["№ 175"],"expected_points":[]},
-  {"id":"RAG-004","question":"Какой инструктаж проводится при разовых работах, не связанных с прямыми обязанностями?","expected_topic":"occupational_briefing","expected_documents":["№ 175"],"expected_points":[]},
-  {"id":"RAG-005","question":"Что делать работнику, если ему не выдали СИЗ?","expected_topic":"ppe_nonprovision","expected_documents":["356-З"],"expected_points":[]},
-  {"id":"RAG-006","question":"Имеет ли работник право отказаться от работы без СИЗ?","expected_topic":"ppe_nonprovision","expected_documents":["356-З"],"expected_points":[]},
-  {"id":"RAG-007","question":"Кто обязан оплачивать обязательный периодический медицинский осмотр?","expected_topic":"medical_examinations","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-008","question":"Какова периодичность аттестации рабочих мест по условиям труда?","expected_topic":"workplace_attestation","expected_documents":["253"],"expected_points":["19"]},
-  {"id":"RAG-009","question":"Когда проводится внеочередная аттестация рабочих мест?","expected_topic":"workplace_attestation","expected_documents":["253"],"expected_points":[]},
-  {"id":"RAG-010","question":"Что делать, если работник не сообщил о несчастном случае руководителю?","expected_topic":"accident_investigation","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-011","question":"Какие требования установлены для обучения работников первой группы при работе на высоте?","expected_topic":"height_work_training","expected_documents":["№ 11"],"expected_points":["50"]},
-  {"id":"RAG-012","question":"На кого распространяется Закон Республики Беларусь Об охране труда № 356-З?","expected_topic":"law_scope","expected_documents":["356-З"],"expected_points":["3"]},
-  {"id":"RAG-013","question":"Какая предельная норма разового подъема тяжести вручную для мужчины?","expected_topic":"lifting_and_moving_loads","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-014","question":"Можно ли допускать к работе сотрудника, не прошедшего проверку знаний по охране труда?","expected_topic":"occupational_training","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-015","question":"Какой порядок действий при угрозе жизни и здоровью работника?","expected_topic":"ppe_nonprovision","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-016","question":"Кто отвечает за проведение инструктажа по охране труда?","expected_topic":"occupational_briefing","expected_documents":["№ 175"],"expected_points":[]},
-  {"id":"RAG-017","question":"Как часто нужно осматривать лестницу-стремянку?","expected_topic":"portable_ladder","expected_documents":["№ 11"],"expected_points":["54"]},
-  {"id":"RAG-018","question":"Какой срок действия результатов аттестации рабочих мест?","expected_topic":"workplace_attestation","expected_documents":["253"],"expected_points":["19"]},
-  {"id":"RAG-019","question":"Какие медицинские осмотры работников являются обязательными?","expected_topic":"medical_examinations","expected_documents":[],"expected_points":[]},
-  {"id":"RAG-020","question":"Что обязан сделать наниматель при выявлении нарушения требований охраны труда?","expected_topic":"general","expected_documents":[],"expected_points":[]}
+  {
+    "id": "RAG-001",
+    "question": "Как часто нужно осматривать переносную лестницу?",
+    "expected_topic": "portable_ladder",
+    "expected_documents": [
+      "№ 11"
+    ],
+    "expected_points": [
+      "54"
+    ],
+    "category": "portable_ladder",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-002",
+    "question": "Как часто проводят периодическую проверку знаний рабочих по охране труда?",
+    "expected_topic": "occupational_training",
+    "expected_documents": [
+      "№ 175"
+    ],
+    "expected_points": [],
+    "category": "occupational_training",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-003",
+    "question": "Кто проводит вводный инструктаж по охране труда?",
+    "expected_topic": "occupational_briefing",
+    "expected_documents": [
+      "№ 175"
+    ],
+    "expected_points": [],
+    "category": "occupational_briefing",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-004",
+    "question": "Какой инструктаж проводится при разовых работах, не связанных с прямыми обязанностями?",
+    "expected_topic": "occupational_briefing",
+    "expected_documents": [
+      "№ 175"
+    ],
+    "expected_points": [],
+    "category": "occupational_briefing",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-005",
+    "question": "Что делать работнику, если ему не выдали СИЗ?",
+    "expected_topic": "ppe_nonprovision",
+    "expected_documents": [
+      "356-З"
+    ],
+    "expected_points": [],
+    "category": "ppe",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-006",
+    "question": "Имеет ли работник право отказаться от работы без СИЗ?",
+    "expected_topic": "ppe_nonprovision",
+    "expected_documents": [
+      "356-З"
+    ],
+    "expected_points": [],
+    "category": "ppe",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-007",
+    "question": "Кто обязан оплачивать обязательный периодический медицинский осмотр?",
+    "expected_topic": "medical_examinations",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "medical_examinations",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-008",
+    "question": "Какова периодичность аттестации рабочих мест по условиям труда?",
+    "expected_topic": "workplace_attestation",
+    "expected_documents": [
+      "253"
+    ],
+    "expected_points": [
+      "19"
+    ],
+    "category": "workplace_attestation",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-009",
+    "question": "Когда проводится внеочередная аттестация рабочих мест?",
+    "expected_topic": "workplace_attestation",
+    "expected_documents": [
+      "253"
+    ],
+    "expected_points": [],
+    "category": "workplace_attestation",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-010",
+    "question": "Что делать, если работник не сообщил о несчастном случае руководителю?",
+    "expected_topic": "accident_investigation",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "accident_investigation",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-011",
+    "question": "Какие требования установлены для обучения работников первой группы при работе на высоте?",
+    "expected_topic": "height_work_training",
+    "expected_documents": [
+      "№ 11"
+    ],
+    "expected_points": [
+      "50"
+    ],
+    "category": "height_work",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-012",
+    "question": "На кого распространяется Закон Республики Беларусь Об охране труда № 356-З?",
+    "expected_topic": "law_scope",
+    "expected_documents": [
+      "356-З"
+    ],
+    "expected_points": [
+      "3"
+    ],
+    "category": "law_scope",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-013",
+    "question": "Какая предельная норма разового подъема тяжести вручную для мужчины?",
+    "expected_topic": "lifting_and_moving_loads",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "manual_handling",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-014",
+    "question": "Можно ли допускать к работе сотрудника, не прошедшего проверку знаний по охране труда?",
+    "expected_topic": "occupational_training",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "occupational_training",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-015",
+    "question": "Какой порядок действий при угрозе жизни и здоровью работника?",
+    "expected_topic": "ppe_nonprovision",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "worker_rights",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-016",
+    "question": "Кто отвечает за проведение инструктажа по охране труда?",
+    "expected_topic": "occupational_briefing",
+    "expected_documents": [
+      "№ 175"
+    ],
+    "expected_points": [],
+    "category": "occupational_briefing",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-017",
+    "question": "Как часто нужно осматривать лестницу-стремянку?",
+    "expected_topic": "portable_ladder",
+    "expected_documents": [
+      "№ 11"
+    ],
+    "expected_points": [
+      "54"
+    ],
+    "category": "portable_ladder",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-018",
+    "question": "Какой срок действия результатов аттестации рабочих мест?",
+    "expected_topic": "workplace_attestation",
+    "expected_documents": [
+      "253"
+    ],
+    "expected_points": [
+      "19"
+    ],
+    "category": "workplace_attestation",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-019",
+    "question": "Какие медицинские осмотры работников являются обязательными?",
+    "expected_topic": "medical_examinations",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "medical_examinations",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-020",
+    "question": "Что обязан сделать наниматель при выявлении нарушения требований охраны труда?",
+    "expected_topic": "general",
+    "expected_documents": [],
+    "expected_points": [],
+    "category": "general_occupational_safety",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "legacy_expectation_pending_official_source_review"
+  }
 ]
