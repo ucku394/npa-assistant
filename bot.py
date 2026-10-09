@@ -70,6 +70,10 @@ logging.basicConfig(
     ),
 )
 
+# httpx INFO logs may include Telegram API URLs with bot credentials.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
