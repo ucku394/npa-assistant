@@ -160,8 +160,31 @@ class ChatService:
                 kind_pattern + r"\s*" + re.escape(number) + r"(?!\d)",
                 re.IGNORECASE,
             )
+            # Bind an explicit legal reference to a nearby SOURCE marker. When
+            # multiple acts are cited, a different source elsewhere in the answer
+            # must not be allowed to validate this claim by accident.
+            window_start = max(0, match.start() - 180)
+            window_end = min(len(text), match.end() + 180)
+            local_ids = set(ChatService._extract_source_ids(str(answer or "")[window_start:window_end]))
+            cited_documents = {
+                str(item.get("document") or "").strip()
+                for item in cited_evidence
+                if str(item.get("document") or "").strip()
+            }
+            if len(cited_documents) > 1 and not local_ids:
+                unsupported_references.append(f"{kind} {number} (no nearby source citation)")
+                continue
+            reference_evidence = (
+                [item for item in cited_evidence if str(item.get("source_id") or "").strip() in local_ids]
+                if local_ids else cited_evidence
+            )
+            reference_evidence_text = " ".join(
+                str(item.get("point") or "") + " " + str(item.get("document") or "") + " "
+                + str(item.get("excerpt") or "")
+                for item in reference_evidence
+            ).lower()
             metadata_match = False
-            for item in cited_evidence:
+            for item in reference_evidence:
                 point_text = str(item.get("point") or "").strip().lower()
                 point_numbers = re.findall(r"\d+(?:[.\-]\d+)*", point_text)
                 if number not in [value.rstrip(".") for value in point_numbers]:
@@ -174,7 +197,7 @@ class ChatService:
                     metadata_match = not point_is_paragraph or point_is_article
                 if metadata_match:
                     break
-            if not reference_re.search(evidence_reference_text) and not metadata_match:
+            if not reference_re.search(reference_evidence_text) and not metadata_match:
                 unsupported_references.append(f"{kind} {number}")
 
         if unsupported_references:
@@ -365,13 +388,13 @@ class ChatService:
         object_patterns = {
             "ladder": r"лестниц\w*",
             "lathe": r"токарн\w+\s+станк\w*",
-            "scaffold": r"(?:лес\w*|подмост\w*)",
+            "scaffold": r"(?:строительн\w+\s+лес\w*|инвентарн\w+\s+лес\w*|подмост\w*)",
             "height_work": r"работ\w*\s+на\s+высот\w*",
             "electrical_installation": r"электроустановк\w*",
             "welding": r"сварочн\w*\s+работ\w*",
             "lifting_equipment": r"(?:кран\w*|тельфер\w*|грузоподъёмн\w+\s+механизм\w*)",
             "confined_space": r"(?:замкнут\w+\s+пространств\w*|колодц\w*)",
-            "pressure_vessel": r"(?:сосуд\w*\s+под\s+давлени\w*|котл\w*)",
+            "pressure_vessel": r"(?:сосуд\w*\s+под\s+давлени\w*|котел\w*|котёл\w*)",
         }
         question_text = str(question or "").lower()
         evidence_scope = " ".join(
