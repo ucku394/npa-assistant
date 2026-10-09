@@ -195,6 +195,33 @@ def _topic_relevance_score(
 
     score = 0.0
 
+    if topic == "lathe_work":
+        for phrase, weight in (
+            ("токарный станок", 1.00),
+            ("токарных станках", 1.00),
+            ("зона обработки заготовок", 0.85),
+            ("защитный экран", 0.75),
+            ("защитный кожух", 0.75),
+            ("сблокированный с пуском станка", 0.95),
+            ("сработанными или забитыми центрами", 0.95),
+            ("рабочие плоскости кулачков", 0.90),
+            ("отрезаемый конец руками", 0.90),
+            ("эксплуатация металлообрабатывающего оборудования", 0.60),
+        ):
+            if phrase in text:
+                score += weight
+        if db_topic == "lathe_work":
+            score += 1.50
+        if "24-11" in document_name or "24–11" in document_name:
+            score += 1.20
+        point = _normalize_point_identifier(_get_point_number(chunk))
+        if point == "84":
+            score += 1.20
+        elif point == "85":
+            score += 1.30
+        elif point == "40":
+            score += 0.80
+
     if topic == "portable_ladder":
         for phrase, weight in (
             ("переносная лестница", 0.85),
@@ -698,6 +725,42 @@ def _search_chunks(
 # ============================================================
 # TARGETED SEARCH (СГРУППИРОВАННЫЙ В ОДИН ЗАПРОС)
 # ============================================================
+def _targeted_lathe_safety_search(supabase) -> List[Dict[str, Any]]:
+    """Возвращает точные пункты 40, 84 и 85 действующих Правил № 24-11."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%№ 24-11%")
+            .in_("point_num", ["40.", "84.", "85."])
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        allowed_points = {"40", "84", "85"}
+        results = [
+            chunk for chunk in results
+            if _normalize_point_identifier(_get_point_number(chunk)) in allowed_points
+        ]
+        for chunk in results:
+            chunk["_lathe_safety_targeted"] = True
+        priority = {"84": 100, "85": 95, "40": 90}
+        results.sort(
+            key=lambda chunk: priority.get(
+                _normalize_point_identifier(_get_point_number(chunk)), 0
+            ),
+            reverse=True,
+        )
+        logger.info(
+            "RAG | lathe safety targeted | points=%s",
+            [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in results],
+        )
+        return results
+    except Exception as exc:
+        logger.warning("RAG | lathe safety targeted search failed: %s", exc)
+        return []
+
+
 def _targeted_portable_ladder_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
     """Адресный поиск действующих требований к лестницам по Правилам № 11."""
     try:
@@ -1831,6 +1894,8 @@ async def _get_targeted_chunks(
             if work_break_results:
                 return work_break_results
 
+    if topic == "lathe_work":
+        return await asyncio.to_thread(_targeted_lathe_safety_search, supabase)
     if topic == "portable_ladder":
         return await asyncio.to_thread(_targeted_portable_ladder_search, supabase, user_query)
     if topic == "occupational_training":
@@ -3086,6 +3151,35 @@ def _select_legal_diverse_chunks(
             points_seen.add(point_key)
         return True
 
+    if topic == "lathe_work":
+        # Для токарных станков фиксируем нормативное ядро: ограждение/блокировка,
+        # специальные запреты и общее требование к средствам коллективной защиты.
+        lathe_pool = [chunk for chunk in ranked_chunks if chunk.get("_lathe_safety_targeted")]
+        lathe_pool.sort(
+            key=lambda chunk: (
+                {"84": 100, "85": 95, "40": 90}.get(
+                    _normalize_point_identifier(_get_point_number(chunk)), 0
+                ),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for required_point in ("84", "85", "40"):
+            for chunk in lathe_pool:
+                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
+                    _add(chunk, max_per_document=5, max_per_point=1)
+                    break
+        for chunk in lathe_pool:
+            if len(selected) >= min(limit, 5):
+                break
+            _add(chunk, max_per_document=5, max_per_point=1)
+        if selected:
+            logger.info(
+                "RAG | lathe safety final | sources=%s",
+                [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
+            )
+            return selected
+
     if topic == "portable_ladder":
         # Для лестниц действующая норма № 11 п. 54 должна быть
         # нормативным ядром. Не позволяем общему score вытеснить её.
@@ -3634,6 +3728,14 @@ async def retrieve_context(
     # Deterministic backstop for concrete legal objects that the classifier
     # may miss. Target discovery must stay inside the correct BY NPA domain.
     _q_lower = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    if topic == "general" and re.search(
+        r"\bтокарн\w*\b|\bметаллообрабатывающ\w*\s+станк\w*\b|\bхолодн\w*\s+обработк\w*\s+металл\w*\b",
+        _q_lower,
+        re.IGNORECASE,
+    ):
+        topic = "lathe_work"
+        legal_domain = "occupational_safety"
+
     if topic == "general" and re.search(
         r"\bлестниц\w*\b|\bстремянк\w*\b|\bприставн\w*\s+лестниц\w*\b",
         _q_lower,
