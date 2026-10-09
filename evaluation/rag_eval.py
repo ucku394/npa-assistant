@@ -8,6 +8,7 @@ Cases without verified official references are explicitly reported.
 """
 import asyncio
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -42,6 +43,13 @@ def validate_dataset(cases):
         if case.get("reference_verified") is True and not case.get("reference_url"):
             errors.append(f"{case_id or label}: reference_verified=true but reference_url is missing")
     return errors, warnings
+
+
+def _normalize_point(value):
+    text = str(value or "").strip().lower()
+    text = re.sub(r"^(?:пункт(?:а|е|ом)?|п\.|point)\s*", "", text)
+    text = re.sub(r"[\s.]+$", "", text)
+    return text
 
 
 def _safe_rate(rows, key):
@@ -126,7 +134,7 @@ async def run(path: str) -> None:
         if not isinstance(chunks, list):
             chunks = []
         docs = {str(x.get("document", "")).strip().lower() for x in chunks if isinstance(x, dict)}
-        points = {str(x.get("point", "")).strip() for x in chunks if isinstance(x, dict) and x.get("point")}
+        points = {_normalize_point(x.get("point")) for x in chunks if isinstance(x, dict) and x.get("point")}
         source_ids = {str(x.get("source_id", "")).strip() for x in chunks if isinstance(x, dict) and x.get("source_id")}
         expected_docs = [str(x).strip() for x in case.get("expected_documents", [])]
         expected_points = [str(x).strip() for x in case.get("expected_points", [])]
@@ -137,7 +145,7 @@ async def run(path: str) -> None:
             expected.lower() in document
             for expected in expected_docs for document in docs
         )
-        point_hit = not expected_points or bool(set(expected_points) & points)
+        point_hit = not expected_points or bool({_normalize_point(x) for x in expected_points} & points)
         source_id_hit = not expected_source_ids or bool(expected_source_ids & source_ids)
 
         grounding = rag.get("grounding")

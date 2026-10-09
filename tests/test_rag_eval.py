@@ -1,4 +1,9 @@
 """Tests for evaluation dataset schema and reporting."""
+import os
+
+os.environ.setdefault("SUPABASE_URL", "https://example.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+
 from evaluation.rag_eval import summarize, validate_dataset
 
 
@@ -62,3 +67,12 @@ def test_summary_reports_per_category_and_grounding():
     assert report["by_category"]["ppe"]["grounding_rate"] == 1.0
     assert report["official_reference_coverage"] == 1.0
     assert report["failed_cases"] == []
+
+
+
+def test_point_normalization_accepts_prefix_and_trailing_period():
+    from evaluation.rag_eval import _normalize_point
+
+    assert _normalize_point("пункт 54.") == "54"
+    assert _normalize_point("54") == "54"
+    assert _normalize_point("2.3.") == "2.3"
