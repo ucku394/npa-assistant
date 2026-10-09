@@ -256,5 +256,25 @@
     "jurisdiction": "BY",
     "reference_verified": false,
     "reference_status": "legacy_expectation_pending_official_source_review"
+  },
+  {
+    "id": "RAG-021",
+    "question": "Можно ли молоко заменить денежной компенсацией или другими видами продукции?",
+    "expected_topic": "milk_provision",
+    "expected_documents": [
+      "356-З",
+      "Трудовой кодекс",
+      "№ 205"
+    ],
+    "expected_points": [
+      "13",
+      "225"
+    ],
+    "category": "milk_provision",
+    "jurisdiction": "BY",
+    "reference_verified": false,
+    "reference_status": "official_explanatory_source_found_primary_current_rule_review_pending",
+    "reference_url": "https://etalonline.by/document/?regnum=u02003366",
+    "notes": "Official ETALONLINE Q&A dated 2020 states compensation instead of milk is allowed only during business trips or for itinerant work; cites Law 356-Z art. 13 and Labor Code art. 225. Equivalent food product list and current version require primary-act verification."
   }
 ]

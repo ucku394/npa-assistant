@@ -93,6 +93,10 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bинструкци\w*\s+по\s+охран\w*\s+труд\w*",
         r"\bнесчастн\w*\s+случа\w*",
         r"\bпрофессиональн\w*\s+заболеван\w*",
+        r"\bмолок\w*.*\bвредност\w*",
+        r"\bравноценн\w*\s+пищев\w*\s+продукт\w*",
+        r"\bвредн\w*\s+веществ\w*.*\bмолок\w*",
+        r"\bмолок\w*.*\bденежн\w*\s+компенсац\w*",
         r"\bмедицинск\w*\s+осмотр\w*",
         r"\bмедосмотр\w*",
         r"\bработ\w*\s+на\s+высот\w*",
@@ -144,6 +148,18 @@ def detect_topic(user_query: str) -> str:
 
     if not query:
         return "general"
+
+    # Milk/equivalent food products are a distinct Belarus OHS benefit topic.
+    milk_provision_patterns = [
+        r"\bмолок\w*",
+        r"\bравноценн\w*\s+пищев\w*\s+продукт\w*",
+        r"\bденежн\w*\s+компенсац\w*.*\bмолок\w*",
+        r"\bмолок\w*.*\bденежн\w*\s+компенсац\w*",
+        r"\bзамен\w*.*\bмолок\w*",
+        r"\bмолок\w*.*\bвредност\w*",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in milk_provision_patterns):
+        return "milk_provision"
 
     ppe_nonprovision_patterns = [
         r"\bсиз\b.*\bне\s+выдан\w*",
