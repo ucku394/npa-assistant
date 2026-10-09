@@ -162,11 +162,11 @@ class ChatService:
             metadata_match = False
             for item in cited_evidence:
                 point_text = str(item.get("point") or "").strip().lower()
-                point_numbers = re.findall(r"\\d+(?:[.\\-]\\d+)*", point_text)
+                point_numbers = re.findall(r"\d+(?:[.\-]\d+)*", point_text)
                 if number not in [value.rstrip(".") for value in point_numbers]:
                     continue
                 point_is_article = bool(re.search(r"стать", point_text))
-                point_is_paragraph = bool(re.search(r"пункт|^п\\.", point_text))
+                point_is_paragraph = bool(re.search(r"пункт|^п\.", point_text))
                 if kind.startswith("пункт") or kind == "п.":
                     metadata_match = not point_is_article or point_is_paragraph
                 else:
