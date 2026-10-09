@@ -106,6 +106,10 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bприставн\w*\s+лестниц\w*",
         r"\bлестниц\w*[-–—]?стремянк\w*",
         r"\bстремянк\w*",
+        # Metalworking machines, including lathes, are occupational-safety queries.
+        r"\bтокарн\w*",
+        r"\bметаллообрабатывающ\w*\s+оборудован\w*",
+        r"\bработ\w*\s+на\s+станк\w*",
         # Conveyor and continuous-transport equipment safety belongs to OHS.
         r"\bконвейер\w*",
         r"\bленточн\w*\s+конвейер\w*",
@@ -274,6 +278,16 @@ def detect_topic(user_query: str) -> str:
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_training_patterns):
         return "occupational_training"
+
+    # Dedicated retrieval mode for lathe and cold metalworking safety.
+    lathe_work_patterns = [
+        r"\bтокарн\w*",
+        r"\bработ\w*\s+на\s+металлообрабатывающ\w*\s+станк\w*",
+        r"\bметаллообрабатывающ\w*\s+оборудован\w*",
+        r"\bхолодн\w*\s+обработк\w*\s+металл\w*",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in lathe_work_patterns):
+        return "lathe_work"
 
     accident_patterns = [
         r"\bнесчастн\w*\s+случа\w*",
