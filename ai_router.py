@@ -1480,11 +1480,19 @@ _gemini_fallback_disabled_until = 0.0
 def generate_answer(
     prompt: str,
     enforce_source_grounding: bool = True,
+    request_id: Optional[str] = None,
 ) -> str:
     global _gemini_disabled_until
     global _gemini_fallback_disabled_until
 
+    request_id = str(request_id or "untracked")
     _validate_prompt(prompt)
+    logger.info(
+        "AI | request_id=%s | generation_start | prompt_chars=%s | source_grounding=%s",
+        request_id,
+        len(prompt),
+        enforce_source_grounding,
+    )
 
     # --------------------------------------------------------
     # 1. PRIMARY GEMINI
@@ -1525,6 +1533,12 @@ def generate_answer(
                             )
                             result = retry_result
                     _gemini_disabled_until = 0.0
+                    logger.info(
+                        "AI | request_id=%s | provider_success=gemini_primary | model=%s | chars=%s",
+                        request_id,
+                        CHAT_MODEL,
+                        len(result),
+                    )
                     return result
 
                 except Exception as e:
@@ -1660,7 +1674,8 @@ def generate_answer(
                 _gemini_fallback_disabled_until = 0.0
 
                 logger.info(
-                    "AI | Gemini fallback success | model=%s | chars=%s",
+                    "AI | request_id=%s | Gemini fallback success | model=%s | chars=%s",
+                    request_id,
                     GEMINI_FALLBACK_MODEL,
                     len(result),
                 )
@@ -1722,14 +1737,21 @@ def generate_answer(
 
     if openrouter_client is not None:
         try:
-            return generate_with_openrouter(
+            result = generate_with_openrouter(
                 prompt,
                 enforce_source_grounding=enforce_source_grounding,
             )
+            logger.info(
+                "AI | request_id=%s | provider_success=openrouter | chars=%s",
+                request_id,
+                len(result),
+            )
+            return result
 
         except Exception as e:
             logger.exception(
-                "AI | OpenRouter failed | error=%s",
+                "AI | request_id=%s | OpenRouter failed | error=%s",
+                request_id,
                 e,
             )
 
@@ -1737,6 +1759,7 @@ def generate_answer(
     # 4. NOTHING WORKED
     # --------------------------------------------------------
 
+    logger.error("AI | request_id=%s | all_providers_failed", request_id)
     raise RuntimeError(
         "All AI providers failed"
     )
