@@ -163,9 +163,26 @@ class ChatService:
             # Bind an explicit legal reference to a nearby SOURCE marker. When
             # multiple acts are cited, a different source elsewhere in the answer
             # must not be allowed to validate this claim by accident.
-            window_start = max(0, match.start() - 180)
-            window_end = min(len(text), match.end() + 180)
-            local_ids = set(ChatService._extract_source_ids(str(answer or "")[window_start:window_end]))
+            sentence_starts = [
+                text.rfind(".", 0, match.start()),
+                text.rfind("!", 0, match.start()),
+                text.rfind("?", 0, match.start()),
+                text.rfind("\\n", 0, match.start()),
+            ]
+            sentence_start = max(sentence_starts) + 1
+            sentence_ends = [
+                position for position in (
+                    text.find(".", match.end()),
+                    text.find("!", match.end()),
+                    text.find("?", match.end()),
+                    text.find("\\n", match.end()),
+                )
+                if position >= 0
+            ]
+            sentence_end = min(sentence_ends) + 1 if sentence_ends else len(text)
+            local_ids = set(
+                ChatService._extract_source_ids(str(answer or "")[sentence_start:sentence_end])
+            )
             cited_documents = {
                 str(item.get("document") or "").strip()
                 for item in cited_evidence
