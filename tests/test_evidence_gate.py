@@ -185,3 +185,30 @@ def test_claim_evidence_allows_currentness_with_verified_metadata():
         question="Какая редакция действует?",
     )
     assert result["passed"] is True
+
+
+def test_claim_evidence_does_not_mix_point_from_another_act():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Дополнительный источник [SOURCE:NPA_DOC_B]. "
+            "Согласно пункту 84 требуется выполнить действие [SOURCE:NPA_DOC_A]."
+        ),
+        evidence_map=[
+            {
+                "source_id": "NPA_DOC_A",
+                "document": "Правила по охране труда",
+                "point": "85.",
+                "excerpt": "Работник обязан соблюдать требования безопасности.",
+            },
+            {
+                "source_id": "NPA_DOC_B",
+                "document": "Другой нормативный акт",
+                "point": "84.",
+                "excerpt": "Работник обязан соблюдать требования безопасности.",
+            },
+        ],
+        query_profile={"question_type": "general"},
+        question="Что установлено пунктом 84?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "legal_reference_not_found_in_cited_evidence"
