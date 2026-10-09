@@ -536,7 +536,7 @@ def split_text_into_chunks(
         heading = lines[0].strip()
         body_lines = lines[1:]
         heading_prefix = heading[:250]
-        content_limit = max(400, max_chars - min(len(heading_prefix) + 30, 350))
+        content_limit = max(200, max_chars - len(heading_prefix) - overlap_chars - 10)
         pieces: List[str] = []
         for line in body_lines:
             pieces.extend(split_long_paragraph(line, content_limit))
