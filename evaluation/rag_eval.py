@@ -57,6 +57,8 @@ def validate_dataset(cases):
                     )
             verified_on = str(case.get("verified_on") or "").strip()
             try:
+                if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", verified_on):
+                    raise ValueError("expected ISO date")
                 date.fromisoformat(verified_on)
             except ValueError:
                 errors.append(f"{case_id or label}: reference_verified=true requires verified_on in YYYY-MM-DD format")
