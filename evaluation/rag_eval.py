@@ -10,6 +10,8 @@ import asyncio
 import json
 import re
 import sys
+from datetime import date
+from urllib.parse import urlparse
 from collections import defaultdict
 from pathlib import Path
 
@@ -40,8 +42,28 @@ def validate_dataset(cases):
             warnings.append(f"{case_id or label}: no expected_topic")
         if not case.get("expected_documents") and not case.get("expected_points"):
             warnings.append(f"{case_id or label}: no document/point retrieval target")
-        if case.get("reference_verified") is True and not case.get("reference_url"):
-            errors.append(f"{case_id or label}: reference_verified=true but reference_url is missing")
+        if case.get("reference_verified") is True:
+            reference_url = str(case.get("reference_url") or "").strip()
+            if not reference_url:
+                errors.append(f"{case_id or label}: reference_verified=true but reference_url is missing")
+            else:
+                parsed = urlparse(reference_url)
+                host = (parsed.hostname or "").lower().rstrip(".")
+                official_domains = ("pravo.by", "etalonline.by", "ncpi.gov.by")
+                official_host = any(host == domain or host.endswith("." + domain) for domain in official_domains)
+                if parsed.scheme != "https" or not official_host:
+                    errors.append(
+                        f"{case_id or label}: verified reference must use HTTPS on an approved Belarus legal-information domain"
+                    )
+            verified_on = str(case.get("verified_on") or "").strip()
+            try:
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", verified_on):
+                    raise ValueError("expected ISO date")
+                date.fromisoformat(verified_on)
+            except ValueError:
+                errors.append(f"{case_id or label}: reference_verified=true requires verified_on in YYYY-MM-DD format")
+            if case.get("jurisdiction") != "BY":
+                errors.append(f"{case_id or label}: verified reference must explicitly set jurisdiction='BY'")
     return errors, warnings
 
 
