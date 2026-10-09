@@ -533,15 +533,27 @@ def split_text_into_chunks(
             chunks.append((point_num, unit_text))
             continue
 
-        heading = lines[0].strip()
-        body_lines = lines[1:]
-        heading_prefix = heading[:250]
+        first_line = lines[0].strip()
+        first_marker = marker_pattern.match(first_line)
+        if first_marker:
+            heading_prefix = first_marker.group(0).strip()
+            first_body = first_line[first_marker.end():].strip()
+            body_lines = ([first_body] if first_body else []) + lines[1:]
+        else:
+            # Неструктурированный длинный абзац не должен дублироваться
+            # или обрезаться из-за искусственного заголовка.
+            heading_prefix = ""
+            body_lines = lines
+
         content_limit = max(200, max_chars - len(heading_prefix) - overlap_chars - 10)
         pieces: List[str] = []
         for line in body_lines:
             pieces.extend(split_long_paragraph(line, content_limit))
         if not pieces:
-            pieces = split_long_paragraph(unit_text, max_chars)
+            pieces = split_long_paragraph(
+                unit_text[len(first_marker.group(0)):] if first_marker else unit_text,
+                content_limit,
+            )
 
         current = heading_prefix
         previous_tail = ""
