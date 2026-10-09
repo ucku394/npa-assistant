@@ -121,6 +121,56 @@ class ChatService:
             for item in cited_evidence
         )
 
+        # A valid SOURCE_ID is not sufficient if the answer cites a point/article
+        # that is absent from the evidence attached to that source.
+        if not cited_evidence:
+            return {
+                "passed": False,
+                "reason": "no_cited_evidence",
+                "question_type": qtype,
+                "cited_evidence_count": 0,
+            }
+
+        evidence_reference_text = " ".join(
+            [
+                str(item.get("point") or "")
+                + " "
+                + str(item.get("document") or "")
+                + " "
+                + str(item.get("excerpt") or "")
+                for item in cited_evidence
+            ]
+        ).lower()
+        reference_pattern = re.compile(
+            r"\\b(?P<kind>пункт(?:а|ом|е)?|п\\.|статья|статьи|статьёй|статье|ст\\.)"
+            r"\\s*(?P<number>\\d+(?:[.\\-]\\d+)*)",
+            re.IGNORECASE,
+        )
+        unsupported_references = []
+        for match in reference_pattern.finditer(text):
+            kind = match.group("kind").lower()
+            number = match.group("number").rstrip(".")
+            kind_pattern = (
+                r"(?:пункт(?:а|ом|е)?|п\\.)"
+                if kind.startswith("пункт") or kind == "п."
+                else r"(?:статья|статьи|статьёй|статье|ст\\.)"
+            )
+            reference_re = re.compile(
+                kind_pattern + r"\\s*" + re.escape(number) + r"(?!\\d)",
+                re.IGNORECASE,
+            )
+            if not reference_re.search(evidence_reference_text):
+                unsupported_references.append(f"{kind} {number}")
+
+        if unsupported_references:
+            return {
+                "passed": False,
+                "reason": "legal_reference_not_found_in_cited_evidence",
+                "unsupported_references": unsupported_references[:10],
+                "question_type": qtype,
+                "cited_evidence_count": len(cited_evidence),
+            }
+
         contradiction_absent = bool(
             re.search(
                 r"(?:не\s+установлен\w*|не\s+определен\w*|"
@@ -710,9 +760,44 @@ class ChatService:
                         "not_cited": required_source_not_cited,
                     }
 
-        # Повторно проверяем обязательный п.14 после grounding-retry:
-        # финальный ответ может уже содержать нужную ссылку, поэтому старый
-        # результат проверки нельзя переносить без пересчета.
+        # Re-evaluate every mandatory-source citation against the final answer.
+        # A retry may change citations, so checks from the first answer are stale.
+        final_answer_source_ids = set(self._extract_source_ids(answer))
+        required_source_not_cited = required_article_49 and bool(article_49_source_ids) and not bool(
+            final_answer_source_ids.intersection(article_49_source_ids)
+        )
+        required_article_11_not_cited = required_article_11 and bool(article_11_source_ids) and not bool(
+            final_answer_source_ids.intersection(article_11_source_ids)
+        )
+        instruction_list_source_not_cited = required_instruction_list_compiler and bool(instruction_list_source_ids) and not bool(
+            final_answer_source_ids.intersection(instruction_list_source_ids)
+        )
+        instruction_role_source_not_cited = required_instruction_osh_service_role and bool(instruction_role_source_ids) and not bool(
+            final_answer_source_ids.intersection(instruction_role_source_ids)
+        )
+        instruction_source_not_cited = required_instruction_developer and bool(instruction_source_ids) and not bool(
+            final_answer_source_ids.intersection(instruction_source_ids)
+        )
+        required_source_failures = {
+            "article_49_missing": required_source_missing,
+            "article_49_not_cited": required_source_not_cited,
+            "article_11_missing": required_article_11_missing,
+            "article_11_not_cited": required_article_11_not_cited,
+            "instruction_list_missing": instruction_list_source_missing,
+            "instruction_list_not_cited": instruction_list_source_not_cited,
+            "instruction_role_missing": instruction_role_source_missing,
+            "instruction_role_not_cited": instruction_role_source_not_cited,
+            "instruction_developer_missing": instruction_source_missing,
+            "instruction_developer_not_cited": instruction_source_not_cited,
+        }
+        if any(required_source_failures.values()):
+            claim_evidence["passed"] = False
+            claim_evidence["required_source_gate"] = {
+                "required": True,
+                "failures": required_source_failures,
+            }
+
+        # Keep the explicit developer-source details in the response for diagnostics.
         if required_instruction_developer:
             instruction_source_not_cited = bool(instruction_source_ids) and not any(
                 source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids
