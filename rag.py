@@ -692,6 +692,7 @@ def _search_chunks(
             )
             chunk["_hybrid_rrf_score"] = _safe_float(chunk.get("rrf_score"))
             chunk["_hybrid_final_score"] = _safe_float(chunk.get("final_score"))
+            chunk["_search_mode"] = "hybrid"
 
         return data
 
@@ -718,6 +719,7 @@ def _search_chunks(
             chunk["similarity"] = _safe_float(chunk.get("similarity"))
             chunk["_hybrid_rrf_score"] = 0.0
             chunk["_hybrid_final_score"] = 0.0
+            chunk["_search_mode"] = "semantic_fallback"
 
         return data
 
@@ -3864,6 +3866,8 @@ async def retrieve_context(
             "cross_reference": cross_reference,
             "domain_specific_count": 0,
             "topic_specific_count": 0,
+            "search_diagnostics": search_diagnostics,
+            "failure_reason": "all_embeddings_empty",
         }
 
     async def _run_search(
@@ -3883,6 +3887,7 @@ async def retrieve_context(
     # Keep concurrent Supabase searches bounded. This lowers peak RAM while
     # preserving the same queries, search limits, scoring and final selection.
     clean_groups: List[List[Dict[str, Any]]] = []
+    search_diagnostics: List[Dict[str, Any]] = []
     search_concurrency = max(1, int(os.getenv("RAG_SEARCH_CONCURRENCY", "2")))
 
     for batch_start in range(0, len(valid_queries), search_concurrency):
@@ -3910,9 +3915,49 @@ async def retrieve_context(
                     result,
                 )
                 clean_groups.append([])
+                search_diagnostics.append({
+                    "query": valid_queries[index],
+                    "mode": "error",
+                    "result_count": 0,
+                    "error": type(result).__name__,
+                    "top_results": [],
+                })
                 continue
 
-            clean_groups.append(result or [])
+            results = result or []
+            clean_groups.append(results)
+            top_results = [
+                {
+                    "document": _get_document_name(chunk),
+                    "point": _get_point_number(chunk),
+                    "semantic_score": round(_safe_float(chunk.get("semantic_score", chunk.get("similarity"))), 4),
+                    "lexical_rank": chunk.get("lexical_rank"),
+                    "rrf_score": round(_safe_float(chunk.get("rrf_score")), 6),
+                    "search_mode": chunk.get("_search_mode", "hybrid"),
+                }
+                for chunk in results[:5]
+            ]
+            search_mode = (
+                results[0].get("_search_mode", "hybrid")
+                if results else "hybrid"
+            )
+            search_diagnostics.append({
+                "query": valid_queries[index],
+                "mode": search_mode,
+                "result_count": len(results),
+                "error": None,
+                "top_results": top_results,
+            })
+            logger.info(
+                "RAG | search_result | query_index=%s | mode=%s | count=%s | top=%s",
+                index,
+                search_mode,
+                len(results),
+                [
+                    f"{item['document']}#{item['point']}|sem={item['semantic_score']}|lex={item['lexical_rank']}"
+                    for item in top_results
+                ],
+            )
 
     query_roles = [
         "main" if index == 0 else "expanded"
@@ -3992,6 +4037,8 @@ async def retrieve_context(
             "cross_reference": cross_reference,
             "domain_specific_count": 0,
             "topic_specific_count": 0,
+            "search_diagnostics": search_diagnostics,
+            "failure_reason": "no_candidates_after_search_and_targeted_retrieval",
         }
 
     domain_specific_count = sum(
@@ -4074,6 +4121,17 @@ async def retrieve_context(
         query_profile=query_profile,
     )
 
+    final_source_diagnostics = [
+        {
+            "source_id": build_source_id(chunk, index),
+            "document": _get_document_name(chunk),
+            "point": _get_point_number(chunk),
+            "combined_score": round(_safe_float(chunk.get("_combined_score")), 4),
+            "semantic_score": round(_safe_float(chunk.get("_best_similarity", _semantic_score(chunk))), 4),
+            "search_mode": chunk.get("_search_mode", "targeted_or_merged"),
+        }
+        for index, chunk in enumerate(final_chunks, start=1)
+    ]
     logger.info(
         "RAG | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
         len(final_chunks),
@@ -4081,8 +4139,8 @@ async def retrieve_context(
         special_category,
         special_issue,
         [
-            f"{_get_document_name(chunk)}#{_get_point_number(chunk)}"
-            for chunk in final_chunks
+            f"{item['source_id']}:{item['document']}#{item['point']}|score={item['combined_score']}"
+            for item in final_source_diagnostics
         ],
     )
 
@@ -4123,6 +4181,9 @@ async def retrieve_context(
         "cross_reference": cross_reference,
         "domain_specific_count": domain_specific_count,
         "topic_specific_count": topic_specific_count,
+        "search_diagnostics": search_diagnostics,
+        "final_source_diagnostics": final_source_diagnostics,
+        "failure_reason": None if final_chunks else "final_selection_empty",
     }
 
 
