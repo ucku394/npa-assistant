@@ -167,7 +167,7 @@ class ChatService:
                 text.rfind(".", 0, match.start()),
                 text.rfind("!", 0, match.start()),
                 text.rfind("?", 0, match.start()),
-                text.rfind("\\n", 0, match.start()),
+                text.rfind("\n", 0, match.start()),
             ]
             sentence_start = max(sentence_starts) + 1
             sentence_ends = [
@@ -175,7 +175,7 @@ class ChatService:
                     text.find(".", match.end()),
                     text.find("!", match.end()),
                     text.find("?", match.end()),
-                    text.find("\\n", match.end()),
+                    text.find("\n", match.end()),
                 )
                 if position >= 0
             ]
