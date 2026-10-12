@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "jurisdiction": "Belarus",
-  "description": "Initial retrieval smoke benchmark. Expected document titles are grounded in the current indexed corpus; expected point numbers are intentionally omitted until manually validated against official source texts.",
+  "description": "Cross-topic retrieval benchmark with focused regression cases for milk substitution and ladder pre-use inspection. Expected document presence measures retrieval only, not answer correctness.",
   "cases": [
     {
       "id": "med_exam_74",
@@ -106,6 +106,24 @@
         "№ 42"
       ],
       "domain": "sanitary"
+    },
+    {
+      "id": "milk_substitution_260",
+      "query": "Можно ли молоко заменить денежной компенсацией или другими видами продукции?",
+      "expected_document_contains": [
+        "№ 260"
+      ],
+      "domain": "occupational_safety",
+      "topic": "milk_provision"
+    },
+    {
+      "id": "ladder_before_use_11",
+      "query": "Нужно ли осматривать лестницу перед каждым применением?",
+      "expected_document_contains": [
+        "№ 11"
+      ],
+      "domain": "occupational_safety",
+      "topic": "portable_ladder"
     }
   ]
 }
