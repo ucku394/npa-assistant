@@ -8,6 +8,7 @@ known source documents and point numbers.
 import pytest
 
 from rag_query_classifier import detect_legal_domain, detect_topic
+from rag_query_generator import build_search_queries
 
 
 @pytest.mark.parametrize(
@@ -46,3 +47,26 @@ def test_topic_routing_across_common_ohs_tasks(query, expected_topic):
 def test_empty_query_falls_back_to_general():
     assert detect_legal_domain("") == "general"
     assert detect_topic("") == "general"
+
+
+
+def test_milk_replacement_search_keeps_short_lexical_queries_in_top_eight():
+    query = "Можно ли молоко заменить денежной компенсацией или другими видами продукции?"
+    queries = build_search_queries(
+        query,
+        detect_topic(query),
+        detect_legal_domain(query),
+        [],
+    )
+    normalized = [item.casefold() for item in queries]
+
+    assert len(queries) <= 8
+    assert "денежная компенсация" in normalized
+    assert "замена молока" in normalized
+    assert "равноценными пищевыми продуктами" in normalized
+
+
+def test_milk_substitution_is_routed_to_occupational_safety():
+    query = "Можно ли молоко заменить денежной компенсацией или другими видами продукции?"
+    assert detect_legal_domain(query) == "occupational_safety"
+    assert detect_topic(query) == "milk_provision"
