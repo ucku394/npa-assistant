@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "jurisdiction": "Belarus",
+  "description": "Initial retrieval smoke benchmark. Expected document titles are grounded in the current indexed corpus; expected point numbers are intentionally omitted until manually validated against official source texts.",
+  "cases": [
+    {
+      "id": "med_exam_74",
+      "query": "Как организовать обязательные медицинские осмотры работников?",
+      "expected_document_contains": [
+        "№ 74"
+      ],
+      "domain": "occupational_safety",
+      "topic": "medical_examinations"
+    },
+    {
+      "id": "accident_30",
+      "query": "Как расследовать несчастный случай на производстве?",
+      "expected_document_contains": [
+        "№ 30",
+        "№ 81"
+      ],
+      "domain": "occupational_safety",
+      "topic": "accident_investigation"
+    },
+    {
+      "id": "fire_82",
+      "query": "Какие требования пожарной безопасности необходимо соблюдать на предприятии?",
+      "expected_document_contains": [
+        "№ 82"
+      ],
+      "domain": "fire_safety",
+      "topic": "general"
+    },
+    {
+      "id": "height_11",
+      "query": "Какие требования охраны труда при выполнении работ на высоте?",
+      "expected_document_contains": [
+        "№ 11"
+      ],
+      "domain": "occupational_safety",
+      "topic": "height_work_training"
+    },
+    {
+      "id": "lathe_24_11",
+      "query": "Какие требования безопасности соблюдать при работе на токарном станке?",
+      "expected_document_contains": [
+        "№ 24-11"
+      ],
+      "domain": "occupational_safety",
+      "topic": "lathe_work"
+    },
+    {
+      "id": "conveyor_88",
+      "query": "Какие требования безопасности при эксплуатации ленточного конвейера?",
+      "expected_document_contains": [
+        "№ 88"
+      ],
+      "domain": "occupational_safety",
+      "topic": "general"
+    },
+    {
+      "id": "food_122",
+      "query": "Какие требования охраны труда действуют при производстве пищевой продукции?",
+      "expected_document_contains": [
+        "№ 122"
+      ],
+      "domain": "occupational_safety",
+      "topic": "general"
+    },
+    {
+      "id": "attestation_253",
+      "query": "Как проводится аттестация рабочих мест по условиям труда?",
+      "expected_document_contains": [
+        "№ 253"
+      ],
+      "domain": "occupational_safety",
+      "topic": "workplace_attestation"
+    },
+    {
+      "id": "ppe_209",
+      "query": "Какие правила обеспечения работников средствами индивидуальной защиты?",
+      "expected_document_contains": [
+        "№209",
+        "№ 209"
+      ],
+      "domain": "occupational_safety",
+      "topic": "general"
+    },
+    {
+      "id": "industrial_354",
+      "query": "Какие основные требования законодательства о промышленной безопасности?",
+      "expected_document_contains": [
+        "№ 354-З"
+      ],
+      "domain": "industrial_safety",
+      "topic": "general"
+    },
+    {
+      "id": "training_175",
+      "query": "Как организовать обучение, стажировку, инструктаж и проверку знаний по охране труда?",
+      "expected_document_contains": [
+        "№ 175"
+      ],
+      "domain": "occupational_safety",
+      "topic": "occupational_briefing"
+    },
+    {
+      "id": "sanitary_42",
+      "query": "Какие санитарно-эпидемиологические требования нужно соблюдать на производстве?",
+      "expected_document_contains": [
+        "№ 42"
+      ],
+      "domain": "sanitary",
+      "topic": "general"
+    }
+  ]
+}
