@@ -195,6 +195,37 @@ def _topic_relevance_score(
 
     score = 0.0
 
+    if topic == "milk_provision":
+        # Prioritize Decree No. 260 and the provision matching the asked sub-question.
+        # Ranking is not a substitute for checking the retrieved legal text.
+        is_decree_260 = bool(
+            re.search(r"№\s*260\b", document_name, flags=re.IGNORECASE)
+            or re.search(r"\b260\b", document_name, flags=re.IGNORECASE)
+        )
+        if is_decree_260:
+            score += 1.25
+        if db_topic == "milk_provision":
+            score += 0.80
+
+        point = _normalize_point_identifier(_get_point_number(chunk))
+        query_for_scoring = str(chunk.get("_user_query_for_scoring") or "").lower()
+        if point == "9" and any(marker in query_for_scoring for marker in ("сколько", "норма", "объем", "объём", "литр")):
+            score += 1.60
+        elif point == "8" and any(marker in query_for_scoring for marker in ("компенсац", "командиров", "разъезд")):
+            score += 1.60
+        elif point == "13" and any(marker in query_for_scoring for marker in ("замен", "равноцен", "продукт", "денежн", "компенсац")):
+            score += 1.60
+
+        relevant_markers = (
+            "молоко",
+            "равноценными пищевыми продуктами",
+            "денежная компенсация",
+            "вредными веществами",
+            "командировках",
+            "разъездным характером работы",
+        )
+        score += min(sum(1 for marker in relevant_markers if marker in text) * 0.12, 0.60)
+
     if topic == "lathe_work":
         for phrase, weight in (
             ("токарный станок", 1.00),
@@ -2103,6 +2134,8 @@ def _intent_relevance_score(
 
     markers = {
         "refusal": ["отказ", "не приступ", "приостанов", "не выполнять"],
+        "permission": ["допускается", "разрешается", "не допускается", "не разрешается", "запрещается", "денежная компенсация"],
+        "quantity": ["0,5 литра", "0.5 литра", "за рабочий день", "за рабочий день (смену)", "норма выдачи"],
         "danger": ["угроз", "опасност", "жизни", "здоров", "риск"],
         "employee_right": ["имеет право", "право работника", "вправе"],
         "employer_duty": ["обязан", "обязанность нанимателя", "наниматель обязан", "работодатель обязан"],
