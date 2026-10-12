@@ -65,6 +65,9 @@ async def evaluate_case(case, supabase):
                         break
             search_docs.extend(docs)
 
+    # De-duplicate documents while preserving first-seen order: diagnostics
+    # repeat the same source across hybrid/semantic/lexical lists.
+    search_docs = list(dict.fromkeys(search_docs))
     final_docs = [chunk_doc_name(chunk) for chunk in result.get("chunks", [])]
     search_hit = any(expected_doc_match(doc, expected) for doc in search_docs)
     final_hit = any(expected_doc_match(doc, expected) for doc in final_docs)
