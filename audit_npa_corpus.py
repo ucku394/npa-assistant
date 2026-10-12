@@ -52,7 +52,7 @@ def main():
 
     chunks = fetch_all(
         "npa_chunks",
-        "id,doc_name,document_id,topic,legal_domain,status,source_url,metadata,embedding,search_text",
+        "id,doc_name,document_id,topic,legal_domain,status,source_url,metadata,search_text",
     )
     documents = fetch_all(
         "npa_documents",
@@ -114,7 +114,6 @@ def main():
             "chunks_missing_legal_domain": sum(not row.get("legal_domain") for row in chunks),
             "chunks_missing_source_url": sum(not row.get("source_url") for row in chunks),
             "chunks_missing_metadata": sum(not row.get("metadata") for row in chunks),
-            "chunks_missing_embedding": sum(not row.get("embedding") for row in chunks),
             "chunks_missing_search_text": sum(not row.get("search_text") for row in chunks),
             "chunks_missing_document_id": missing_doc_links,
             "orphan_chunks": orphan_chunks,
