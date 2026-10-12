@@ -231,6 +231,20 @@ def build_search_queries(
     universal_profile["legal_query_plan"] = legal_plan
     queries: List[str] = [original]
 
+    # Short lexical queries are essential for inflected Russian legal terms.
+    # PGroonga's query syntax does not reliably stem every inflection, so a
+    # long natural-language question can yield zero lexical hits even when the
+    # exact governing paragraph is indexed. Keep these first so the final
+    # eight-query budget cannot discard them behind generic expansions.
+    if topic == "milk_provision":
+        queries.extend([
+            "денежная компенсация",
+            "денежной компенсацией",
+            "замена молока",
+            "равноценными пищевыми продуктами",
+            "молока товарами продуктами",
+        ])
+
     if universal_profile.get("event") == "law_scope":
         queries.extend(build_universal_search_queries(universal_profile, original))
     # Универсальный planner добавляет юридические формулировки без удаления
