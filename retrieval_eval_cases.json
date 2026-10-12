@@ -28,8 +28,7 @@
       "expected_document_contains": [
         "№ 82"
       ],
-      "domain": "fire_safety",
-      "topic": "general"
+      "domain": "fire_safety"
     },
     {
       "id": "height_11",
@@ -55,8 +54,7 @@
       "expected_document_contains": [
         "№ 88"
       ],
-      "domain": "occupational_safety",
-      "topic": "general"
+      "domain": "occupational_safety"
     },
     {
       "id": "food_122",
@@ -64,8 +62,7 @@
       "expected_document_contains": [
         "№ 122"
       ],
-      "domain": "occupational_safety",
-      "topic": "general"
+      "domain": "occupational_safety"
     },
     {
       "id": "attestation_253",
@@ -83,8 +80,7 @@
         "№209",
         "№ 209"
       ],
-      "domain": "occupational_safety",
-      "topic": "general"
+      "domain": "occupational_safety"
     },
     {
       "id": "industrial_354",
@@ -92,8 +88,7 @@
       "expected_document_contains": [
         "№ 354-З"
       ],
-      "domain": "industrial_safety",
-      "topic": "general"
+      "domain": "industrial_safety"
     },
     {
       "id": "training_175",
@@ -110,8 +105,7 @@
       "expected_document_contains": [
         "№ 42"
       ],
-      "domain": "sanitary",
-      "topic": "general"
+      "domain": "sanitary"
     }
   ]
 }
