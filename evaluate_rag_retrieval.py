@@ -43,17 +43,42 @@ async def evaluate_case(case, supabase):
     result = await retrieve_context(case["query"], supabase, request_id=f"eval-{case['id']}")
     expected = case["expected_document_contains"]
 
+    # Keep ordered result lists separately from the de-duplicated hit check.
+    # Diagnostics can contain the same document in multiple search modes; ranking
+    # is therefore measured per mode, while the aggregate search rank uses the
+    # first occurrence across diagnostic groups.
     search_docs = []
+    search_rank_by_mode = {}
     for diagnostic in result.get("search_diagnostics", []):
         for group in ("hybrid_top", "semantic_top", "lexical_top", "top_results"):
-            for item in diagnostic.get(group, []) or []:
-                doc = item.get("document") or item.get("doc_name") or ""
-                if doc:
-                    search_docs.append(doc)
+            items = diagnostic.get(group, []) or []
+            docs = [
+                item.get("document") or item.get("doc_name") or ""
+                for item in items
+            ]
+            docs = [doc for doc in docs if doc]
+            mode = str(diagnostic.get("mode") or group)
+            if mode not in search_rank_by_mode:
+                for rank, doc in enumerate(docs, start=1):
+                    if expected_doc_match(doc, expected):
+                        search_rank_by_mode[mode] = rank
+                        break
+            search_docs.extend(docs)
 
     final_docs = [chunk_doc_name(chunk) for chunk in result.get("chunks", [])]
     search_hit = any(expected_doc_match(doc, expected) for doc in search_docs)
     final_hit = any(expected_doc_match(doc, expected) for doc in final_docs)
+    expected_search_rank = next(
+        (rank for rank, doc in enumerate(search_docs, start=1)
+         if expected_doc_match(doc, expected)),
+        None,
+    )
+    expected_final_rank = next(
+        (rank for rank, doc in enumerate(final_docs, start=1)
+         if expected_doc_match(doc, expected)),
+        None,
+    )
+    reciprocal_rank = 1.0 / expected_final_rank if expected_final_rank else 0.0
 
     return {
         "id": case["id"],
@@ -67,6 +92,10 @@ async def evaluate_case(case, supabase):
         "final_count": result.get("final_count", len(result.get("chunks", []))),
         "expected_document_in_search_results": search_hit,
         "expected_document_in_final_context": final_hit,
+        "expected_document_search_rank": expected_search_rank,
+        "expected_document_final_rank": expected_final_rank,
+        "final_context_reciprocal_rank": round(reciprocal_rank, 4),
+        "search_rank_by_mode": search_rank_by_mode,
         "failure_reason": result.get("failure_reason"),
         "search_modes": sorted({
             str(item.get("mode") or "unknown")
@@ -118,6 +147,12 @@ async def main():
     )
     topic_checked = [row for row in results if row.get("expected_topic")]
     topic_correct = sum(row.get("actual_topic") == row.get("expected_topic") for row in topic_checked)
+    ranked_cases = [row for row in results if row.get("expected_document_final_rank")]
+    reciprocal_ranks = [row.get("final_context_reciprocal_rank", 0.0) for row in results]
+    top1_hits = sum(row.get("expected_document_final_rank") == 1 for row in results)
+    final_context_positions = [
+        row["expected_document_final_rank"] for row in ranked_cases
+    ]
 
     report = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -129,6 +164,10 @@ async def main():
             "expected_document_final_context_hit_rate": round(final / total, 4) if total else 0,
             "domain_accuracy": round(domain_correct / total, 4) if total else 0,
             "topic_accuracy_on_labeled_cases": round(topic_correct / len(topic_checked), 4) if topic_checked else None,
+            "expected_document_final_context_top1_rate": round(top1_hits / total, 4) if total else 0,
+            "mean_reciprocal_rank_final_context": round(sum(reciprocal_ranks) / total, 4) if total else 0,
+            "mean_expected_document_rank_when_found": round(sum(final_context_positions) / len(final_context_positions), 2) if final_context_positions else None,
+            "cases_with_expected_document_ranked": len(ranked_cases),
         },
         "cases": results,
     }
