@@ -472,6 +472,20 @@ def detect_query_intents(user_query: str) -> List[str]:
             r"\bвправ\w*",
             r"\bможет\s+ли\s+работник\w*",
         ],
+        "permission": [
+            r"\bразреша\w*\s+ли\b",
+            r"\bдопуска\w*\s+ли\b",
+            r"\bможно\s+ли\b",
+            r"\bне\s+допуска\w*",
+            r"\bне\s+разреша\w*",
+            r"\bзапреща\w*",
+        ],
+        "quantity": [
+            r"\bсколько\b",
+            r"\bнорм\w*\s+(?:выдач\w*|количеств\w*)",
+            r"\bкакое\s+количеств\w*",
+            r"\bскольк\w*\s+литр\w*",
+        ],
         "responsible_person": [
             r"\bкто\s+провод\w*",
             r"\bкто\s+долж\w*\s+провод\w*",
@@ -529,6 +543,25 @@ def detect_primary_intent(
     query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
 
     explicit_patterns = [
+        (
+            "permission",
+            (
+                r"\bразреша\w*\s+ли\b",
+                r"\bдопуска\w*\s+ли\b",
+                r"\bможно\s+ли\b",
+                r"\bне\s+допуска\w*",
+                r"\bне\s+разреша\w*",
+                r"\bзапреща\w*",
+            ),
+        ),
+        (
+            "quantity",
+            (
+                r"\bсколько\b",
+                r"\bнорм\w*\s+(?:выдач\w*|количеств\w*)",
+                r"\bкакое\s+количеств\w*",
+            ),
+        ),
         (
             "responsible_person",
             (
@@ -605,6 +638,8 @@ def detect_primary_intent(
 
     # Fallback: только если форма вопроса не дала явного сигнала.
     fallback_priority = [
+        "permission",
+        "quantity",
         "responsible_person",
         "employer_duty",
         "employee_right",
