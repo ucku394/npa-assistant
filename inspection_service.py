@@ -120,24 +120,9 @@ async def verify_finding(
             "risk_level": "medium",
         }
 
-    # Do not force every visual finding into fire safety: PPE/tool/electrical
-    # findings should retrieve occupational-safety requirements.
-    finding_text = (raw_query + " " + str(finding.get("visual_evidence") or "")).lower()
-    if any(marker in finding_text for marker in (
-        "сварочн", "welding", "щиток", "helmet", "очки", "glasses",
-        "перчат", "glove", "каск", "сиз", "ppe", "кабел", "cable",
-        "электроинструмент", "grinder", "болгар", "ушм", "дрел", "drill",
-        "пил", "tool", "инструмент", "рукоят", "кожух", "guard",
-    )):
-        domain_hint = "охрана труда"
-    elif any(marker in finding_text for marker in (
-        "огнетуш", "extinguisher", "искр", "sparks", "горюч", "combust",
-        "пожар", "fire", "средства пожаротушения",
-    )):
-        domain_hint = "пожарная безопасность"
-    else:
-        domain_hint = "охрана труда и пожарная безопасность"
-    query = f"нормативные требования Республики Беларусь, {domain_hint}: {raw_query}"
+    from inspection_query import build_finding_query
+
+    query = build_finding_query(finding)
 
     rag = await retrieve_context(query, supabase)
     chunks = rag.get("chunks") or []
