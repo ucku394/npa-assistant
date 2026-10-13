@@ -1,7 +1,7 @@
 """Regression tests for photo-inspection legal-domain routing."""
 
 from inspection_query import build_finding_query
-from rag_query_classifier import detect_legal_domain
+from rag_query_classifier import detect_legal_domain, detect_topic, is_scaffolding_query
 
 
 def test_scaffold_and_unfixed_decking_route_to_occupational_safety():
@@ -37,3 +37,19 @@ def test_unrelated_ppe_finding_keeps_occupational_safety_routing():
         "visual_evidence": "Работник работает с болгаркой без очков",
     })
     assert detect_legal_domain(query) == "occupational_safety"
+
+
+
+def test_stairwell_and_tower_scaffold_are_not_routed_to_portable_ladder():
+    query = build_finding_query({
+        "description": "Использование ненадежной деревянной опоры при работах на высоте",
+        "visual_evidence": "Вышка-тура, деревянный брус уперт в ступень лестницы для поддержки настила",
+    })
+    assert is_scaffolding_query(query)
+    assert detect_topic(query) == "general"
+    assert detect_legal_domain(query) == "occupational_safety"
+
+
+def test_explicit_portable_ladder_query_keeps_dedicated_topic():
+    assert not is_scaffolding_query("Нужно ли осматривать переносную лестницу перед каждым применением?")
+    assert detect_topic("Нужно ли осматривать переносную лестницу перед каждым применением?") == "portable_ladder"
