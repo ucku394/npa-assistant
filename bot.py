@@ -27,8 +27,6 @@ import re
 from contextlib import asynccontextmanager
 from io import BytesIO
 
-from supabase import create_client
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -42,14 +40,11 @@ from telegram.ext import (
 
 
 from config import (
-    SUPABASE_SERVICE_ROLE_KEY,
-    SUPABASE_URL,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
 )
 
 
-from rag_engine.rag import build_source_id
 from core.chat_service import chat_service
 from services.vision_service import VisionUnavailableError, analyze_image
 from services.inspection_service import verify_findings
@@ -104,175 +99,13 @@ async def continuous_typing(chat, interval: float = 4.0):
 
 
 # ============================================================
-# SOURCE ID FUNCTIONS
-# ============================================================
-
-def extract_used_source_ids(answer: str) -> list[str]:
-    """
-    Извлекает SOURCE_ID из ответа модели.
-    """
-    if not answer:
-        return []
-
-    result = []
-    seen = set()
-
-    marked_matches = re.findall(
-        r"\[SOURCE:([A-Za-zА-Яа-яЁё0-9_./-]+)\]",
-        answer,
-    )
-
-    for source_id in marked_matches:
-        source_id = source_id.strip()
-        if not source_id:
-            continue
-        if source_id not in seen:
-            seen.add(source_id)
-            result.append(source_id)
-
-    raw_matches = re.findall(
-        r"\bNPA_[A-Za-zА-Яа-яЁё0-9_./-]+\b",
-        answer,
-    )
-
-    for source_id in raw_matches:
-        source_id = source_id.strip()
-        if not source_id:
-            continue
-        if source_id not in seen:
-            seen.add(source_id)
-            result.append(source_id)
-
-    return result
-
-
-def build_used_source_references(
-    chunks,
-    used_source_ids,
-) -> list[str]:
-    """
-    Возвращает только те источники, которые присутствуют среди chunks
-    и были процитированы моделью.
-    """
-    if not chunks or not used_source_ids:
-        return []
-
-    used = {
-        str(source_id).strip()
-        for source_id in used_source_ids
-        if source_id
-    }
-
-    references = []
-    seen = set()
-
-    for index, chunk in enumerate(chunks, start=1):
-        source_id = (
-            chunk.get("_source_id")
-            or build_source_id(chunk, index)
-        )
-
-        if not source_id or source_id not in used:
-            continue
-
-        document_name = (
-            chunk.get("document")
-            or chunk.get("document_name")
-            or chunk.get("doc_name")
-            or chunk.get("title")
-            or chunk.get("npa_name")
-            or chunk.get("source")
-            or "Неизвестный НПА"
-        )
-        document_name = str(document_name).strip()
-
-        point = (
-            chunk.get("point_num")
-            or chunk.get("point")
-            or chunk.get("point_number")
-            or chunk.get("article")
-            or chunk.get("article_number")
-            or chunk.get("paragraph")
-            or chunk.get("section")
-            or ""
-        )
-        point = str(point).strip()
-
-        if point:
-            reference = f"{document_name} — пункт/статья {point}"
-        else:
-            reference = document_name
-
-        if reference not in seen:
-            seen.add(reference)
-            references.append(reference)
-
-    return references
-
-
-def remove_source_markers(
-    answer: str,
-    valid_source_ids=None,
-) -> str:
-    """
-    Удаляет технические SOURCE-маркеры.
-    """
-    if not answer:
-        return ""
-
-    answer = re.sub(
-        r"\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]",
-        "",
-        answer,
-    )
-
-    if valid_source_ids:
-        valid_ids = sorted(
-            {
-                str(source_id).strip()
-                for source_id in valid_source_ids
-                if source_id
-            },
-            key=len,
-            reverse=True,
-        )
-
-        for source_id in valid_ids:
-            answer = re.sub(
-                rf"(?<![A-Za-zА-Яа-яЁё0-9_])"
-                rf"{re.escape(source_id)}"
-                rf"(?![A-Za-zА-Яа-яЁё0-9_])",
-                "",
-                answer,
-            )
-
-    answer = re.sub(r"[ \t]+([,.;:])", r"\1", answer)
-    answer = re.sub(r"[ \t]+\n", "\n", answer)
-    answer = re.sub(r"\n{3,}", "\n\n", answer)
-
-    return answer.strip()
-
-
-# ============================================================
 # CONFIG VALIDATION
 # ============================================================
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured.")
-
-
-# ============================================================
-# ============================================================
-# CLIENTS
-# ============================================================
-
-supabase = create_client(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY,
-)
+# Supabase client is owned by ChatService and shared with inspection verification.
 
 # TEXT UTILITIES
 # ============================================================
@@ -319,9 +152,8 @@ def ensure_numbered_list_spacing(text: str) -> str:
 
 
 def to_telegram_html(text: str) -> str:
-    text = clean_ai_markup(text)
-    text = ensure_numbered_list_spacing(text)
-    text = html.escape(text, quote=False)
+    # Input is normalized once in send_long_message before splitting.
+    text = html.escape(str(text or ""), quote=False)
 
     text = re.sub(r"(?m)^\s*#{1,6}\s*(.+?)\s*$", r"<b>\1</b>", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
@@ -374,6 +206,9 @@ async def send_long_message(
 ):
     if not update.effective_message:
         return
+
+    # Normalize once before splitting; HTML conversion must not repeat text cleanup.
+    text = ensure_numbered_list_spacing(clean_ai_markup(text))
 
     for chunk in split_text_smart(text):
         if use_html:
@@ -590,22 +425,18 @@ async def text_handler(
                 except Exception as e:
                     logger.debug("Не удалось обновить статус анализа: %s", e)
 
-            answer = clean_ai_markup(
+            answer = (
                 result.get("telegram_answer")
                 or result.get("answer_with_citations")
                 or result.get("answer")
                 or ""
             )
-            answer = ensure_numbered_list_spacing(answer)
 
             sources = result.get("sources") or []
             if not sources:
                 logger.warning(
                     "LEGAL | Evidence Gate passed but no validated sources were returned."
                 )
-
-            answer = clean_ai_markup(answer)
-            answer = ensure_numbered_list_spacing(answer)
 
         if status_message:
             try:
@@ -924,12 +755,18 @@ async def photo_handler(
                     parse_mode="HTML",
                 )
 
-            verified = await verify_findings(vision.get("potential_findings") or [], supabase)
+            verified = await verify_findings(
+                vision.get("potential_findings") or [],
+                chat_service.supabase,
+            )
 
+            # Keep only Telegram's file ID and the compact inspection result in user_data.
+            # The original image bytes are fetched again only if a prescription is requested.
+            context.user_data.pop("pending_inspection", None)
             context.user_data["pending_inspection"] = {
                 "vision": vision,
                 "verified": verified,
-                "photo_bytes": image_bytes,
+                "photo_file_id": photo.file_id,
                 "caption": caption,
             }
 
@@ -1031,11 +868,22 @@ async def inspection_callback(
     )
 
     try:
+        photo_file_id = pending.get("photo_file_id")
+        photo_bytes = None
+        if photo_file_id:
+            telegram_file = await context.bot.get_file(photo_file_id)
+            buffer = BytesIO()
+            await telegram_file.download_to_memory(out=buffer)
+            photo_bytes = buffer.getvalue()
+            if len(photo_bytes) > 12 * 1024 * 1024:
+                raise ValueError("Фотография слишком большая для включения в предписание (максимум 12 МБ).")
+
         docx_bytes = await asyncio.to_thread(
             build_draft_prescription,
             confirmed,
-            pending.get("photo_bytes"),
+            photo_bytes,
         )
+        del photo_bytes
         await query.message.reply_document(
             document=BytesIO(docx_bytes),
             filename="proekt_predpisaniya_po_foto.docx",
