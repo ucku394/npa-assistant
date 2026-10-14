@@ -232,3 +232,25 @@ def test_grounding_retry_prompt_uses_real_line_breaks():
 
     assert "\\n\\n===" not in prompt
     assert "\n\n===" in prompt
+
+
+def test_chat_service_disables_router_source_grounding_for_evidence_gate():
+    import inspect
+    from services.ai_router import generate_answer
+
+    signature = inspect.signature(generate_answer)
+    assert signature.parameters["enforce_source_grounding"].default is True
+
+    # Both initial generation and the single Evidence Gate retry delegate
+    # content validation to ChatService; router provider fallbacks remain enabled.
+    chat_source = inspect.getsource(ChatService.process_text)
+    assert chat_source.count("enforce_source_grounding=False") == 2
+
+
+def test_legal_system_prompt_is_compact_and_keeps_core_policy():
+    from services.ai_router import LEGAL_SYSTEM_PROMPT
+
+    assert len(LEGAL_SYSTEM_PROMPT) < 2000
+    assert "Республике Беларусь" in LEGAL_SYSTEM_PROMPT
+    assert "Не выдумывай нормы" in LEGAL_SYSTEM_PROMPT
+    assert "SOURCE_ID" in LEGAL_SYSTEM_PROMPT
