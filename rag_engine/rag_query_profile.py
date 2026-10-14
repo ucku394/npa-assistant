@@ -561,7 +561,12 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         ])
 
     # Target the indexed Presidential Directive No. 1 for distinctive organizational-discipline questions.
-    _directive_query = bool(re.search(r"директив|общественн\w+ безопасност\w+", query, re.IGNORECASE))
+    _directive_query = bool(re.search(
+        r"директив\w*.{0,100}(?:№\s*1|11\s+марта\s+2004)|"
+        r"общественн\w+ безопасност\w*.{0,100}дисциплин\w*",
+        query,
+        re.IGNORECASE,
+    ))
     _leadership_discipline = (
         bool(re.search(r"руководител\w*.{0,50}организац\w*", query, re.IGNORECASE))
         and bool(re.search(r"дисциплин\w*", query, re.IGNORECASE))
