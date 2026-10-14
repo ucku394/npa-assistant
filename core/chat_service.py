@@ -18,6 +18,7 @@ from services.ai_router import generate_answer
 from config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
 from prompts import LEGAL_ASSISTANT_PROMPT
 from rag_engine.rag import build_source_id, retrieve_context
+from legal_rules_registry import evaluate_mandatory_source_rules
 
 logger = logging.getLogger(__name__)
 
@@ -850,104 +851,26 @@ class ChatService:
 
         grounding = self._grounding_check(answer, valid_source_ids)
 
-        # Для запросов об отстранении за нарушения ОТ обязательным первичным
-        # источником является ст. 49 ТК РБ. Даже если модель формально сослалась
-        # на другие валидные SOURCE_ID, без этой нормы ответ не считается
-        # достаточно подтвержденным: ст. 223/47 регулируют другие вопросы.
-        query_profile = rag_result.get("query_profile") or {}
-        required_article_49 = "suspension_for_osh_violation" in (query_profile.get("qualifiers") or [])
-        article_49_source_ids = [
-            chunk.get("_source_id") or build_source_id(chunk, index)
-            for index, chunk in enumerate(chunks, start=1)
-            if "трудовой кодекс" in str(chunk.get("doc_name") or "").lower()
-            and str(chunk.get("point_num") or "").strip().lower() in {"статья 49", "49", "статья 49."}
-        ]
-        required_source_missing = required_article_49 and not article_49_source_ids
-        required_source_not_cited = required_article_49 and bool(article_49_source_ids) and not any(
-            source_id in self._extract_source_ids(answer) for source_id in article_49_source_ids
+        mandatory_gate = evaluate_mandatory_source_rules(
+            query_profile=query_profile,
+            chunks=chunks,
+            answer=answer,
+            extract_source_ids=self._extract_source_ids,
+            build_source_id=build_source_id,
         )
-        if required_source_missing:
-            logger.warning("LEGAL | Required source missing | Article 49 TK RB not retrieved")
-        elif required_source_not_cited:
-            logger.warning("LEGAL | Required source not cited | Article 49 TK RB source_ids=%s", article_49_source_ids)
-
-        # Для вопросов о праве на отказ/действиях при непредоставлении СИЗ
-        # обязательным первичным источником является ст. 11 Закона № 356-З.
-        # Ст. 28 подтверждает обязанность обеспечить СИЗ, но сама не отвечает
-        # на вопрос о последующих действиях работника.
-        required_article_11 = any(
-            qualifier in (query_profile.get("qualifiers") or [])
-            for qualifier in ("refusal_due_to_no_ppe", "ppe_nonprovision_action")
-        )
-        article_11_source_ids = [
-            chunk.get("_source_id") or build_source_id(chunk, index)
-            for index, chunk in enumerate(chunks, start=1)
-            if "356-з" in str(chunk.get("doc_name") or "").lower()
-            and str(chunk.get("point_num") or "").strip().lower() in {"статья 11", "11", "статья 11."}
-        ]
-        required_article_11_missing = required_article_11 and not article_11_source_ids
-        required_article_11_not_cited = required_article_11 and bool(article_11_source_ids) and not any(
-            source_id in self._extract_source_ids(answer) for source_id in article_11_source_ids
-        )
-        if required_article_11_missing:
-            logger.warning("LEGAL | Required source missing | Article 11 Law 356-Z not retrieved")
-        elif required_article_11_not_cited:
-            logger.warning("LEGAL | Required source not cited | Article 11 Law 356-Z source_ids=%s", article_11_source_ids)
-
-        # Для вопроса о том, кто составляет перечень инструкций,
-        # обязательным первичным источником является п.11 постановления №176.
-        required_instruction_list_compiler = "instruction_list_compiler" in (query_profile.get("qualifiers") or [])
-        instruction_list_source_ids = [
-            chunk.get("_source_id") or build_source_id(chunk, index)
-            for index, chunk in enumerate(chunks, start=1)
-            if "№ 176" in str(chunk.get("doc_name") or "")
-            and str(chunk.get("point_num") or "").strip().lower() in {"11", "11.", "пункт 11", "пункт 11."}
-        ]
-        instruction_list_source_missing = required_instruction_list_compiler and not instruction_list_source_ids
-        instruction_list_source_not_cited = required_instruction_list_compiler and bool(instruction_list_source_ids) and not any(
-            source_id in self._extract_source_ids(answer) for source_id in instruction_list_source_ids
-        )
-        if instruction_list_source_missing:
-            logger.warning("LEGAL | Required source missing | NPA 176 point 11 not retrieved for instruction list")
-        elif instruction_list_source_not_cited:
-            logger.warning("LEGAL | Required source not cited | NPA 176 point 11 source_ids=%s", instruction_list_source_ids)
-
-        # Для вопроса о роли службы охраны труда при разработке инструкций
-        # обязательным первичным источником является п.11 постановления №176.
-        required_instruction_osh_service_role = "instruction_osh_service_role" in (query_profile.get("qualifiers") or [])
-        instruction_role_source_ids = [
-            chunk.get("_source_id") or build_source_id(chunk, index)
-            for index, chunk in enumerate(chunks, start=1)
-            if "№ 176" in str(chunk.get("doc_name") or "")
-            and str(chunk.get("point_num") or "").strip().lower() in {"11", "11.", "пункт 11", "пункт 11."}
-        ]
-        instruction_role_source_missing = required_instruction_osh_service_role and not instruction_role_source_ids
-        instruction_role_source_not_cited = required_instruction_osh_service_role and bool(instruction_role_source_ids) and not any(
-            source_id in self._extract_source_ids(answer) for source_id in instruction_role_source_ids
-        )
-        if instruction_role_source_missing:
-            logger.warning("LEGAL | Required source missing | NPA 176 point 11 not retrieved")
-        elif instruction_role_source_not_cited:
-            logger.warning("LEGAL | Required source not cited | NPA 176 point 11 source_ids=%s", instruction_role_source_ids)
-
-        # Для вопроса «кто разрабатывает инструкции по охране труда»
-        # обязательным первичным источником является п.14 постановления №176.
-        # П.11 используется только как вторичный организационный контекст.
-        required_instruction_developer = "instruction_developer" in (query_profile.get("qualifiers") or [])
-        instruction_source_ids = [
-            chunk.get("_source_id") or build_source_id(chunk, index)
-            for index, chunk in enumerate(chunks, start=1)
-            if "№ 176" in str(chunk.get("doc_name") or "")
-            and str(chunk.get("point_num") or "").strip().lower() in {"14", "14.", "пункт 14", "пункт 14."}
-        ]
-        instruction_source_missing = required_instruction_developer and not instruction_source_ids
-        instruction_source_not_cited = required_instruction_developer and bool(instruction_source_ids) and not any(
-            source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids
-        )
-        if instruction_source_missing:
-            logger.warning("LEGAL | Required source missing | NPA 176 point 14 not retrieved")
-        elif instruction_source_not_cited:
-            logger.warning("LEGAL | Required source not cited | NPA 176 point 14 source_ids=%s", instruction_source_ids)
+        for rule_id in mandatory_gate["active_rules"]:
+            details = mandatory_gate["details"]
+            if details.get(f"{rule_id}_missing"):
+                logger.warning(
+                    "LEGAL | Required source missing | rule=%s",
+                    rule_id,
+                )
+            elif details.get(f"{rule_id}_not_cited"):
+                logger.warning(
+                    "LEGAL | Required source not cited | rule=%s source_ids=%s",
+                    rule_id,
+                    details.get(f"{rule_id}_source_ids", []),
+                )
 
         claim_evidence = self._claim_evidence_check(
             answer=answer,
@@ -957,25 +880,13 @@ class ChatService:
             question=question,
         )
 
-        if required_source_missing or required_source_not_cited or required_article_11_missing or required_article_11_not_cited or instruction_source_missing or instruction_source_not_cited or instruction_role_source_missing or instruction_role_source_not_cited or instruction_list_source_missing or instruction_list_source_not_cited:
+        if not mandatory_gate["passed"]:
             claim_evidence["passed"] = False
             claim_evidence["required_source_gate"] = {
                 "required": True,
-                "article_49_source_ids": article_49_source_ids,
-                "article_49_missing": required_source_missing,
-                "article_49_not_cited": required_source_not_cited,
-                "article_11_source_ids": article_11_source_ids,
-                "article_11_missing": required_article_11_missing,
-                "article_11_not_cited": required_article_11_not_cited,
-                "instruction_source_ids": instruction_source_ids,
-                "instruction_source_missing": instruction_source_missing,
-                "instruction_source_not_cited": instruction_source_not_cited,
-                "instruction_role_source_ids": instruction_role_source_ids,
-                "instruction_role_source_missing": instruction_role_source_missing,
-                "instruction_role_source_not_cited": instruction_role_source_not_cited,
-                "instruction_list_source_ids": instruction_list_source_ids,
-                "instruction_list_source_missing": instruction_list_source_missing,
-                "instruction_list_source_not_cited": instruction_list_source_not_cited,
+                "active_rules": mandatory_gate["active_rules"],
+                **mandatory_gate["details"],
+                "failures": mandatory_gate["failures"],
             }
 
         logger.info(
@@ -1024,68 +935,35 @@ class ChatService:
                     topic=str(rag_result.get("topic") or ""),
             question=question,
                 )
-                if required_article_49:
-                    required_source_not_cited = bool(article_49_source_ids) and not any(
-                        source_id in self._extract_source_ids(answer) for source_id in article_49_source_ids
-                    )
-                    if required_source_missing or required_source_not_cited:
-                        claim_evidence["passed"] = False
-                    claim_evidence["required_source_gate"] = {
-                        "required": True,
-                        "article_49_source_ids": article_49_source_ids,
-                        "missing": required_source_missing,
-                        "not_cited": required_source_not_cited,
-                    }
 
-        # Re-evaluate every mandatory-source citation against the final answer.
-        # A retry may change citations, so checks from the first answer are stale.
-        final_answer_source_ids = set(self._extract_source_ids(answer))
-        required_source_not_cited = required_article_49 and bool(article_49_source_ids) and not bool(
-            final_answer_source_ids.intersection(article_49_source_ids)
+
+        # Re-evaluate all mandatory-source rules against the final answer after retry.
+        # The registry is the single source of truth for active rules and point matching.
+        final_mandatory_gate = evaluate_mandatory_source_rules(
+            query_profile=query_profile,
+            chunks=chunks,
+            answer=answer,
+            extract_source_ids=self._extract_source_ids,
+            build_source_id=build_source_id,
         )
-        required_article_11_not_cited = required_article_11 and bool(article_11_source_ids) and not bool(
-            final_answer_source_ids.intersection(article_11_source_ids)
-        )
-        instruction_list_source_not_cited = required_instruction_list_compiler and bool(instruction_list_source_ids) and not bool(
-            final_answer_source_ids.intersection(instruction_list_source_ids)
-        )
-        instruction_role_source_not_cited = required_instruction_osh_service_role and bool(instruction_role_source_ids) and not bool(
-            final_answer_source_ids.intersection(instruction_role_source_ids)
-        )
-        instruction_source_not_cited = required_instruction_developer and bool(instruction_source_ids) and not bool(
-            final_answer_source_ids.intersection(instruction_source_ids)
-        )
-        required_source_failures = {
-            "article_49_missing": required_source_missing,
-            "article_49_not_cited": required_source_not_cited,
-            "article_11_missing": required_article_11_missing,
-            "article_11_not_cited": required_article_11_not_cited,
-            "instruction_list_missing": instruction_list_source_missing,
-            "instruction_list_not_cited": instruction_list_source_not_cited,
-            "instruction_role_missing": instruction_role_source_missing,
-            "instruction_role_not_cited": instruction_role_source_not_cited,
-            "instruction_developer_missing": instruction_source_missing,
-            "instruction_developer_not_cited": instruction_source_not_cited,
-        }
-        if any(required_source_failures.values()):
+        if not final_mandatory_gate["passed"]:
             claim_evidence["passed"] = False
             claim_evidence["required_source_gate"] = {
                 "required": True,
-                "failures": required_source_failures,
+                "active_rules": final_mandatory_gate["active_rules"],
+                **final_mandatory_gate["details"],
+                "failures": final_mandatory_gate["failures"],
             }
+        elif "required_source_gate" in claim_evidence:
+            claim_evidence.pop("required_source_gate", None)
 
-        # Keep the explicit developer-source details in the response for diagnostics.
-        if required_instruction_developer:
-            instruction_source_not_cited = bool(instruction_source_ids) and not any(
-                source_id in self._extract_source_ids(answer) for source_id in instruction_source_ids
-            )
-            if instruction_source_missing or instruction_source_not_cited:
-                claim_evidence["passed"] = False
+        if "instruction_developer" in final_mandatory_gate["active_rules"]:
+            details = final_mandatory_gate["details"]
             claim_evidence["required_instruction_source_gate"] = {
                 "required": True,
-                "source_ids": instruction_source_ids,
-                "missing": instruction_source_missing,
-                "not_cited": instruction_source_not_cited,
+                "source_ids": details.get("instruction_developer_source_ids", []),
+                "missing": details.get("instruction_developer_missing", False),
+                "not_cited": details.get("instruction_developer_not_cited", False),
             }
 
         rag_meta["grounding"] = grounding
