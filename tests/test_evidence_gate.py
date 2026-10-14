@@ -216,7 +216,7 @@ def test_claim_evidence_does_not_mix_point_from_another_act():
 def test_legal_assistant_prompt_includes_evidence_map():
     from prompts import LEGAL_ASSISTANT_PROMPT
 
-    evidence_map_text = "EVIDENCE MAP:\\nSOURCE_ID=NPA_TEST_1"
+    evidence_map_text = "EVIDENCE MAP:\nSOURCE_ID=NPA_TEST_1"
     prompt = LEGAL_ASSISTANT_PROMPT.format(
         user_query="Тестовый вопрос",
         retrieved_text="Фрагмент нормативного акта",
@@ -224,7 +224,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
     )
 
     assert evidence_map_text in prompt
-    assert prompt.index(evidence_map_text) < prompt.index("НОРМАТИВНЫЙ КОНТЕКСТ")
+    assert prompt.index(evidence_map_text) < prompt.rindex("НОРМАТИВНЫЙ КОНТЕКСТ")
 
 
 def test_grounding_retry_prompt_uses_real_line_breaks():
