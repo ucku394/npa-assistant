@@ -227,44 +227,6 @@ def _topic_relevance_score(
         )
         score += min(sum(1 for marker in relevant_markers if marker in text) * 0.12, 0.60)
 
-    # Directive No. 1 (current edition): leader-duty questions need the
-    # operative points 16.1/16.2, not only the general accountability rule
-    # in point 17. Reserve context slots before generic semantic ranking can
-    # crowd these clauses out.
-    directive_duty_query = bool(
-        re.search(r"\\bруководител\\w*\\b", user_query, re.IGNORECASE)
-        and re.search(
-            r"дисциплин|общественн\\w* безопасност|предупрежден\\w*|травматизм|обязанност\\w*|обеспечен\\w*",
-            user_query,
-            re.IGNORECASE,
-        )
-    )
-    if directive_duty_query:
-        directive_pool = []
-        for chunk in ranked_chunks:
-            document_name = _get_document_name(chunk).lower()
-            if "директив" not in document_name or not any(
-                marker in document_name for marker in ("безопасност", "дисциплин", "директива № 1")
-            ):
-                continue
-            point = _normalize_point_identifier(_get_point_number(chunk))
-            if point in {"16", "16.1", "16.2", "17"}:
-                directive_pool.append(chunk)
-
-        point_priority = {"16.1": 4, "16.2": 3, "16": 2, "17": 1}
-        directive_pool.sort(
-            key=lambda chunk: (
-                point_priority.get(_normalize_point_identifier(_get_point_number(chunk)), 0),
-                _safe_float(chunk.get("_combined_score")),
-            ),
-            reverse=True,
-        )
-        for required_point in ("16.1", "16.2", "16", "17"):
-            for chunk in directive_pool:
-                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
-                    _add(chunk, max_per_document=4, max_per_point=1)
-                    break
-
     if topic == "lathe_work":
         for phrase, weight in (
             ("токарный станок", 1.00),
@@ -3236,6 +3198,44 @@ def _select_legal_diverse_chunks(
         if point_key is not None:
             points_seen.add(point_key)
         return True
+
+    # Directive No. 1 (current edition): leader-duty questions need the
+    # operative points 16.1/16.2, not only the general accountability rule
+    # in point 17. Reserve context slots before generic semantic ranking can
+    # crowd these clauses out.
+    directive_duty_query = bool(
+        re.search(r"\bруководител\w*\b", user_query, re.IGNORECASE)
+        and re.search(
+            r"дисциплин|общественн\w* безопасност|предупрежден\w*|травматизм|обязанност\w*|обеспечен\w*",
+            user_query,
+            re.IGNORECASE,
+        )
+    )
+    if directive_duty_query:
+        directive_pool = []
+        for chunk in ranked_chunks:
+            document_name = _get_document_name(chunk).lower()
+            if "директив" not in document_name or not any(
+                marker in document_name for marker in ("безопасност", "дисциплин", "директива № 1")
+            ):
+                continue
+            point = _normalize_point_identifier(_get_point_number(chunk))
+            if point in {"16", "16.1", "16.2", "17"}:
+                directive_pool.append(chunk)
+
+        point_priority = {"16.1": 4, "16.2": 3, "16": 2, "17": 1}
+        directive_pool.sort(
+            key=lambda chunk: (
+                point_priority.get(_normalize_point_identifier(_get_point_number(chunk)), 0),
+                _safe_float(chunk.get("_combined_score")),
+            ),
+            reverse=True,
+        )
+        for required_point in ("16.1", "16.2", "16", "17"):
+            for chunk in directive_pool:
+                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
+                    _add(chunk, max_per_document=4, max_per_point=1)
+                    break
 
     if topic == "lathe_work":
         # Для токарных станков фиксируем нормативное ядро: ограждение/блокировка,
