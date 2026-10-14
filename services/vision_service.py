@@ -329,45 +329,28 @@ def _normalize(data: Dict[str, Any]) -> Dict[str, Any]:
 
 # --- Постобработка: не даём «пустоте» уйти наверх ----------------------------
 def _postprocess(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Добавляет findings, если модель явно «промолчала» там, где не должна.
-
-    Логика мягкая: мы не выдумываем нарушение, а помечаем сцену как
-    требующую ручной проверки, чтобы downstream не отбрасывал её молча.
-    """
+    """Marks ambiguous work scenes for manual review without inventing a violation."""
     scene_text = " ".join([
         str(result.get("scene") or ""),
         " ".join(o.get("description", "") for o in result.get("observations", [])),
     ]).lower()
 
-    # Признаки ручного инструмента и человека в кадре.
     tool_markers = (
         "болгарк", "ушм", "grinder", "дрел", "пил", "сварк", "welding",
         "инструмент", "tool", "резак", "cutter",
     )
     person_markers = ("человек", "работник", "man", "worker", "person", "мужчина")
 
-    has_tool = any(m in scene_text for m in tool_markers)
-    has_person = any(m in scene_text for m in person_markers)
+    has_tool = any(marker in scene_text for marker in tool_markers)
+    has_person = any(marker in scene_text for marker in person_markers)
 
-    if has_person and has_tool and not result["potential_findings"]:
-        result["potential_findings"].append({
-            "description": (
-                "В кадре человек работает с ручным/электроинструментом, "
-                "но модель не выделила конкретных нарушений ОТ. "
-                "Сцена требует ручной проверки."
-            ),
-            "risk_level": "medium",
-            "confidence": 0.3,
-            "visual_evidence": "Человек и инструмент в рабочей зоне.",
-            "verification_needed": [
-                "Проверить наличие и применение СИЗ (очки/щиток, каска, перчатки).",
-                "Проверить комплектность инструмента (боковая рукоятка, кожух).",
-                "Проверить правильность хвата и позы работника.",
-                "Проверить состояние кабеля и подключения.",
-                "Сопоставить с НПА Республики Беларусь по охране труда.",
-            ],
-        })
+    # A person using a tool is not, by itself, evidence of a legal violation.
+    # Preserve an empty findings list and surface the scene for manual review.
+    if has_person and has_tool and not result.get("potential_findings"):
         result["needs_review"] = True
+        logger.info(
+            "VISION | person/tool scene has no concrete finding; manual review required"
+        )
 
     return result
 
