@@ -1,5 +1,5 @@
 """DOCX generator for the Belarus occupational-safety prescription form."""
-from datetime import date, timedelta
+from datetime import date
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
@@ -110,9 +110,7 @@ def build_draft_prescription(
     enterprise = enterprise or PRESCRIPTION_ORGANIZATION
     responsible = responsible or PRESCRIPTION_DEFAULT_RESPONSIBLE
     today = issue_date or date.today().strftime("%d.%m.%Y")
-    due = deadline or (
-        date.today() + timedelta(days=PRESCRIPTION_DEFAULT_DEADLINE_DAYS)
-    ).strftime("%d.%m.%Y")
+    due = str(deadline or "").strip()
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -126,8 +124,13 @@ def build_draft_prescription(
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run(f"ПРЕДПИСАНИЕ № {prescription_number or '____________'}")
-    _font(r, 13, True)
+    r = p.add_run("ПРОЕКТ ПРЕДПИСАНИЯ — ТРЕБУЕТ ПРОВЕРКИ СПЕЦИАЛИСТОМ")
+    _font(r, 10, True)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run(f"№ {prescription_number or '____________'}")
+    _font(r, 12, True)
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -193,7 +196,7 @@ def build_draft_prescription(
                 measure += f"\nВыявлено: {violation}."
             _cell(cells[0], i, 8, False, WD_ALIGN_PARAGRAPH.CENTER)
             _cell(cells[1], measure, 8)
-            _cell(cells[2], due, 8, False, WD_ALIGN_PARAGRAPH.CENTER)
+            _cell(cells[2], due or "Установить уполномоченным лицом", 8, False, WD_ALIGN_PARAGRAPH.CENTER)
             _cell(cells[3], "", 8)
     else:
         cells = table.add_row().cells
@@ -224,6 +227,14 @@ def build_draft_prescription(
     _cell(sig.cell(0, 1), "Предписание получил\n\n__________________________\n(подпись)", 8)
     _cell(sig.cell(1, 0), f"{issuer_name or 'И.О. Фамилия'}\n{issuer_position or 'должность работника службы охраны труда (специалиста по охране труда)'}\nДата: {today}", 7)
     _cell(sig.cell(1, 1), f"{recipient_name or 'И.О. Фамилия'}\n{recipient_position or 'должность'}\nДата: __________________", 7)
+
+    p = doc.add_paragraph()
+    r = p.add_run(
+        "ВАЖНО: проект не является утверждённым предписанием. До подписания "
+        "проверьте актуальность и применимость каждой нормативной ссылки, "
+        "полномочия выдавшего лица, сроки и обязательные реквизиты."
+    )
+    _font(r, 8, True)
 
     p = doc.add_paragraph()
     r = p.add_run("Примечания:")
