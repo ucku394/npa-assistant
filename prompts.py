@@ -1203,9 +1203,6 @@ source_index. НИКОГДА не придумывай source_index.
 ПОТЕНЦИАЛЬНОЕ НАБЛЮДЕНИЕ:
 {finding}
 
-EVIDENCE MAP
-{evidence_map}
-
-НОРМАТИВНЫЙ КОНТЕКСТ:
+НОРМАТИВНЫЙ КОНТЕКСТ (каждый блок содержит индекс, SOURCE_ID, НПА, пункт и текст):
 {retrieved_text}
 """
