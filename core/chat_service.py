@@ -850,6 +850,7 @@ class ChatService:
                 valid_source_ids.append(str(source_id))
 
         grounding = self._grounding_check(answer, valid_source_ids)
+        query_profile = rag_result.get("query_profile") or {}
 
         mandatory_gate = evaluate_mandatory_source_rules(
             query_profile=query_profile,
