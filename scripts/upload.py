@@ -1695,7 +1695,35 @@ def replace_document_safely(
             doc_name,
         )
 
-        # Активируем staging только после успешной перенумерации.
+        def staged_chunk_numbers_operation():
+            return (
+                supabase.table("npa_chunks")
+                .select("chunk_no")
+                .eq("doc_name", staging_doc_name)
+                .eq("document_id", document_id)
+                .order("chunk_no")
+                .execute()
+            )
+
+        staged_chunk_numbers_response = supabase_execute(
+            staged_chunk_numbers_operation,
+            f"VERIFY STAGING CHUNK NUMBERS | {doc_name}",
+        )
+        staged_chunk_numbers = [
+            int(item["chunk_no"])
+            for item in (getattr(staged_chunk_numbers_response, "data", None) or [])
+        ]
+        expected_chunk_numbers = list(range(1, expected_count + 1))
+        if staged_chunk_numbers != expected_chunk_numbers:
+            raise RuntimeError(
+                "STAGING CHUNK NUMBER SEQUENCE MISMATCH: "
+                f"expected 1..{expected_count}, "
+                f"got {len(staged_chunk_numbers)} rows "
+                "with a non-sequential sequence"
+            )
+
+        # Активируем staging только после успешной перенумерации
+        # и проверки последовательности chunk_no.
         update_document_name(
             supabase,
             staging_doc_name,
@@ -1719,33 +1747,6 @@ def replace_document_safely(
                 "FINAL DOCUMENT COUNT MISMATCH: "
                 f"expected {expected_count}, "
                 f"found {final_count}"
-            )
-
-        def final_chunk_numbers_operation():
-            return (
-                supabase.table("npa_chunks")
-                .select("chunk_no")
-                .eq("doc_name", doc_name)
-                .eq("document_id", document_id)
-                .order("chunk_no")
-                .execute()
-            )
-
-        final_chunk_numbers_response = supabase_execute(
-            final_chunk_numbers_operation,
-            f"VERIFY CHUNK NUMBERS | {doc_name}",
-        )
-        final_chunk_numbers = [
-            int(item["chunk_no"])
-            for item in (getattr(final_chunk_numbers_response, "data", None) or [])
-        ]
-        expected_chunk_numbers = list(range(1, expected_count + 1))
-        if final_chunk_numbers != expected_chunk_numbers:
-            raise RuntimeError(
-                "FINAL CHUNK NUMBER SEQUENCE MISMATCH: "
-                f"expected 1..{expected_count}, "
-                f"got {len(final_chunk_numbers)} rows "
-                "with a non-sequential sequence"
             )
 
         staging_left = (
