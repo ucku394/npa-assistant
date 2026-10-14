@@ -14,10 +14,10 @@ from typing import Any, Dict, List
 
 from supabase import create_client
 
-from ai_router import generate_answer
+from services.ai_router import generate_answer
 from config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
 from prompts import LEGAL_ASSISTANT_PROMPT
-from rag import build_source_id, retrieve_context
+from rag_engine.rag import build_source_id, retrieve_context
 
 logger = logging.getLogger(__name__)
 
