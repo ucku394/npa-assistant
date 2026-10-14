@@ -965,12 +965,14 @@ class ChatService:
             }
 
         logger.info(
-            "CHAT | request_id=%s | evidence_gate_initial | grounding_passed=%s | claim_evidence_passed=%s | unknown_sources=%s | claim_reason=%s",
+            "CHAT | request_id=%s | evidence_gate_initial | grounding_passed=%s | claim_evidence_passed=%s | unknown_sources=%s | claim_reason=%s | unsupported_references=%s | cited_evidence_count=%s",
             request_id,
             grounding.get("passed"),
             claim_evidence.get("passed"),
             grounding.get("unknown_source_ids"),
             claim_evidence.get("reason"),
+            claim_evidence.get("unsupported_references", []),
+            claim_evidence.get("cited_evidence_count", 0),
         )
 
         if not grounding["passed"] or not claim_evidence["passed"]:
