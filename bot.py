@@ -49,11 +49,11 @@ from config import (
 )
 
 
-from rag import build_source_id
+from rag_engine.rag import build_source_id
 from core.chat_service import chat_service
-from vision_service import VisionUnavailableError, analyze_image
-from inspection_service import verify_findings
-from prescription_service import build_draft_prescription
+from services.vision_service import VisionUnavailableError, analyze_image
+from services.inspection_service import verify_findings
+from services.prescription_service import build_draft_prescription
 
 
 # ============================================================

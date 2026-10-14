@@ -18,9 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from core.chat_service import chat_service
-from inspection_service import verify_findings
-from prescription_service import build_draft_prescription
-from vision_service import analyze_image, VisionUnavailableError
+from services.inspection_service import verify_findings
+from services.prescription_service import build_draft_prescription
+from services.vision_service import analyze_image, VisionUnavailableError
 
 
 logging.basicConfig(
