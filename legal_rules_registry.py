@@ -113,6 +113,20 @@ def evaluate_mandatory_source_rules(
         details[f"{rule_id}_missing"] = missing
         details[f"{rule_id}_not_cited"] = not_cited
 
+    # Preserve legacy diagnostic keys while callers migrate to rule IDs.
+    aliases = {
+        "instruction_list": "instruction_list_compiler",
+        "instruction_role": "instruction_osh_service_role",
+        "instruction_source": "instruction_developer",
+    }
+    for legacy_id, rule_id in aliases.items():
+        if rule_id in active_rules:
+            details[f"{legacy_id}_source_ids"] = details.get(f"{rule_id}_source_ids", [])
+            details[f"{legacy_id}_missing"] = details.get(f"{rule_id}_missing", False)
+            details[f"{legacy_id}_not_cited"] = details.get(f"{rule_id}_not_cited", False)
+            failures[f"{legacy_id}_missing"] = failures.get(f"{rule_id}_missing", False)
+            failures[f"{legacy_id}_not_cited"] = failures.get(f"{rule_id}_not_cited", False)
+
     return {
         "required": bool(active_rules),
         "active_rules": active_rules,
