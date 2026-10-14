@@ -254,3 +254,5 @@ def test_legal_system_prompt_is_compact_and_keeps_core_policy():
     assert "Республике Беларусь" in LEGAL_SYSTEM_PROMPT
     assert "Не выдумывай нормы" in LEGAL_SYSTEM_PROMPT
     assert "SOURCE_ID" in LEGAL_SYSTEM_PROMPT
+    assert "[SOURCE:NPA_...]" in LEGAL_SYSTEM_PROMPT
+    assert "рядом с подтверждаемым утверждением" in LEGAL_SYSTEM_PROMPT
