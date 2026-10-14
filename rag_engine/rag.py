@@ -11,6 +11,7 @@ from .rag_query_generator import build_universal_search_queries, build_search_qu
 from .legal_query_planner import build_legal_query_plan
 from .legal_target_discovery import discover_legal_targets
 from .rag_query_modes import _attestation_query_mode, _accident_query_mode
+from legal_rules_registry import RAG_SELECTION_RULES
 from .rag_query_classifier import (
     detect_legal_domain,
     detect_topic,
@@ -1954,8 +1955,6 @@ async def _get_targeted_chunks(
             supabase,
             user_query,
         )
-    if topic == "occupational_training":
-        return await asyncio.to_thread(_targeted_occupational_training_search, supabase)
     return []
 
 
@@ -3237,63 +3236,49 @@ def _select_legal_diverse_chunks(
                     _add(chunk, max_per_document=4, max_per_point=1)
                     break
 
-    if topic == "lathe_work":
-        # Для токарных станков фиксируем нормативное ядро: ограждение/блокировка,
-        # специальные запреты и общее требование к средствам коллективной защиты.
-        lathe_pool = [chunk for chunk in ranked_chunks if chunk.get("_lathe_safety_targeted")]
-        lathe_pool.sort(
+    selection_rule = RAG_SELECTION_RULES.get(topic)
+    if selection_rule:
+        target_flag = selection_rule["target_flag"]
+        topic_pool = [chunk for chunk in ranked_chunks if chunk.get(target_flag)]
+        point_priority = {
+            point: len(selection_rule["priority_points"]) - index
+            for index, point in enumerate(selection_rule["priority_points"])
+        }
+        topic_pool.sort(
             key=lambda chunk: (
-                {"84": 100, "85": 95, "40": 90}.get(
-                    _normalize_point_identifier(_get_point_number(chunk)), 0
+                point_priority.get(
+                    _normalize_point_identifier(_get_point_number(chunk)),
+                    0,
                 ),
                 _safe_float(chunk.get("_combined_score")),
             ),
             reverse=True,
         )
-        for required_point in ("84", "85", "40"):
-            for chunk in lathe_pool:
+        for required_point in selection_rule["priority_points"]:
+            for chunk in topic_pool:
                 if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
-                    _add(chunk, max_per_document=5, max_per_point=1)
+                    _add(
+                        chunk,
+                        max_per_document=selection_rule["max_per_document"],
+                        max_per_point=1,
+                    )
                     break
-        for chunk in lathe_pool:
-            if len(selected) >= min(limit, 5):
+        max_items = min(limit, selection_rule["max_items"])
+        for chunk in topic_pool:
+            if len(selected) >= max_items:
                 break
-            _add(chunk, max_per_document=5, max_per_point=1)
+            _add(
+                chunk,
+                max_per_document=selection_rule["max_per_document"],
+                max_per_point=1,
+            )
         if selected:
             logger.info(
-                "RAG | lathe safety final | sources=%s",
+                "RAG | %s final | sources=%s",
+                selection_rule["log_label"],
                 [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
             )
             return selected
-
-    if topic == "portable_ladder":
-        # Для лестниц действующая норма № 11 п. 54 должна быть
-        # нормативным ядром. Не позволяем общему score вытеснить её.
-        ladder_pool = [chunk for chunk in ranked_chunks if chunk.get("_portable_ladder_targeted")]
-        ladder_pool.sort(
-            key=lambda chunk: (
-                1 if _normalize_point_identifier(_get_point_number(chunk)) == "54" else 0,
-                1 if _normalize_point_identifier(_get_point_number(chunk)) == "53" else 0,
-                _safe_float(chunk.get("_combined_score")),
-            ),
-            reverse=True,
-        )
-        for required_point in ("54", "53"):
-            for chunk in ladder_pool:
-                if _normalize_point_identifier(_get_point_number(chunk)) == required_point:
-                    _add(chunk, max_per_document=4, max_per_point=1)
-                    break
-        for chunk in ladder_pool:
-            if len(selected) >= min(limit, 3):
-                break
-            _add(chunk, max_per_document=4, max_per_point=1)
-        if selected:
-            logger.info(
-                "RAG | portable ladder final | sources=%s",
-                [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in selected],
-            )
-            return selected
-
 
     if topic == "height_work_training":
         # Алгоритм обучения должен быть нормативно полным, а не состоять
