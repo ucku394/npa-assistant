@@ -256,15 +256,20 @@ async def create_prescription(request: PrescriptionRequest):
         raise HTTPException(status_code=400, detail="Нет наблюдений для повторной юридической проверки.")
     try:
         reverified = await verify_findings(candidates, chat_service.supabase)
-        confirmed = [
-            item for item in reverified
-            if item.get("status") == "confirmed" and item.get("legal_basis")
-        ]
-        if not confirmed:
-            raise HTTPException(
-                status_code=400,
-                detail="Повторная проверка не подтвердила нарушения с нормативным основанием. Проект не сформирован.",
-            )
+    except Exception:
+        logger.exception("WEB API | prescription legal re-verification failed")
+        raise HTTPException(status_code=503, detail="Не удалось повторно проверить нормативные основания. Проект не сформирован.")
+
+    confirmed = [
+        item for item in reverified
+        if item.get("status") == "confirmed" and item.get("legal_basis")
+    ]
+    if not confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail="Повторная проверка не подтвердила нарушения с нормативным основанием. Проект не сформирован.",
+        )
+    try:
         content = await asyncio.to_thread(
             build_draft_prescription,
             findings=confirmed,
