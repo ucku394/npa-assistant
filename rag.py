@@ -14,6 +14,7 @@ from rag_query_modes import _attestation_query_mode, _accident_query_mode
 from rag_query_classifier import (
     detect_legal_domain,
     detect_topic,
+    is_scaffolding_query,
     detect_special_category,
     _minor_special_issue,
     detect_query_intents,
@@ -3767,6 +3768,9 @@ async def retrieve_context(
     # Deterministic backstop for concrete legal objects that the classifier
     # may miss. Target discovery must stay inside the correct BY NPA domain.
     _q_lower = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    scaffolding_query = is_scaffolding_query(_q_lower)
+    if scaffolding_query and legal_domain == "general":
+        legal_domain = "occupational_safety"
     if topic == "general" and re.search(
         r"\bтокарн\w*\b|\bметаллообрабатывающ\w*\s+станк\w*\b|\bхолодн\w*\s+обработк\w*\s+металл\w*\b",
         _q_lower,
@@ -3775,8 +3779,9 @@ async def retrieve_context(
         topic = "lathe_work"
         legal_domain = "occupational_safety"
 
-    if topic == "general" and re.search(
-        r"\bлестниц\w*\b|\bстремянк\w*\b|\bприставн\w*\s+лестниц\w*\b",
+    if topic == "general" and not scaffolding_query and re.search(
+        r"\b(?:переносн\w*|приставн\w*)\s+лестниц\w*\b|"
+        r"\bлестниц\w*[-–—]?стремянк\w*\b|\bстремянк\w*\b",
         _q_lower,
         re.IGNORECASE,
     ):
@@ -3804,6 +3809,23 @@ async def retrieve_context(
     special_category = detect_special_category(user_query)
     special_issue = _minor_special_issue(user_query) if special_category == "minor" else None
     query_profile = build_universal_query_profile(user_query)
+    if scaffolding_query:
+        # The generic profile rules can mistake a stairway/scaffold description
+        # for portable-ladder inspection or height-work training. Route by the
+        # visible object before query expansion.
+        query_profile.update({
+            "subject": "scaffolding",
+            "event": "scaffolding_safety",
+            "action": "assess_safe_setup",
+            "object": "scaffold_decking_supports",
+        })
+        query_profile.setdefault("qualifiers", []).append("scaffolding_inspection")
+        query_profile.setdefault("legal_phrases", []).extend([
+            "Правила по охране труда при выполнении строительных работ",
+            "Правила по охране труда при выполнении работ на высоте",
+            "строительные леса вышки-туры подмости настилы опоры устойчивость",
+            "приемка и осмотр средств подмащивания",
+        ])
     legal_query_plan = build_legal_query_plan(
         user_query,
         query_profile,

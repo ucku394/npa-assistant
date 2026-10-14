@@ -7,6 +7,23 @@
 import re
 from typing import List, Optional
 
+
+def is_scaffolding_query(user_query: str) -> bool:
+    """Recognize scaffolds/decking/supports without conflating them with ladders."""
+    query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
+    patterns = (
+        r"\bвышк\w*[- ]?тур\w*",
+        r"\bстроительн\w*\s+лес\w*",
+        r"\bсредств\w*\s+подмащив\w*",
+        r"\bподмост\w*",
+        r"\bнеинвентарн\w*\s+лес\w*",
+        r"\bнастил\w*",
+        r"\bопор\w*",
+        r"\bдеревянн\w*\s+(?:брус|стойк|опор)\w*",
+        r"\bбрус\w*",
+    )
+    return bool(query and any(re.search(p, query, re.IGNORECASE) for p in patterns))
+
 def detect_legal_domain(user_query: str) -> str:
     """
     Определяет основную правовую область запроса.
@@ -147,6 +164,11 @@ def detect_topic(user_query: str) -> str:
     query = str(user_query or "").strip().lower()
 
     if not query:
+        return "general"
+
+    # Scaffold/decking findings are not portable-ladder questions, even when
+    # the description also mentions a stairway or an inspection.
+    if is_scaffolding_query(query):
         return "general"
 
     # Milk/equivalent food products are a distinct Belarus OHS benefit topic.
