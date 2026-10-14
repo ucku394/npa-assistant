@@ -128,3 +128,95 @@ REVOKE ALL ON FUNCTION public.activate_npa_staging_document(uuid, text, text, in
 REVOKE ALL ON FUNCTION public.activate_npa_staging_document(uuid, text, text, integer) FROM anon;
 REVOKE ALL ON FUNCTION public.activate_npa_staging_document(uuid, text, text, integer) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.activate_npa_staging_document(uuid, text, text, integer) TO service_role;
+
+
+-- Legacy semantic RPCs are still used by compatibility/fallback paths.
+-- Keep inactive staging chunks invisible through every supported search RPC.
+CREATE OR REPLACE FUNCTION public.match_npa_chunks(
+    query_embedding vector,
+    match_threshold double precision,
+    match_count integer
+)
+RETURNS TABLE(doc_name text, doc_type text, point_num text, content text, similarity double precision)
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $function$
+    SELECT
+        n.doc_name,
+        n.doc_type,
+        n.point_num,
+        n.content,
+        1 - (n.embedding OPERATOR(public.<=>) query_embedding) AS similarity
+    FROM public.npa_chunks AS n
+    WHERE
+        n.embedding IS NOT NULL
+        AND COALESCE(n.status, 'active') = 'active'
+        AND 1 - (n.embedding OPERATOR(public.<=>) query_embedding) >= match_threshold
+    ORDER BY n.embedding OPERATOR(public.<=>) query_embedding
+    LIMIT match_count;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.match_npa_chunks_v2(
+    query_embedding vector,
+    match_threshold double precision,
+    match_count integer,
+    legal_domain_filter text
+)
+RETURNS TABLE(doc_name text, doc_type text, point_num text, content text, legal_domain text, similarity double precision)
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $function$
+    SELECT
+        n.doc_name,
+        n.doc_type,
+        n.point_num,
+        n.content,
+        n.legal_domain,
+        1 - (n.embedding OPERATOR(public.<=>) query_embedding) AS similarity
+    FROM public.npa_chunks AS n
+    WHERE
+        n.embedding IS NOT NULL
+        AND COALESCE(n.status, 'active') = 'active'
+        AND n.legal_domain IN (legal_domain_filter, 'general')
+        AND 1 - (n.embedding OPERATOR(public.<=>) query_embedding) >= match_threshold
+    ORDER BY n.embedding OPERATOR(public.<=>) query_embedding
+    LIMIT match_count;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.match_npa_chunks_v3(
+    query_embedding vector,
+    match_threshold double precision,
+    match_count integer,
+    legal_domain_filter text,
+    topic_filter text DEFAULT NULL
+)
+RETURNS TABLE(doc_name text, doc_type text, point_num text, content text, legal_domain text, topic text, similarity double precision)
+LANGUAGE sql
+STABLE
+SET search_path = ''
+AS $function$
+    SELECT
+        n.doc_name,
+        n.doc_type,
+        n.point_num,
+        n.content,
+        n.legal_domain,
+        n.topic,
+        1 - (n.embedding OPERATOR(public.<=>) query_embedding) AS similarity
+    FROM public.npa_chunks AS n
+    WHERE
+        n.embedding IS NOT NULL
+        AND COALESCE(n.status, 'active') = 'active'
+        AND (n.legal_domain = legal_domain_filter OR n.legal_domain = 'general')
+        AND (
+            topic_filter IS NULL
+            OR n.topic = topic_filter
+            OR n.topic = 'general'
+            OR n.topic IS NULL
+        )
+        AND 1 - (n.embedding OPERATOR(public.<=>) query_embedding) >= match_threshold
+    ORDER BY n.embedding OPERATOR(public.<=>) query_embedding
+    LIMIT match_count;
+$function$;
