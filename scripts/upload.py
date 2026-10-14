@@ -5,10 +5,13 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 from uuid import uuid4
 
 from docx import Document
+from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -369,22 +372,22 @@ def read_docx(
 
     parts: List[str] = []
 
-    # --------------------------------------------------------
-    # Paragraphs
-    # --------------------------------------------------------
+    # Обходим XML-элементы body по порядку: абзац, таблица,
+    # следующий абзац и т. д. Это сохраняет связь таблицы
+    # с пунктом НПА, рядом с которым она расположена.
+    for child in document.element.body.iterchildren():
 
-    for paragraph in document.paragraphs:
+        if child.tag == qn("w:p"):
+            block = Paragraph(child, document)
+            text = block.text.strip()
+            if text:
+                parts.append(text)
+            continue
 
-        text = paragraph.text.strip()
+        if child.tag != qn("w:tbl"):
+            continue
 
-        if text:
-            parts.append(text)
-
-    # --------------------------------------------------------
-    # Tables
-    # --------------------------------------------------------
-
-    for table in document.tables:
+        table = Table(child, document)
 
         for row in table.rows:
 
@@ -395,47 +398,22 @@ def read_docx(
                 cell_parts = []
 
                 for paragraph in cell.paragraphs:
-
-                    paragraph_text = (
-                        paragraph.text.strip()
-                    )
-
+                    paragraph_text = paragraph.text.strip()
                     if paragraph_text:
-                        cell_parts.append(
-                            paragraph_text
-                        )
+                        cell_parts.append(paragraph_text)
 
-                cell_text = " ".join(
-                    cell_parts
-                )
+                cell_text = " ".join(cell_parts)
 
                 if cell_text:
-                    cells.append(
-                        cell_text
-                    )
+                    cells.append(cell_text)
 
             if cells:
-                parts.append(
-                    " | ".join(cells)
-                )
+                parts.append(" | ".join(cells))
 
     text = "\n".join(parts)
-
-    text = text.replace(
-        "\r\n",
-        "\n",
-    )
-
-    text = text.replace(
-        "\r",
-        "\n",
-    )
-
-    text = re.sub(
-        r"\n{3,}",
-        "\n\n",
-        text,
-    )
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text.strip()
 
@@ -1321,12 +1299,14 @@ def build_rows(
 def insert_rows(
     supabase,
     rows: List[dict],
-) -> int:
+    return_inserted_rows: bool = False,
+) -> Union[int, List[dict]]:
 
     if not rows:
-        return 0
+        return [] if return_inserted_rows else 0
 
     uploaded = 0
+    inserted_rows: List[dict] = []
 
     total_batches = (
         len(rows)
@@ -1358,7 +1338,6 @@ def insert_rows(
         )
 
         def operation():
-
             return (
                 supabase
                 .table("npa_chunks")
@@ -1366,17 +1345,98 @@ def insert_rows(
                 .execute()
             )
 
-        supabase_execute(
+        response = supabase_execute(
             operation,
-            (
-                f"INSERT BATCH "
-                f"{batch_number}/{total_batches}"
-            ),
+            f"INSERT BATCH {batch_number}/{total_batches}",
         )
+
+        if return_inserted_rows:
+            batch_rows = getattr(response, "data", None) or []
+            if len(batch_rows) != len(batch):
+                raise RuntimeError(
+                    "INSERT RETURN COUNT MISMATCH: "
+                    f"expected {len(batch)}, got {len(batch_rows)}"
+                )
+            inserted_rows.extend(dict(item) for item in batch_rows)
 
         uploaded += len(batch)
 
+    if return_inserted_rows:
+        return inserted_rows
+
     return uploaded
+
+
+def renumber_staged_rows(
+    supabase,
+    staged_rows: List[dict],
+    doc_name: str,
+) -> None:
+    """
+    Обновляет chunk_no пакетными UPSERT-запросами по 50 строк,
+    используя полные строки и их первичные ключи id.
+    Вызывается после удаления старой редакции, пока строки
+    ещё имеют staging doc_name.
+    """
+    if not staged_rows:
+        return
+
+    ordered_rows = sorted(
+        staged_rows,
+        key=lambda item: int(item.get("chunk_no", 0)),
+    )
+
+    missing_ids = [
+        index + 1
+        for index, row in enumerate(ordered_rows)
+        if not row.get("id")
+    ]
+    if missing_ids:
+        raise RuntimeError(
+            "RENUMBER: INSERT response did not return id for "
+            f"chunks {missing_ids[:10]}"
+        )
+
+    total_batches = (
+        len(ordered_rows)
+        + UPLOAD_BATCH_SIZE
+        - 1
+    ) // UPLOAD_BATCH_SIZE
+
+    for start in range(0, len(ordered_rows), UPLOAD_BATCH_SIZE):
+        source_batch = ordered_rows[start:start + UPLOAD_BATCH_SIZE]
+        batch_number = start // UPLOAD_BATCH_SIZE + 1
+        batch: List[dict] = []
+
+        for new_chunk_no, source_row in enumerate(
+            source_batch,
+            start=start + 1,
+        ):
+            updated_row = dict(source_row)
+            updated_row["chunk_no"] = new_chunk_no
+            batch.append(updated_row)
+
+        def operation():
+            return (
+                supabase
+                .table("npa_chunks")
+                .upsert(batch, on_conflict="id")
+                .execute()
+            )
+
+        supabase_execute(
+            operation,
+            f"RENUMBER BATCH | {doc_name} | "
+            f"{batch_number}/{total_batches}",
+        )
+
+        logger.info(
+            "RENUMBER BATCH | %s | %s/%s | rows=%s",
+            doc_name,
+            batch_number,
+            total_batches,
+            len(batch),
+        )
 
 
 # ============================================================
@@ -1556,17 +1616,22 @@ def replace_document_safely(
         # 1. ЗАГРУЖАЕМ НОВУЮ РЕДАКЦИЮ
         # ====================================================
 
-        inserted = insert_rows(
+        inserted_rows = insert_rows(
             supabase,
             staging_rows,
+            return_inserted_rows=True,
         )
 
-        if inserted != expected_count:
-
+        if len(inserted_rows) != expected_count:
             raise RuntimeError(
                 "STAGING INSERT COUNT MISMATCH: "
                 f"expected {expected_count}, "
-                f"inserted {inserted}"
+                f"inserted {len(inserted_rows)}"
+            )
+
+        if any(not item.get("id") for item in inserted_rows):
+            raise RuntimeError(
+                "STAGING INSERT RESPONSE MISSING PRIMARY KEYS"
             )
 
         # ====================================================
@@ -1618,50 +1683,24 @@ def replace_document_safely(
             )
 
         # ====================================================
-        # 4. АКТИВИРУЕМ НОВУЮ РЕДАКЦИЮ
+        # 4. ВОССТАНАВЛИВАЕМ НУМЕРАЦИЮ ПАКЕТАМИ
         # ====================================================
 
+        # Старая редакция уже удалена, поэтому номера 1..N свободны.
+        # Полные строки с первичными ключами позволяют обновлять их
+        # через UPSERT батчами вместо отдельного UPDATE на каждый чанк.
+        renumber_staged_rows(
+            supabase,
+            inserted_rows,
+            doc_name,
+        )
+
+        # Активируем staging только после успешной перенумерации.
         update_document_name(
             supabase,
             staging_doc_name,
             doc_name,
         )
-
-        # После удаления старой редакции можно вернуть нумерацию
-        # chunks к 1..N, сохраняя UNIQUE(document_id, chunk_no).
-        def staged_ids_operation():
-            return (
-                supabase.table("npa_chunks")
-                .select("id,chunk_no")
-                .eq("doc_name", doc_name)
-                .eq("document_id", document_id)
-                .order("chunk_no")
-                .execute()
-            )
-
-        staged_ids_response = supabase_execute(
-            staged_ids_operation,
-            f"RENUMBER CHUNKS | {doc_name}",
-        )
-        staged_ids = getattr(staged_ids_response, "data", None) or []
-        if len(staged_ids) != expected_count:
-            raise RuntimeError(
-                "RENUMBER COUNT MISMATCH: "
-                f"expected {expected_count}, found {len(staged_ids)}"
-            )
-
-        for new_chunk_no, staged_item in enumerate(staged_ids, start=1):
-            def renumber_operation(item_id=staged_item["id"], number=new_chunk_no):
-                return (
-                    supabase.table("npa_chunks")
-                    .update({"chunk_no": number})
-                    .eq("id", item_id)
-                    .execute()
-                )
-            supabase_execute(
-                renumber_operation,
-                f"RENUMBER CHUNK | {new_chunk_no}/{expected_count}",
-            )
 
         # ====================================================
         # 5. ФИНАЛЬНАЯ ПРОВЕРКА
@@ -1680,6 +1719,33 @@ def replace_document_safely(
                 "FINAL DOCUMENT COUNT MISMATCH: "
                 f"expected {expected_count}, "
                 f"found {final_count}"
+            )
+
+        def final_chunk_numbers_operation():
+            return (
+                supabase.table("npa_chunks")
+                .select("chunk_no")
+                .eq("doc_name", doc_name)
+                .eq("document_id", document_id)
+                .order("chunk_no")
+                .execute()
+            )
+
+        final_chunk_numbers_response = supabase_execute(
+            final_chunk_numbers_operation,
+            f"VERIFY CHUNK NUMBERS | {doc_name}",
+        )
+        final_chunk_numbers = [
+            int(item["chunk_no"])
+            for item in (getattr(final_chunk_numbers_response, "data", None) or [])
+        ]
+        expected_chunk_numbers = list(range(1, expected_count + 1))
+        if final_chunk_numbers != expected_chunk_numbers:
+            raise RuntimeError(
+                "FINAL CHUNK NUMBER SEQUENCE MISMATCH: "
+                f"expected 1..{expected_count}, "
+                f"got {len(final_chunk_numbers)} rows "
+                "with a non-sequential sequence"
             )
 
         staging_left = (
