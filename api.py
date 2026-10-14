@@ -155,6 +155,22 @@ async def chat(request: ChatRequest):
             rag=result.get("rag") or {},
         )
 
+    if result.get("error") == "grounding_failed":
+        return ChatResponse(
+            success=False,
+            error="grounding_failed",
+            question=question,
+            answer=(
+                "Не удалось подтвердить ответ найденными фрагментами нормативных "
+                "правовых актов. Чтобы не вводить вас в заблуждение, я не буду "
+                "выдавать неподтверждённое предположение за требование законодательства. "
+                "Попробуйте уточнить вопрос или указать конкретный нормативный акт."
+            ),
+            answer_with_citations="",
+            sources=[],
+            rag=result.get("rag") or {},
+        )
+
     if not result.get("success"):
         raise HTTPException(
             status_code=500,
@@ -226,12 +242,19 @@ async def create_prescription(request: PrescriptionRequest):
     if not confirmed:
         raise HTTPException(status_code=400, detail="Нет подтверждённых нарушений с проверенным нормативным основанием.")
     try:
-        content = build_draft_prescription(
-            findings=confirmed, enterprise=request.enterprise, subdivision=request.subdivision,
-            workplace=request.workplace, recipient=request.recipient,
-            prescription_number=request.prescription_number, deadline=request.deadline or None,
-            issuer_name=request.issuer_name, issuer_position=request.issuer_position,
-            recipient_name=request.recipient_name, recipient_position=request.recipient_position,
+        content = await asyncio.to_thread(
+            build_draft_prescription,
+            findings=confirmed,
+            enterprise=request.enterprise,
+            subdivision=request.subdivision,
+            workplace=request.workplace,
+            recipient=request.recipient,
+            prescription_number=request.prescription_number,
+            deadline=request.deadline or None,
+            issuer_name=request.issuer_name,
+            issuer_position=request.issuer_position,
+            recipient_name=request.recipient_name,
+            recipient_position=request.recipient_position,
         )
         return StreamingResponse(BytesIO(content),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
