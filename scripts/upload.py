@@ -1490,85 +1490,37 @@ def replace_document_safely(
     dry_run: bool = False,
 ) -> int:
     """
-    Безопасная замена редакции НПА.
+    Заменяет редакцию через staging и транзакционную PostgreSQL-функцию.
 
-    Последовательность:
-
-    1. Новая редакция полностью подготовлена.
-    2. Embeddings рассчитаны.
-    3. Rows сформированы.
-    4. Rows загружаются под временным staging-именем.
-    5. Staging проверяется.
-    6. Только после этого удаляется старая редакция.
-    7. Staging переименовывается в canonical doc_name.
-    8. Выполняется финальная проверка.
+    Новые чанки сначала загружаются со status='inactive', поэтому
+    поисковые RPC, фильтрующие status='active', не должны их возвращать.
+    Удаление старой редакции, перенумерация и активация выполняются
+    одной транзакцией внутри activate_npa_staging_document().
     """
 
     if not rows:
-
-        raise RuntimeError(
-            f"Нет данных для замены документа: "
-            f"{doc_name}"
-        )
+        raise RuntimeError(f"Нет данных для замены документа: {doc_name}")
 
     expected_count = len(rows)
-
     if dry_run:
-
         logger.info(
-            "DRY-RUN | замена НЕ выполняется."
-        )
-
-        logger.info(
-            "DRY-RUN | документ=%s | "
-            "новых chunks=%s",
+            "DRY-RUN | замена НЕ выполняется | документ=%s | chunks=%s",
             doc_name,
             expected_count,
         )
-
         return expected_count
 
-    # --------------------------------------------------------
-    # Проверяем, что старый документ действительно существует.
-    # --------------------------------------------------------
-
-    if not document_exists(
-        supabase,
-        doc_name,
-    ):
-
-        raise RuntimeError(
-            "REPLACE требует существующий документ. "
-            f"Документ '{doc_name}' "
-            "не найден в Supabase."
-        )
-
-    # npa_chunks.document_id — обязательный FK.
-    # Для replace используем UUID существующей записи НПА.
-    document_id = get_document_id(
-        supabase,
-        doc_name,
-    )
-
+    # Проверяем запись документа, а не наличие старых чанков:
+    # это позволяет восстановить документ, у которого запись есть,
+    # но чанки отсутствуют или повреждены.
+    document_id = get_document_id(supabase, doc_name)
     if not document_id:
         raise RuntimeError(
-            "REPLACE: получен пустой document_id "
-            f"для документа: {doc_name}"
+            f"REPLACE: пустой document_id для документа: {doc_name}"
         )
 
-    logger.info(
-        "DOCUMENT ID | %s | %s",
-        doc_name,
-        document_id,
-    )
+    staging_doc_name = f"{STAGING_PREFIX}{uuid4().hex}"
 
-    staging_doc_name = (
-        f"{STAGING_PREFIX}"
-        f"{uuid4().hex}"
-    )
-
-    # UNIQUE(document_id, chunk_no): staging-фрагменты временно
-    # получают номера выше максимального номера старой редакции.
     def max_chunk_operation():
         return (
             supabase.table("npa_chunks")
@@ -1586,36 +1538,24 @@ def replace_document_safely(
     max_chunk_data = getattr(max_chunk_response, "data", None) or []
     max_chunk_no = int(max_chunk_data[0]["chunk_no"]) if max_chunk_data else 0
 
-    staging_rows = []
-
+    staging_rows: List[dict] = []
     for offset, row in enumerate(rows, start=1):
         staged_row = dict(row)
         staged_row["doc_name"] = staging_doc_name
         staged_row["document_id"] = document_id
         staged_row["chunk_no"] = max_chunk_no + offset
-
-        if not staged_row.get("document_id"):
-            raise RuntimeError(
-                "REPLACE: staging row сформирован "
-                "без document_id."
-            )
-
-        staging_rows.append(
-            staged_row
-        )
+        # Не позволяем поиску видеть неполную новую редакцию.
+        staged_row["status"] = "inactive"
+        staging_rows.append(staged_row)
 
     logger.info(
-        "REPLACE | staging name=%s | document_id=%s",
+        "REPLACE | staging=%s | document_id=%s | chunks=%s",
         staging_doc_name,
         document_id,
+        expected_count,
     )
 
     try:
-
-        # ====================================================
-        # 1. ЗАГРУЖАЕМ НОВУЮ РЕДАКЦИЮ
-        # ====================================================
-
         inserted_rows = insert_rows(
             supabase,
             staging_rows,
@@ -1625,162 +1565,103 @@ def replace_document_safely(
         if len(inserted_rows) != expected_count:
             raise RuntimeError(
                 "STAGING INSERT COUNT MISMATCH: "
-                f"expected {expected_count}, "
-                f"inserted {len(inserted_rows)}"
+                f"expected {expected_count}, inserted {len(inserted_rows)}"
             )
-
         if any(not item.get("id") for item in inserted_rows):
-            raise RuntimeError(
-                "STAGING INSERT RESPONSE MISSING PRIMARY KEYS"
-            )
+            raise RuntimeError("STAGING INSERT RESPONSE MISSING PRIMARY KEYS")
 
-        # ====================================================
-        # 2. ПРОВЕРЯЕМ STAGING
-        # ====================================================
-
-        staged_count = (
-            count_document_rows(
-                supabase,
-                staging_doc_name,
-            )
-        )
-
+        staged_count = count_document_rows(supabase, staging_doc_name)
         if staged_count != expected_count:
-
             raise RuntimeError(
                 "STAGING VERIFY COUNT MISMATCH: "
-                f"expected {expected_count}, "
-                f"found {staged_count}"
+                f"expected {expected_count}, found {staged_count}"
             )
 
-        logger.info(
-            "STAGING VERIFY | OK | chunks=%s",
-            staged_count,
-        )
-
-        # ====================================================
-        # 3. ТЕПЕРЬ МОЖНО УДАЛИТЬ СТАРУЮ РЕДАКЦИЮ
-        # ====================================================
-
-        delete_document_vectors(
-            supabase,
-            doc_name,
-        )
-
-        old_count_after_delete = (
-            count_document_rows(
-                supabase,
-                doc_name,
-            )
-        )
-
-        if old_count_after_delete != 0:
-
-            raise RuntimeError(
-                "OLD DOCUMENT DELETE VERIFY FAILED: "
-                f"remaining="
-                f"{old_count_after_delete}"
-            )
-
-        # ====================================================
-        # 4. ВОССТАНАВЛИВАЕМ НУМЕРАЦИЮ ПАКЕТАМИ
-        # ====================================================
-
-        # Старая редакция уже удалена, поэтому номера 1..N свободны.
-        # Полные строки с первичными ключами позволяют обновлять их
-        # через UPSERT батчами вместо отдельного UPDATE на каждый чанк.
-        renumber_staged_rows(
-            supabase,
-            inserted_rows,
-            doc_name,
-        )
-
-        def staged_chunk_numbers_operation():
+        # Проверяем статус до атомарного переключения.
+        def staged_status_operation():
             return (
                 supabase.table("npa_chunks")
-                .select("chunk_no")
+                .select("id,status,document_id")
                 .eq("doc_name", staging_doc_name)
+                .eq("document_id", document_id)
+                .execute()
+            )
+
+        staged_status_response = supabase_execute(
+            staged_status_operation,
+            f"VERIFY STAGING STATUS | {doc_name}",
+        )
+        staged_items = getattr(staged_status_response, "data", None) or []
+        if len(staged_items) != expected_count:
+            raise RuntimeError(
+                "STAGING DOCUMENT_ID VERIFY FAILED: "
+                f"expected {expected_count}, found {len(staged_items)}"
+            )
+        if any(item.get("status") != "inactive" for item in staged_items):
+            raise RuntimeError("STAGING STATUS VERIFY FAILED: non-inactive row found")
+
+        # Один RPC = одна транзакция PostgreSQL. Если функция выбросит
+        # исключение, удаление старых строк и активация откатятся вместе.
+        def activate_operation():
+            return supabase.rpc(
+                "activate_npa_staging_document",
+                {
+                    "p_document_id": document_id,
+                    "p_staging_doc_name": staging_doc_name,
+                    "p_doc_name": doc_name,
+                    "p_expected_count": expected_count,
+                },
+            ).execute()
+
+        supabase_execute(
+            activate_operation,
+            f"ATOMIC ACTIVATE DOCUMENT | {doc_name}",
+        )
+
+        final_count = count_document_rows(supabase, doc_name)
+        if final_count != expected_count:
+            raise RuntimeError(
+                "FINAL DOCUMENT COUNT MISMATCH: "
+                f"expected {expected_count}, found {final_count}"
+            )
+
+        def final_status_operation():
+            return (
+                supabase.table("npa_chunks")
+                .select("id,status,document_id,chunk_no")
+                .eq("doc_name", doc_name)
                 .eq("document_id", document_id)
                 .order("chunk_no")
                 .execute()
             )
 
-        staged_chunk_numbers_response = supabase_execute(
-            staged_chunk_numbers_operation,
-            f"VERIFY STAGING CHUNK NUMBERS | {doc_name}",
+        final_status_response = supabase_execute(
+            final_status_operation,
+            f"FINAL VERIFY | {doc_name}",
         )
-        staged_chunk_numbers = [
-            int(item["chunk_no"])
-            for item in (getattr(staged_chunk_numbers_response, "data", None) or [])
-        ]
-        expected_chunk_numbers = list(range(1, expected_count + 1))
-        if staged_chunk_numbers != expected_chunk_numbers:
+        final_rows = getattr(final_status_response, "data", None) or []
+        expected_numbers = list(range(1, expected_count + 1))
+        actual_numbers = [int(item["chunk_no"]) for item in final_rows]
+        if len(final_rows) != expected_count:
             raise RuntimeError(
-                "STAGING CHUNK NUMBER SEQUENCE MISMATCH: "
-                f"expected 1..{expected_count}, "
-                f"got {len(staged_chunk_numbers)} rows "
-                "with a non-sequential sequence"
+                f"FINAL ROW COUNT MISMATCH: expected {expected_count}, got {len(final_rows)}"
             )
-
-        # Активируем staging только после успешной перенумерации
-        # и проверки последовательности chunk_no.
-        update_document_name(
-            supabase,
-            staging_doc_name,
-            doc_name,
-        )
-
-        # ====================================================
-        # 5. ФИНАЛЬНАЯ ПРОВЕРКА
-        # ====================================================
-
-        final_count = (
-            count_document_rows(
-                supabase,
-                doc_name,
-            )
-        )
-
-        if final_count != expected_count:
-
-            raise RuntimeError(
-                "FINAL DOCUMENT COUNT MISMATCH: "
-                f"expected {expected_count}, "
-                f"found {final_count}"
-            )
-
-        staging_left = (
-            count_document_rows(
-                supabase,
-                staging_doc_name,
-            )
-        )
-
-        if staging_left != 0:
-
-            raise RuntimeError(
-                "STAGING ROWS REMAIN "
-                "AFTER ACTIVATION: "
-                f"{staging_left}"
-            )
+        if actual_numbers != expected_numbers:
+            raise RuntimeError("FINAL CHUNK NUMBER SEQUENCE MISMATCH")
+        if any(item.get("status") != "active" for item in final_rows):
+            raise RuntimeError("FINAL STATUS VERIFY FAILED: non-active row found")
 
         logger.info(
-            "REPLACE COMPLETE | %s | chunks=%s",
+            "REPLACE COMPLETE | %s | chunks=%s | atomic=yes",
             doc_name,
             final_count,
         )
-
         return final_count
 
     except Exception:
-
-        # Удаляем только staging.
-        # Канонический документ здесь не удаляем.
-        cleanup_staging(
-            supabase,
-            staging_doc_name,
-        )
-
+        # После ошибки RPC старые данные откатываются PostgreSQL-транзакцией.
+        # Здесь удаляем только staging-строки, никогда не canonical-документ.
+        cleanup_staging(supabase, staging_doc_name)
         raise
 
 
