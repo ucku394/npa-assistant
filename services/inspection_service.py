@@ -147,6 +147,10 @@ async def verify_finding(
         .replace("{finding}", json.dumps(finding, ensure_ascii=False))
         .replace("{retrieved_text}", indexed_context)
     )
+    unresolved = re.findall(r"\{[a-zA-Z_][a-zA-Z0-9_]*\}", prompt)
+    if unresolved:
+        logger.error("INSPECTION | unresolved prompt placeholders=%s", unresolved)
+        raise ValueError("Legal verification prompt contains unresolved placeholders.")
     try:
         answer = await asyncio.to_thread(generate_vision_legal_json, prompt)
         data = _parse_json(answer)
