@@ -735,17 +735,32 @@ def _search_chunks(
             exc,
         )
 
-        response = (
-            supabase.rpc(
-                "semantic_search_npa_chunks",
-                {
-                    "query_embedding": query_vector,
-                    "match_count": RAG_CANDIDATE_COUNT,
-                    "domain_filter": legal_domain,
-                    "topic_filter": topic_filter,
-                },
-            ).execute()
-        )
+        try:
+            response = (
+                supabase.rpc(
+                    "semantic_search_npa_chunks",
+                    {
+                        "query_embedding": query_vector,
+                        "match_count": RAG_CANDIDATE_COUNT,
+                        "domain_filter": legal_domain,
+                        "topic_filter": topic_filter,
+                    },
+                ).execute()
+            )
+        except Exception as fallback_exc:
+            error_text = str(fallback_exc)
+            if "jwt issued at future" in error_text.lower():
+                logger.error(
+                    "RAG | semantic fallback also failed: Supabase rejected JWT as issued in the future; "
+                    "check the configured service-role key and its iat/clock alignment. "
+                    "Returning no candidates instead of aborting the request."
+                )
+            else:
+                logger.exception(
+                    "RAG | semantic fallback failed after hybrid search error; returning no candidates | error=%s",
+                    fallback_exc,
+                )
+            return []
 
         data = response.data or []
         for chunk in data:
