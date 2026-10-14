@@ -256,3 +256,31 @@ def test_legal_system_prompt_is_compact_and_keeps_core_policy():
     assert "SOURCE_ID" in LEGAL_SYSTEM_PROMPT
     assert "[SOURCE:NPA_...]" in LEGAL_SYSTEM_PROMPT
     assert "рядом с подтверждаемым утверждением" in LEGAL_SYSTEM_PROMPT
+
+
+def test_claim_evidence_accepts_source_marker_on_immediately_following_line():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Согласно п. 17 Директивы № 1 руководители обеспечивают дисциплину.\n"
+            "[SOURCE:NPA_DIRECTIVE_1_P17]\n"
+            "Согласно ст. 253 Трудового кодекса применяется соответствующая норма.\n"
+            "[SOURCE:NPA_TK_253]"
+        ),
+        evidence_map=[
+            {
+                "source_id": "NPA_DIRECTIVE_1_P17",
+                "document": "Директива № 1 о мерах по укреплению общественной безопасности и дисциплины",
+                "point": "17.",
+                "excerpt": "Пункт 17. Руководители организаций обеспечивают общественную безопасность и дисциплину.",
+            },
+            {
+                "source_id": "NPA_TK_253",
+                "document": "Трудовой кодекс Республики Беларусь",
+                "point": "статья 253",
+                "excerpt": "Статья 253. Обязанности нанимателя.",
+            },
+        ],
+        query_profile={"question_type": "general"},
+        question="Какие обязанности установлены?",
+    )
+    assert result["passed"] is True

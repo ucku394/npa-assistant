@@ -180,9 +180,23 @@ class ChatService:
                 if position >= 0
             ]
             sentence_end = min(sentence_ends) + 1 if sentence_ends else len(text)
-            local_ids = set(
-                ChatService._extract_source_ids(str(answer or "")[sentence_start:sentence_end])
+            answer_text = str(answer or "")
+            local_text = answer_text[sentence_start:sentence_end]
+
+            # The legal prompt explicitly allows SOURCE markers on the line
+            # immediately after a claim. Include that one adjacent marker when
+            # binding a legal reference to its evidence; do not scan later
+            # sentences, which could incorrectly validate a reference by a
+            # citation belonging to a different claim.
+            adjacent_text = answer_text[sentence_end:]
+            adjacent_marker = re.match(
+                r"\s*\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]",
+                adjacent_text,
             )
+            if adjacent_marker:
+                local_text += adjacent_marker.group(0)
+
+            local_ids = set(ChatService._extract_source_ids(local_text))
             cited_documents = {
                 str(item.get("document") or "").strip()
                 for item in cited_evidence
