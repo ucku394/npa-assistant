@@ -786,6 +786,7 @@ class ChatService:
             answer = await asyncio.to_thread(
                 generate_answer,
                 prompt,
+                enforce_source_grounding=False,
                 request_id=request_id,
             )
         except Exception as exc:
@@ -991,6 +992,7 @@ class ChatService:
                 retry_answer = await asyncio.to_thread(
                     generate_answer,
                     retry_prompt,
+                    enforce_source_grounding=False,
                     request_id=request_id,
                 )
             except Exception as exc:
