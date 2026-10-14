@@ -152,9 +152,8 @@ def ensure_numbered_list_spacing(text: str) -> str:
 
 
 def to_telegram_html(text: str) -> str:
-    text = clean_ai_markup(text)
-    text = ensure_numbered_list_spacing(text)
-    text = html.escape(text, quote=False)
+    # Input is normalized once in send_long_message before splitting.
+    text = html.escape(str(text or ""), quote=False)
 
     text = re.sub(r"(?m)^\s*#{1,6}\s*(.+?)\s*$", r"<b>\1</b>", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
@@ -207,6 +206,9 @@ async def send_long_message(
 ):
     if not update.effective_message:
         return
+
+    # Normalize once before splitting; HTML conversion must not repeat text cleanup.
+    text = ensure_numbered_list_spacing(clean_ai_markup(text))
 
     for chunk in split_text_smart(text):
         if use_html:
@@ -423,13 +425,12 @@ async def text_handler(
                 except Exception as e:
                     logger.debug("Не удалось обновить статус анализа: %s", e)
 
-            # Normalize once here; send_long_message performs HTML conversion only.
-            answer = ensure_numbered_list_spacing(clean_ai_markup(
+            answer = (
                 result.get("telegram_answer")
                 or result.get("answer_with_citations")
                 or result.get("answer")
                 or ""
-            ))
+            )
 
             sources = result.get("sources") or []
             if not sources:
