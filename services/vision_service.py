@@ -63,6 +63,39 @@ def _should_retry(exc: Exception) -> bool:
     return _error_kind(exc) == "transient"
 
 
+# Process-local cooldowns prevent every new photo from retrying a provider
+# whose quota is exhausted or whose account has no balance.
+_VISION_MODEL_DISABLED_UNTIL: Dict[str, float] = {}
+
+
+def _vision_model_cooldown_seconds(model: str, exc: Exception) -> int:
+    message = str(exc or "").lower()
+    if (
+        "generate_content_free_tier_requests" in message
+        or "generaterequestsperdayperproject-freetier" in message
+        or _is_openrouter_daily_free_quota_error(exc)
+    ):
+        return 24 * 60 * 60
+
+    kind = _error_kind(exc)
+    if kind == "quota":
+        return 5 * 60
+    if kind in {"balance", "auth", "forbidden"}:
+        return 30 * 60
+    if kind == "transient":
+        return 30
+    return 2 * 60
+
+
+def _mark_vision_model_cooldown(model: str, exc: Exception) -> None:
+    seconds = _vision_model_cooldown_seconds(model, exc)
+    _VISION_MODEL_DISABLED_UNTIL[model] = time.monotonic() + seconds
+    logger.warning(
+        "VISION | model cooldown | model=%s | kind=%s | seconds=%s",
+        model, _error_kind(exc), seconds,
+    )
+
+
 _client = OpenAI(
     api_key=OPENROUTER_API_KEY,
     base_url="https://openrouter.ai/api/v1",
@@ -535,8 +568,17 @@ def analyze_image(
     last_error: Exception | None = None
     best_empty: Dict[str, Any] | None = None
     free_tier_exhausted = False
+    attempted_models = 0
 
     for model in models:
+        remaining = _VISION_MODEL_DISABLED_UNTIL.get(model, 0.0) - time.monotonic()
+        if remaining > 0:
+            logger.info(
+                "VISION | skip model on cooldown | model=%s | remaining=%ss",
+                model, int(remaining),
+            )
+            continue
+
         if free_tier_exhausted and (
             model == "openrouter/free" or model.endswith(":free")
         ):
@@ -545,6 +587,7 @@ def analyze_image(
                 model,
             )
             continue
+        attempted_models += 1
         try:
             logger.info(
                 "VISION | trying model=%s | provider=%s",
@@ -588,6 +631,7 @@ def analyze_image(
 
         except Exception as exc:
             last_error = exc
+            _mark_vision_model_cooldown(model, exc)
             if _is_openrouter_daily_free_quota_error(exc):
                 free_tier_exhausted = True
                 logger.error(
@@ -606,6 +650,11 @@ def analyze_image(
         if not best_empty["potential_findings"]:
             best_empty["needs_review"] = True
         return best_empty
+
+    if attempted_models == 0 and models:
+        raise VisionUnavailableError(
+            "All configured vision providers are on cooldown; retry after the cooldown expires."
+        ) from last_error
 
     if free_tier_exhausted:
         raise VisionUnavailableError(
