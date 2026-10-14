@@ -65,7 +65,7 @@ BEGIN
         SELECT 1
           FROM public.npa_chunks c
          WHERE c.doc_name = p_staging_doc_name
-           AND c.document_id <> p_document_id
+           AND c.document_id IS DISTINCT FROM p_document_id
     ) THEN
         RAISE EXCEPTION 'Staging name is associated with another document';
     END IF;
@@ -74,7 +74,7 @@ BEGIN
     -- If any later statement fails, PostgreSQL rolls this deletion back.
     DELETE FROM public.npa_chunks c
      WHERE c.document_id = p_document_id
-       AND c.doc_name <> p_staging_doc_name;
+       AND c.doc_name IS DISTINCT FROM p_staging_doc_name;
 
     -- Move staging chunk numbers to a disjoint temporary range first. This
     -- avoids collisions with UNIQUE(document_id, chunk_no) while renumbering.
