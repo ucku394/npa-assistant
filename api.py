@@ -238,10 +238,33 @@ async def inspect_photo(file: UploadFile = File(...)):
 
 @app.post("/api/prescription")
 async def create_prescription(request: PrescriptionRequest):
-    confirmed = [x for x in request.findings if x.get("status") == "confirmed" and x.get("legal_basis")]
-    if not confirmed:
-        raise HTTPException(status_code=400, detail="Нет подтверждённых нарушений с проверенным нормативным основанием.")
+    # Never trust status/legal_basis supplied by the browser. Re-run legal
+    # verification on the server and use only the fresh, source-validated result.
+    candidates = []
+    for item in request.findings:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get("violation") or item.get("description") or "").strip()
+        if not description:
+            continue
+        candidates.append({
+            "description": description,
+            "visual_evidence": str(item.get("evidence") or item.get("visual_evidence") or "").strip(),
+            "risk_level": item.get("risk_level", "medium"),
+        })
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Нет наблюдений для повторной юридической проверки.")
     try:
+        reverified = await verify_findings(candidates, chat_service.supabase)
+        confirmed = [
+            item for item in reverified
+            if item.get("status") == "confirmed" and item.get("legal_basis")
+        ]
+        if not confirmed:
+            raise HTTPException(
+                status_code=400,
+                detail="Повторная проверка не подтвердила нарушения с нормативным основанием. Проект не сформирован.",
+            )
         content = await asyncio.to_thread(
             build_draft_prescription,
             findings=confirmed,
