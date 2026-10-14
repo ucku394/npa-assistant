@@ -934,7 +934,7 @@ class ChatService:
                     evidence_map=evidence_map,
                     query_profile=rag_result.get("query_profile") or {},
                     topic=str(rag_result.get("topic") or ""),
-            question=question,
+                    question=question,
                 )
 
 
