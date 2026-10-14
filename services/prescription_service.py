@@ -11,7 +11,6 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
 from config import (
-    PRESCRIPTION_DEFAULT_DEADLINE_DAYS,
     PRESCRIPTION_ORGANIZATION,
     PRESCRIPTION_SERVICE_NAME,
     PRESCRIPTION_DEFAULT_RESPONSIBLE,
