@@ -230,7 +230,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
 def test_grounding_retry_prompt_uses_real_line_breaks():
     prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
 
-    assert "\\n\\n===" not in prompt
+    assert "\n\n===" not in prompt
     assert "\n\n===" in prompt
 
 
@@ -261,9 +261,9 @@ def test_legal_system_prompt_is_compact_and_keeps_core_policy():
 def test_claim_evidence_accepts_source_marker_on_immediately_following_line():
     result = ChatService._claim_evidence_check(
         answer=(
-            "Согласно п. 17 Директивы № 1 руководители обеспечивают дисциплину.\\n"
-            "[SOURCE:NPA_DIRECTIVE_1_P17]\\n"
-            "Согласно ст. 253 Трудового кодекса применяется соответствующая норма.\\n"
+            "Согласно п. 17 Директивы № 1 руководители обеспечивают дисциплину.\n"
+            "[SOURCE:NPA_DIRECTIVE_1_P17]\n"
+            "Согласно ст. 253 Трудового кодекса применяется соответствующая норма.\n"
             "[SOURCE:NPA_TK_253]"
         ),
         evidence_map=[
