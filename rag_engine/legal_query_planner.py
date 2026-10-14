@@ -53,7 +53,7 @@ def build_legal_query_plan(original: str, profile: Dict[str, Any], topic: str, l
     fallback = fallback_plan(original, profile, topic, legal_domain)
     if not original: return fallback
     try:
-        from ai_router import generate_answer
+        from services.ai_router import generate_answer
         raw = generate_answer(_prompt(original, profile, topic, legal_domain), enforce_source_grounding=False)
         plan = _json(raw)
         allowed_domains = {"occupational_safety","fire_safety","industrial_safety","labor_law","other"}

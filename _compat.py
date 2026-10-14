@@ -24,7 +24,6 @@ _MODULES = {
     "evaluate_rag_retrieval": "scripts.evaluate_rag_retrieval",
     "reindex": "scripts.reindex",
     "upload": "scripts.upload",
-    "test_embedding": "scripts.check_embedding",
 }
 
 def dispatch(caller_name: str, caller_file: str) -> None:

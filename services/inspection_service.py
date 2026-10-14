@@ -120,7 +120,7 @@ async def verify_finding(
             "risk_level": "medium",
         }
 
-    from inspection_query import build_finding_query
+    from .inspection_query import build_finding_query
 
     query = build_finding_query(finding)
 
