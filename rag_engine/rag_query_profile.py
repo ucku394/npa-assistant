@@ -560,6 +560,31 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "продолжительность стажировки",
         ])
 
+    # Target the indexed Presidential Directive No. 1 for distinctive organizational-discipline questions.
+    _directive_query = bool(re.search(
+        r"директив\w*.{0,100}(?:№\s*1|11\s+марта\s+2004)|"
+        r"общественн\w+ безопасност\w*.{0,100}дисциплин\w*",
+        query,
+        re.IGNORECASE,
+    ))
+    _leadership_discipline = (
+        bool(re.search(r"руководител\w*.{0,50}организац\w*", query, re.IGNORECASE))
+        and bool(re.search(r"дисциплин\w*", query, re.IGNORECASE))
+        and bool(re.search(r"безопасност\w*", query, re.IGNORECASE))
+    )
+    if _directive_query or _leadership_discipline:
+        profile["target_document"] = "общественной безопасности и дисциплины"
+        profile["event"] = "organizational_discipline"
+        profile["subject"] = "organization_leadership"
+        profile["object"] = "discipline_and_public_safety"
+        profile["qualifiers"].append("directive_1_organizational_discipline")
+        profile["legal_phrases"].extend([
+            "Директива Президента Республики Беларусь от 11 марта 2004 г. № 1",
+            "О мерах по укреплению общественной безопасности и дисциплины",
+            "руководители организаций обязаны",
+            "укрепление трудовой дисциплины",
+            "обеспечение общественной безопасности",
+        ])
     profile["legal_phrases"] = list(dict.fromkeys(profile["legal_phrases"]))
     profile["qualifiers"] = list(dict.fromkeys(profile["qualifiers"]))
     return profile

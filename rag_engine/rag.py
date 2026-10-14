@@ -2715,6 +2715,15 @@ def _legal_authority_relevance_score(
         if normalized_target and normalized_target in normalized_doc:
             score += 0.75
 
+        # A named Directive No. 1 is the primary authority for this question.
+        # Give it a material reranking advantage; the default +0.75 was too weak
+        # to prevent unrelated but semantically similar acts from taking all slots.
+        if target_document == "общественной безопасности и дисциплины":
+            if "общественной безопасности и дисциплины" in normalized_doc:
+                score += 2.50
+            else:
+                score -= 0.65
+
     if target_article:
         normalized_point = point.rstrip(".").strip()
         normalized_article = target_article.rstrip(".").strip()
