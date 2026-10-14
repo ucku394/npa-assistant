@@ -212,3 +212,23 @@ def test_claim_evidence_does_not_mix_point_from_another_act():
     )
     assert result["passed"] is False
     assert result["reason"] == "legal_reference_not_found_in_cited_evidence"
+
+def test_legal_assistant_prompt_includes_evidence_map():
+    from prompts import LEGAL_ASSISTANT_PROMPT
+
+    evidence_map_text = "EVIDENCE MAP:\nSOURCE_ID=NPA_TEST_1"
+    prompt = LEGAL_ASSISTANT_PROMPT.format(
+        user_query="Тестовый вопрос",
+        retrieved_text="Фрагмент нормативного акта",
+        evidence_map=evidence_map_text,
+    )
+
+    assert evidence_map_text in prompt
+    assert prompt.index(evidence_map_text) < prompt.rindex("НОРМАТИВНЫЙ КОНТЕКСТ")
+
+
+def test_grounding_retry_prompt_uses_real_line_breaks():
+    prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
+
+    assert "\\n\\n===" not in prompt
+    assert "\n\n===" in prompt
