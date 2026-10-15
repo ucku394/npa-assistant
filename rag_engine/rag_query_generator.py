@@ -231,6 +231,17 @@ def build_search_queries(
     universal_profile["legal_query_plan"] = legal_plan
     queries: List[str] = [original]
 
+    if "external_service_provider_briefing" in (universal_profile.get("qualifiers") or []):
+        # Сначала короткие лексические запросы к норме № 175, п. 46:
+        # длинный исходный вопрос может иначе проиграть тематике медосмотров.
+        queries.extend([
+            "Инструкция № 175 пункт 46 вводный инструктаж",
+            "пункт 46 вводный инструктаж оказание услуг на территории организации",
+            "работники других организаций вводный инструктаж выполнение работ на территории организации",
+            "привлечение к работам оказанию услуг в организации или на ее территории",
+            "выполнение работ оказание услуг по заданию организации по заключенному договору вводный инструктаж",
+        ])
+
     # Short lexical queries are essential for inflected Russian legal terms.
     # PGroonga's query syntax does not reliably stem every inflection, so a
     # long natural-language question can yield zero lexical hits even when the
