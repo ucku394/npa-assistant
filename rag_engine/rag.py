@@ -1445,6 +1445,15 @@ def _targeted_occupational_briefing_search(
     target_mode = _is_target_briefing_query(user_query)
     normalized_query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
     procedure_mode = bool(
+    external_service_query = bool(
+        re.search(r"\bинструктаж\w*", normalized_query)
+        and re.search(
+            r"\b(?:медицинск\w*\s+работник\w*|медработник\w*|сторонн\w*\s+организац\w*|"
+            r"друг\w*\s+организац\w*|подрядчик\w*|оказан\w*\s+услуг\w*|"
+            r"на\s+территори\w*)",
+            normalized_query,
+        )
+    )
         re.search(
             r"\b(алгоритм|порядок|пошагов|что делать|как провести|как организовать|"
             r"последовательност|процедур)\b",
@@ -1458,6 +1467,10 @@ def _targeted_occupational_briefing_search(
         point_values = []
         for point in range(16, 36):
             point_values.extend([str(point), f"{point}."])
+        # Для стороннего исполнителя адресно извлекаем п. 46, который
+        # регулирует вводный инструктаж при оказании услуг на территории.
+        if external_service_query:
+            point_values.extend(["46", "46."])
 
         response = (
             supabase.table("npa_chunks")
@@ -1494,6 +1507,8 @@ def _targeted_occupational_briefing_search(
             "22": 1000, "26": 900, "27": 880, "28": 860,
             "29": 840, "30": 820, "31": 980, "35": 960,
         }
+        if external_service_query:
+            priority_points["46"] = 1100
 
         def briefing_priority(chunk: Dict[str, Any]) -> tuple:
             point = _normalize_point_identifier(_get_point_number(chunk))
