@@ -212,6 +212,22 @@ def detect_topic(user_query: str) -> str:
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in ppe_nonprovision_patterns):
         return "ppe_nonprovision"
 
+    # Если вопрос касается инструктажа внешнего специалиста, медицинский
+    # контекст не должен ошибочно переключать поиск на нормы о медосмотрах.
+    external_service_briefing = (
+        re.search(r"\\bинструктаж\\w*", query, re.IGNORECASE)
+        and re.search(
+            r"\\b(?:медицинск\\w*\\s+работник\\w*|медработник\\w*|работник\\w*\\s+медицинск\\w*)\\b|"
+            r"\\bсторонн\\w*\\s+организац\\w*|\\bдруг\\w*\\s+организац\\w*|"
+            r"\\bподрядчик\\w*|\\bоказывающ\\w*\\s+услуг\\w*|"
+            r"\\bна\\s+территори\\w*\\s+(?:организац\\w*|предприят\\w*)",
+            query,
+            re.IGNORECASE,
+        )
+    )
+    if external_service_briefing:
+        return "occupational_briefing"
+
     medical_exam_patterns = [
         r"\bмедицинск\w*\s+осмотр\w*",
         r"\bмедицинск\w*\s+освидетельствован\w*",
