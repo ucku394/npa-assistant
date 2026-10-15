@@ -32,6 +32,35 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
     if not query:
         return profile
 
+    # При инструктаже стороннего специалиста приоритетна сфера действия
+    # п. 46 Инструкции № 175, а не правила проведения медосмотров.
+    external_service_briefing = (
+        re.search(r"\\bинструктаж\\w*", query, re.IGNORECASE)
+        and re.search(
+            r"\\b(?:медицинск\\w*\\s+работник\\w*|медработник\\w*|работник\\w*\\s+медицинск\\w*)\\b|"
+            r"\\bсторонн\\w*\\s+организац\\w*|\\bдруг\\w*\\s+организац\\w*|"
+            r"\\bподрядчик\\w*|\\bоказывающ\\w*\\s+услуг\\w*|"
+            r"\\bна\\s+территори\\w*\\s+(?:организац\\w*|предприят\\w*)",
+            query,
+            re.IGNORECASE,
+        )
+    )
+    if external_service_briefing:
+        profile["event"] = "occupational_briefing"
+        profile["object"] = "external_service_provider_briefing"
+        profile["subject"] = "external_service_provider"
+        profile["action"] = "provide_introductory_briefing"
+        profile["target_document"] = "175"
+        profile["target_article"] = "46"
+        profile["qualifiers"].append("external_service_provider_briefing")
+        profile["legal_phrases"].extend([
+            "пункт 46 Инструкции постановление Министерства труда и социальной защиты Республики Беларусь № 175 вводный инструктаж",
+            "участии в производственном процессе привлечении к работам оказанию услуг в организации или на ее территории",
+            "выполнение работ оказание услуг по заданию организации по заключенному договору",
+            "вводный инструктаж с работниками других организаций при выполнении работ на территории организации",
+            "инструктаж по охране труда сторонний медицинский работник проводит медицинские осмотры на территории предприятия",
+        ])
+
     scope_pattern = (
         r"\bна\s+кого\s+(?:распространяется|распространяются|действует|действуют|применяется|применяются)\b|"
         r"\bсфера\s+действия\b|"
