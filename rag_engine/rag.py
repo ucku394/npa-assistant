@@ -326,16 +326,16 @@ def _topic_relevance_score(
 
         query_for_scoring = str(chunk.get("_user_query_for_scoring") or "").lower()
         external_service_query = bool(
-            re.search(r"\\bинструктаж\\w*", query_for_scoring)
+            re.search(r"\bинструктаж\w*", query_for_scoring)
             and re.search(
-                r"\\b(?:медицинск\\w*\\s+работник\\w*|медработник\\w*|сторонн\\w*\\s+организац\\w*|"
-                r"друг\\w*\\s+организац\\w*|подрядчик\\w*|оказан\\w*\\s+услуг\\w*|"
-                r"на\\s+территори\\w*)",
+                r"\b(?:медицинск\w*\s+работник\w*|медработник\w*|сторонн\w*\s+организац\w*|"
+                r"друг\w*\s+организац\w*|подрядчик\w*|оказан\w*\s+услуг\w*|"
+                r"на\s+территори\w*)",
                 query_for_scoring,
             )
         )
         if external_service_query:
-            if re.search(r"\\b175\\b", document_name):
+            if re.search(r"\b175\b", document_name):
                 score += 1.75
             if _normalize_point_identifier(_get_point_number(chunk)) == "46":
                 score += 2.25
