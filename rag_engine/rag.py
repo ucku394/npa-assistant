@@ -324,6 +324,28 @@ def _topic_relevance_score(
         if db_topic == "occupational_briefing":
             score += 1.0
 
+        query_for_scoring = str(chunk.get("_user_query_for_scoring") or "").lower()
+        external_service_query = bool(
+            re.search(r"\\bинструктаж\\w*", query_for_scoring)
+            and re.search(
+                r"\\b(?:медицинск\\w*\\s+работник\\w*|медработник\\w*|сторонн\\w*\\s+организац\\w*|"
+                r"друг\\w*\\s+организац\\w*|подрядчик\\w*|оказан\\w*\\s+услуг\\w*|"
+                r"на\\s+территори\\w*)",
+                query_for_scoring,
+            )
+        )
+        if external_service_query:
+            if re.search(r"\\b175\\b", document_name):
+                score += 1.75
+            if _normalize_point_identifier(_get_point_number(chunk)) == "46":
+                score += 2.25
+            external_markers = (
+                "оказанию услуг", "на ее территории", "на территории организации",
+                "работниками других организаций", "по заключенному с организацией договору",
+                "участии в производственном процессе",
+            )
+            score += min(sum(0.45 for marker in external_markers if marker in content), 1.80)
+
         target_instruction_markers = [
             "целевой инструктаж",
             "разовых работ",
