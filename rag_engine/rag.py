@@ -1445,18 +1445,18 @@ def _targeted_occupational_briefing_search(
     target_mode = _is_target_briefing_query(user_query)
     normalized_query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
     procedure_mode = bool(
+        re.search(
+            r"\b(алгоритм|порядок|пошагов|что делать|как провести|как организовать|"
+            r"последовательност|процедур)\b",
+            normalized_query,
+        )
+    )
     external_service_query = bool(
         re.search(r"\bинструктаж\w*", normalized_query)
         and re.search(
             r"\b(?:медицинск\w*\s+работник\w*|медработник\w*|сторонн\w*\s+организац\w*|"
             r"друг\w*\s+организац\w*|подрядчик\w*|оказан\w*\s+услуг\w*|"
             r"на\s+территори\w*)",
-            normalized_query,
-        )
-    )
-        re.search(
-            r"\b(алгоритм|порядок|пошагов|что делать|как провести|как организовать|"
-            r"последовательност|процедур)\b",
             normalized_query,
         )
     )
