@@ -14,15 +14,18 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 from supabase import create_client
 
 from rag_engine.rag import retrieve_context
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def expected_doc_match(doc_name, expected_values):

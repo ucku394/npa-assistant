@@ -1,10 +1,15 @@
 import os
 import sys
 import time
+from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client
 from sentence_transformers import SentenceTransformer
 
+# Ensure project root is in sys.path
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 # ============================================================
 # НАСТРОЙКИ
@@ -18,352 +23,339 @@ BATCH_SIZE = 16
 # Сколько строк получать из Supabase за один запрос
 FETCH_BATCH_SIZE = 500
 
-# ============================================================
-# ЗАГРУЗКА .ENV
-# ============================================================
 
-load_dotenv()
+def main():
+    # ============================================================
+    # ЗАГРУЗКА .ENV
+    # ============================================================
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    load_dotenv()
 
-if not SUPABASE_URL:
-    print("ОШИБКА: не найден SUPABASE_URL в .env")
-    sys.exit(1)
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not SUPABASE_SERVICE_ROLE_KEY:
-    print("ОШИБКА: не найден SUPABASE_SERVICE_ROLE_KEY в .env")
-    sys.exit(1)
-
-
-# ============================================================
-# SUPABASE
-# ============================================================
-
-print("=" * 70)
-print("ПЕРЕИНДЕКСАЦИЯ NPA_CHUNKS")
-print("=" * 70)
-
-print("\nПодключение к Supabase...")
-
-supabase = create_client(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY
-)
-
-print("Supabase: OK")
-
-
-# ============================================================
-# МОДЕЛЬ EMBEDDING
-# ============================================================
-
-print("\nЗагрузка модели:")
-print(MODEL_NAME)
-
-try:
-    model = SentenceTransformer(MODEL_NAME)
-except Exception as e:
-    print("\nОШИБКА загрузки модели:")
-    print(e)
-    sys.exit(1)
-
-print("Модель загружена.")
-
-# Проверяем размерность
-test_embedding = model.encode(
-    ["passage: тест проверки размерности"],
-    normalize_embeddings=True
-)[0]
-
-embedding_dimension = len(test_embedding)
-
-print(f"Размерность embedding: {embedding_dimension}")
-
-if embedding_dimension != 768:
-    print(
-        f"\nОШИБКА: ожидалась размерность 768, "
-        f"получено {embedding_dimension}"
-    )
-    sys.exit(1)
-
-print("Размерность: OK")
-
-
-# ============================================================
-# ПОЛУЧАЕМ ОБЩЕЕ КОЛИЧЕСТВО
-# ============================================================
-
-print("\nПолучение количества чанков...")
-
-count_response = (
-    supabase
-    .table("npa_chunks")
-    .select("id", count="exact")
-    .execute()
-)
-
-total = count_response.count
-
-if total is None:
-    print("ОШИБКА: Supabase не вернул количество записей.")
-    sys.exit(1)
-
-print(f"Всего чанков: {total}")
-
-
-if total == 0:
-    print("Таблица npa_chunks пустая.")
-    sys.exit(0)
-
-
-# ============================================================
-# ПЕРЕИНДЕКСАЦИЯ
-# ============================================================
-
-processed = 0
-updated = 0
-skipped = 0
-errors = 0
-
-start_time = time.time()
-
-
-for offset in range(0, total, FETCH_BATCH_SIZE):
-
-    print("\n" + "-" * 70)
-    print(
-        f"Получение записей "
-        f"{offset + 1} - {min(offset + FETCH_BATCH_SIZE, total)}"
-    )
-    print("-" * 70)
-
-    try:
-        response = (
-            supabase
-            .table("npa_chunks")
-            .select("id, content")
-            .range(
-                offset,
-                min(offset + FETCH_BATCH_SIZE, total) - 1
-            )
-            .execute()
-        )
-
-        rows = response.data
-
-    except Exception as e:
-        print("\nОШИБКА получения данных:")
-        print(e)
-
-        print("\nОстанавливаем процесс.")
-        print("Запустите reindex.py повторно после устранения проблемы.")
-
+    if not SUPABASE_URL:
+        print("ОШИБКА: не найден SUPABASE_URL в .env")
         sys.exit(1)
 
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        print("ОШИБКА: не найден SUPABASE_SERVICE_ROLE_KEY в .env")
+        sys.exit(1)
 
-    if not rows:
-        print("Записей больше нет.")
-        break
+    # ============================================================
+    # SUPABASE
+    # ============================================================
 
+    print("=" * 70)
+    print("ПЕРЕИНДЕКСАЦИЯ NPA_CHUNKS")
+    print("=" * 70)
 
-    # --------------------------------------------------------
-    # Разбиваем полученные записи на небольшие batch
-    # --------------------------------------------------------
+    print("\nПодключение к Supabase...")
 
-    for batch_start in range(0, len(rows), BATCH_SIZE):
+    supabase = create_client(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+    )
 
-        batch = rows[
-            batch_start:
-            batch_start + BATCH_SIZE
-        ]
+    print("Supabase: OK")
 
-        valid_rows = []
-        texts = []
+    # ============================================================
+    # МОДЕЛЬ EMBEDDING
+    # ============================================================
 
-        for row in batch:
+    print("\nЗагрузка модели:")
+    print(MODEL_NAME)
 
-            row_id = row.get("id")
-            content = row.get("content")
+    try:
+        model = SentenceTransformer(MODEL_NAME)
+    except Exception as e:
+        print("\nОШИБКА загрузки модели:")
+        print(e)
+        sys.exit(1)
 
-            if not row_id:
-                print("Пропуск записи без id.")
-                skipped += 1
-                continue
+    print("Модель загружена.")
 
-            if not content:
-                print(
-                    f"Пропуск {row_id}: пустой content."
-                )
-                skipped += 1
-                continue
+    # Проверяем размерность
+    test_embedding = model.encode(
+        ["passage: тест проверки размерности"],
+        normalize_embeddings=True,
+    )[0]
 
-            content = str(content).strip()
+    embedding_dimension = len(test_embedding)
 
-            if not content:
-                print(
-                    f"Пропуск {row_id}: пустой content."
-                )
-                skipped += 1
-                continue
+    print(f"Размерность embedding: {embedding_dimension}")
 
-            # Для E5 документы должны иметь prefix passage:
-            texts.append(
-                "passage: " + content
-            )
+    if embedding_dimension != 768:
+        print(
+            f"\nОШИБКА: ожидалась размерность 768, "
+            f"получено {embedding_dimension}"
+        )
+        sys.exit(1)
 
-            valid_rows.append(row)
+    print("Размерность: OK")
 
+    # ============================================================
+    # ПОЛУЧАЕМ ОБЩЕЕ КОЛИЧЕСТВО
+    # ============================================================
 
-        if not valid_rows:
-            continue
+    print("\nПолучение количества чанков...")
 
+    count_response = (
+        supabase
+        .table("npa_chunks")
+        .select("id", count="exact")
+        .execute()
+    )
 
-        # ----------------------------------------------------
-        # Генерация embeddings
-        # ----------------------------------------------------
+    total = count_response.count
+
+    if total is None:
+        print("ОШИБКА: Supabase не вернул количество записей.")
+        sys.exit(1)
+
+    print(f"Всего чанков: {total}")
+
+    if total == 0:
+        print("Таблица npa_chunks пустая.")
+        sys.exit(0)
+
+    # ============================================================
+    # ПЕРЕИНДЕКСАЦИЯ
+    # ============================================================
+
+    processed = 0
+    updated = 0
+    skipped = 0
+    errors = 0
+
+    start_time = time.time()
+
+    for offset in range(0, total, FETCH_BATCH_SIZE):
+
+        print("\n" + "-" * 70)
+        print(
+            f"Получение записей "
+            f"{offset + 1} - {min(offset + FETCH_BATCH_SIZE, total)}"
+        )
+        print("-" * 70)
 
         try:
-
-            embeddings = model.encode(
-                texts,
-                batch_size=BATCH_SIZE,
-                normalize_embeddings=True,
-                show_progress_bar=False
+            response = (
+                supabase
+                .table("npa_chunks")
+                .select("id, content")
+                .range(
+                    offset,
+                    min(offset + FETCH_BATCH_SIZE, total) - 1,
+                )
+                .execute()
             )
+
+            rows = response.data
 
         except Exception as e:
-
-            print("\nОШИБКА генерации embedding:")
+            print("\nОШИБКА получения данных:")
             print(e)
 
-            errors += len(valid_rows)
-
-            print(
-                "\nПроцесс остановлен. "
-                "Необходимо повторить запуск."
-            )
+            print("\nОстанавливаем процесс.")
+            print("Запустите reindex.py повторно после устранения проблемы.")
 
             sys.exit(1)
 
+        if not rows:
+            print("Записей больше нет.")
+            break
 
-        # ----------------------------------------------------
-        # Проверка размерности
-        # ----------------------------------------------------
+        # --------------------------------------------------------
+        # Разбиваем полученные записи на небольшие batch
+        # --------------------------------------------------------
 
-        for embedding in embeddings:
+        for batch_start in range(0, len(rows), BATCH_SIZE):
 
-            if len(embedding) != 768:
+            batch = rows[
+                batch_start:
+                batch_start + BATCH_SIZE
+            ]
 
-                print(
-                    "\nКРИТИЧЕСКАЯ ОШИБКА:"
+            valid_rows = []
+            texts = []
+
+            for row in batch:
+
+                row_id = row.get("id")
+                content = row.get("content")
+
+                if not row_id:
+                    print("Пропуск записи без id.")
+                    skipped += 1
+                    continue
+
+                if not content:
+                    print(
+                        f"Пропуск {row_id}: пустой content."
+                    )
+                    skipped += 1
+                    continue
+
+                content = str(content).strip()
+
+                if not content:
+                    print(
+                        f"Пропуск {row_id}: пустой content."
+                    )
+                    skipped += 1
+                    continue
+
+                # Для E5 документы должны иметь prefix passage:
+                texts.append(
+                    "passage: " + content
                 )
 
+                valid_rows.append(row)
+
+            if not valid_rows:
+                continue
+
+            # ----------------------------------------------------
+            # Генерация embeddings
+            # ----------------------------------------------------
+
+            try:
+
+                embeddings = model.encode(
+                    texts,
+                    batch_size=BATCH_SIZE,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
+
+            except Exception as e:
+
+                print("\nОШИБКА генерации embedding:")
+                print(e)
+
+                errors += len(valid_rows)
+
                 print(
-                    f"Получена размерность {len(embedding)}, "
-                    f"ожидалась 768."
+                    "\nПроцесс остановлен. "
+                    "Необходимо повторить запуск."
                 )
 
                 sys.exit(1)
 
+            # ----------------------------------------------------
+            # Проверка размерности
+            # ----------------------------------------------------
 
-        # ----------------------------------------------------
-        # Записываем embeddings в Supabase
-        # ----------------------------------------------------
+            for embedding in embeddings:
 
-        for row, embedding in zip(valid_rows, embeddings):
+                if len(embedding) != 768:
 
-            row_id = row["id"]
+                    print(
+                        "\nКРИТИЧЕСКАЯ ОШИБКА:"
+                    )
 
-            try:
+                    print(
+                        f"Получена размерность {len(embedding)}, "
+                        f"ожидалась 768."
+                    )
 
-                vector = embedding.tolist()
+                    sys.exit(1)
 
-                (
-                    supabase
-                    .table("npa_chunks")
-                    .update({
-                        "embedding": vector
-                    })
-                    .eq("id", row_id)
-                    .execute()
-                )
+            # ----------------------------------------------------
+            # Записываем embeddings в Supabase
+            # ----------------------------------------------------
 
-                updated += 1
+            for row, embedding in zip(valid_rows, embeddings):
 
-            except Exception as e:
+                row_id = row["id"]
 
-                errors += 1
+                try:
+
+                    vector = embedding.tolist()
+
+                    (
+                        supabase
+                        .table("npa_chunks")
+                        .update({
+                            "embedding": vector,
+                        })
+                        .eq("id", row_id)
+                        .execute()
+                    )
+
+                    updated += 1
+
+                except Exception as e:
+
+                    errors += 1
+
+                    print(
+                        f"\nОшибка обновления {row_id}:"
+                    )
+
+                    print(e)
+
+            processed += len(batch)
+
+            elapsed = time.time() - start_time
+
+            if processed > 0:
+
+                speed = processed / elapsed
+
+                remaining = total - processed
+
+                if speed > 0:
+                    eta = remaining / speed
+                else:
+                    eta = 0
 
                 print(
-                    f"\nОшибка обновления {row_id}:"
+                    f"Прогресс: "
+                    f"{processed}/{total} "
+                    f"({processed / total * 100:.1f}%) | "
+                    f"обновлено: {updated} | "
+                    f"пропущено: {skipped} | "
+                    f"ошибок: {errors} | "
+                    f"скорость: {speed:.1f}/сек | "
+                    f"осталось: {eta / 60:.1f} мин"
                 )
 
-                print(e)
+    # ============================================================
+    # ФИНАЛ
+    # ============================================================
+
+    elapsed = time.time() - start_time
+
+    print("\n")
+    print("=" * 70)
+    print("ПЕРЕИНДЕКСАЦИЯ ЗАВЕРШЕНА")
+    print("=" * 70)
+
+    print(f"Всего чанков:       {total}")
+    print(f"Обновлено:          {updated}")
+    print(f"Пропущено:          {skipped}")
+    print(f"Ошибок:             {errors}")
+    print(f"Время:              {elapsed / 60:.2f} мин")
+
+    print("=" * 70)
+
+    if errors > 0:
+        print(
+            "\nВНИМАНИЕ: были ошибки."
+        )
+        print(
+            "Не запускайте бота до проверки базы."
+        )
+    else:
+        print(
+            "\nВсе embeddings успешно обновлены."
+        )
+        print(
+            "Теперь можно переходить к изменению bot.py."
+        )
 
 
-        processed += len(batch)
-
-        elapsed = time.time() - start_time
-
-        if processed > 0:
-
-            speed = processed / elapsed
-
-            remaining = total - processed
-
-            if speed > 0:
-                eta = remaining / speed
-            else:
-                eta = 0
-
-            print(
-                f"Прогресс: "
-                f"{processed}/{total} "
-                f"({processed / total * 100:.1f}%) | "
-                f"обновлено: {updated} | "
-                f"пропущено: {skipped} | "
-                f"ошибок: {errors} | "
-                f"скорость: {speed:.1f}/сек | "
-                f"осталось: {eta / 60:.1f} мин"
-            )
-
-
-# ============================================================
-# ФИНАЛ
-# ============================================================
-
-elapsed = time.time() - start_time
-
-print("\n")
-print("=" * 70)
-print("ПЕРЕИНДЕКСАЦИЯ ЗАВЕРШЕНА")
-print("=" * 70)
-
-print(f"Всего чанков:       {total}")
-print(f"Обновлено:          {updated}")
-print(f"Пропущено:          {skipped}")
-print(f"Ошибок:             {errors}")
-print(f"Время:              {elapsed / 60:.2f} мин")
-
-print("=" * 70)
-
-if errors > 0:
-
-    print(
-        "\nВНИМАНИЕ: были ошибки."
-    )
-
-    print(
-        "Не запускайте бота до проверки базы."
-    )
-
-else:
-
-    print(
-        "\nВсе embeddings успешно обновлены."
-    )
-
-    print(
-        "Теперь можно переходить к изменению bot.py."
-    )
+if __name__ == "__main__":
+    main()

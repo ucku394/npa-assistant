@@ -10,9 +10,14 @@ and deliberately does not guess legal metadata, effective dates, or official URL
 import argparse
 import json
 import os
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from dotenv import load_dotenv
 from supabase import create_client

@@ -15,6 +15,10 @@ from urllib.parse import urlparse
 from collections import defaultdict
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from core.chat_service import ChatService
 
 
@@ -214,6 +218,6 @@ async def run(path: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
         raise SystemExit("Usage: python evaluation/rag_eval.py evaluation/questions.json")
     asyncio.run(run(sys.argv[1]))

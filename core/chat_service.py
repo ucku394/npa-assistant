@@ -27,10 +27,22 @@ class ChatService:
     """Common text-question pipeline used by Telegram and Web."""
 
     def __init__(self, supabase_client=None):
-        self.supabase = supabase_client or create_client(
-            SUPABASE_URL,
-            SUPABASE_SERVICE_ROLE_KEY,
-        )
+        self._supabase = supabase_client
+
+    @property
+    def supabase(self):
+        if self._supabase is None:
+            if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+                raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured.")
+            self._supabase = create_client(
+                SUPABASE_URL,
+                SUPABASE_SERVICE_ROLE_KEY,
+            )
+        return self._supabase
+
+    @supabase.setter
+    def supabase(self, value):
+        self._supabase = value
 
     @staticmethod
     def _extract_source_ids(answer: str) -> List[str]:
@@ -203,8 +215,9 @@ class ChatService:
                 for item in cited_evidence
                 if str(item.get("document") or "").strip()
             }
+            canonical_kind = "пункт" if (kind.startswith("пункт") or kind == "п.") else "статья"
             if len(cited_documents) > 1 and not local_ids:
-                unsupported_references.append(f"{kind} {number} (no nearby source citation)")
+                unsupported_references.append(f"{canonical_kind} {number} (no nearby source citation)")
                 continue
             reference_evidence = (
                 [item for item in cited_evidence if str(item.get("source_id") or "").strip() in local_ids]
@@ -230,7 +243,7 @@ class ChatService:
                 if metadata_match:
                     break
             if not reference_re.search(reference_evidence_text) and not metadata_match:
-                unsupported_references.append(f"{kind} {number}")
+                unsupported_references.append(f"{canonical_kind} {number}")
 
         if unsupported_references:
             return {
@@ -353,9 +366,9 @@ class ChatService:
             str(question or "").lower(),
         ))
         russian_act = re.compile(
-            r"(?:трудов\w+\s+кодекс\w+\s+российск\w+\s+федераци\w+|"
-            r"\bтк\s*рф\b|\bкоап\s*рф\b|федеральн\w+\s+закон\w+|"
-            r"законодательств\w+\s+российск\w+\s+федераци\w+)",
+            r"(?:трудов\w*\s+кодекс\w*\s+российск\w*\s+федераци\w*|"
+            r"\bтк\s*рф\b|\bкоап\s*рф\b|федеральн\w*\s+закон\w*|"
+            r"законодательств\w*\s+российск\w*\s+федераци\w*)",
             re.IGNORECASE,
         )
         russian_sources = [
@@ -419,10 +432,10 @@ class ChatService:
         # Detect answer scope drift into a different work/equipment category.
         object_patterns = {
             "ladder": r"лестниц\w*",
-            "lathe": r"токарн\w+\s+станк\w*",
+            "lathe": r"токарн\w+\s+стан[ок]\w*",
             "scaffold": r"(?:строительн\w+\s+лес\w*|инвентарн\w+\s+лес\w*|подмост\w*)",
             "height_work": r"работ\w*\s+на\s+высот\w*",
-            "electrical_installation": r"электроустановк\w*",
+            "electrical_installation": r"электроустанов\w*",
             "welding": r"сварочн\w*\s+работ\w*",
             "lifting_equipment": r"(?:кран\w*|тельфер\w*|грузоподъёмн\w+\s+механизм\w*)",
             "confined_space": r"(?:замкнут\w+\s+пространств\w*|колодц\w*)",

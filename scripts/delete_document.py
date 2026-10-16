@@ -34,17 +34,31 @@ from supabase import create_client, Client
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 script_dir = Path(__file__).resolve().parents[1]
+if str(script_dir) not in sys.path:
+    sys.path.insert(0, str(script_dir))
 load_dotenv(dotenv_path=script_dir / '.env')
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Проверьте наличие SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в файле .env")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 TABLE = "npa_chunks"
+_supabase_client: Client | None = None
+
+
+def get_supabase_client() -> Client:
+    global _supabase_client
+    if _supabase_client is None:
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if not url or not key:
+            raise ValueError("Проверьте наличие SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в файле .env")
+        _supabase_client = create_client(url, key)
+    return _supabase_client
+
+
+class _SupabaseProxy:
+    def __getattr__(self, name):
+        return getattr(get_supabase_client(), name)
+
+
+supabase = _SupabaseProxy()
 
 
 def fetch_all_doc_names() -> list[str]:

@@ -1,12 +1,11 @@
-from embedding import get_query_embedding
+"""Tests for the local query embedding pipeline."""
+from embedding import EMBEDDING_DIM, get_query_embedding
 
 
-text = "Какие требования предъявляются к работам на высоте?"
+def test_get_query_embedding_dimension():
+    text = "Какие требования предъявляются к работам на высоте?"
+    vector = get_query_embedding(text)
 
-vector = get_query_embedding(text)
-
-print()
-print("Embedding успешно создан!")
-print("Размерность:", len(vector))
-print("Первые 10 значений:")
-print(vector[:10])
+    assert isinstance(vector, list)
+    assert len(vector) == EMBEDDING_DIM
+    assert all(isinstance(x, float) for x in vector[:5])

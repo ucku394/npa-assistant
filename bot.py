@@ -99,14 +99,6 @@ async def continuous_typing(chat, interval: float = 4.0):
 
 
 # ============================================================
-# CONFIG VALIDATION
-# ============================================================
-
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
-
-# Supabase client is owned by ChatService and shared with inspection verification.
-
 # TEXT UTILITIES
 # ============================================================
 
@@ -920,6 +912,9 @@ async def error_handler(
 # ============================================================
 
 def main():
+    if not TELEGRAM_BOT_TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
+
     logger.info("Bot started.")
 
     application = (

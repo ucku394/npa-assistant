@@ -1,4 +1,9 @@
 .env
 __pycache__/
+*.pyc
 *.docx
 *.pdf
+.pytest_cache/
+*.log
+.venv/
+venv/
