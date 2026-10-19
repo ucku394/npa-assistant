@@ -911,11 +911,9 @@ async def error_handler(
 # MAIN
 # ============================================================
 
-def main():
+def build_application() -> Application:
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
-
-    logger.info("Bot started.")
 
     application = (
         Application.builder()
@@ -933,6 +931,12 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     application.add_error_handler(error_handler)
 
+    return application
+
+
+def main():
+    logger.info("Bot started.")
+    application = build_application()
     application.run_polling(
         drop_pending_updates=False,
         allowed_updates=Update.ALL_TYPES,

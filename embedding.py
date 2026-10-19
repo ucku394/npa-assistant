@@ -250,14 +250,30 @@ def get_model():
 
     try:
 
-        logger.info(
-            "EMBEDDING | creating SentenceTransformer..."
-        )
+        model = None
+        use_onnx = os.getenv("USE_ONNX", "true").lower() in ("true", "1", "yes")
+        if use_onnx:
+            try:
+                logger.info("EMBEDDING | attempting to load with ONNX backend...")
+                model = SentenceTransformer(
+                    EMBEDDING_MODEL,
+                    device=DEVICE,
+                    backend="onnx",
+                )
+                logger.info("EMBEDDING | successfully loaded using ONNX runtime")
+            except Exception as onnx_exc:
+                logger.warning(
+                    "EMBEDDING | ONNX backend unavailable or failed (%s); falling back to PyTorch",
+                    onnx_exc,
+                )
+                model = None
 
-        model = SentenceTransformer(
-            EMBEDDING_MODEL,
-            device=DEVICE,
-        )
+        if model is None:
+            logger.info("EMBEDDING | creating SentenceTransformer with PyTorch...")
+            model = SentenceTransformer(
+                EMBEDDING_MODEL,
+                device=DEVICE,
+            )
 
         _log_memory(
             "after SentenceTransformer creation"

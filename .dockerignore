@@ -1,0 +1,16 @@
+.git
+.github
+.gitignore
+.dockerignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.env
+*.log
+.venv
+venv
+*.docx
+*.pdf
+retrieval_eval_results.json
