@@ -323,6 +323,55 @@ def test_claim_evidence_accepts_citation_on_immediately_following_line():
     assert result["passed"] is True
 
 
+
+
+def test_claim_evidence_accepts_appendix_table_row_without_treating_it_as_rules_paragraph():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "В приложении 1 к Правилам приведена графическая схема страховочной системы; "
+            "для позиции 1 таблицы указаны параметры [SOURCE:NPA_11_APPENDIX_1]."
+        ),
+        evidence_map=[{
+            "source_id": "NPA_11_APPENDIX_1",
+            "document": "Правила по охране труда при выполнении работ на высоте от 6 февраля 2025 г. № 11",
+            "point": "06.02.",
+            "excerpt": (
+                "Приложение 1 к Правилам по охране труда при выполнении работ на высоте "
+                "№ п/п | Графическая схема к определению параметров страховочной системы"
+            ),
+        }],
+        query_profile={"question_type": "general"},
+        question="Что указано в приложении 1?",
+    )
+    assert result["passed"] is True
+
+
+def test_claim_evidence_still_rejects_bare_invented_paragraph_for_appendix_source():
+    result = ChatService._claim_evidence_check(
+        answer="Согласно пункту 1 Правил предельное усилие составляет 6 кН [SOURCE:NPA_11_APPENDIX_1].",
+        evidence_map=[{
+            "source_id": "NPA_11_APPENDIX_1",
+            "document": "Правила по охране труда при выполнении работ на высоте от 6 февраля 2025 г. № 11",
+            "point": "06.02.",
+            "excerpt": (
+                "Приложение 1 к Правилам по охране труда при выполнении работ на высоте "
+                "№ п/п | Графическая схема к определению параметров страховочной системы"
+            ),
+        }],
+        query_profile={"question_type": "limit"},
+        question="Какое предельное усилие допускается?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "legal_reference_not_found_in_cited_evidence"
+
+
+def test_grounding_retry_prompt_warns_against_confusing_appendix_rows_with_legal_points():
+    prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "legal_reference_not_found"})
+    assert "не называй строку" in prompt
+    assert "не придумывай номер пункта/статьи" in prompt
+    assert "SOURCE_ID непосредственно рядом" in prompt
+
+
 def test_claim_evidence_accepts_height_work_scope_with_fall_protection_terms():
     result = ChatService._claim_evidence_check(
         answer=(
