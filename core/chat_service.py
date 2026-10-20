@@ -158,11 +158,11 @@ class ChatService:
         )
         claim_units = [
             unit.strip()
-            for unit in re.split(r"(?<=[.!?])\\s+(?=[А-ЯЁ])|\\n+", str(answer or ""))
+            for unit in re.split(r"(?<=[.!?])\s+(?=[А-ЯЁ])|\n+", str(answer or ""))
             if unit.strip()
         ]
         source_marker_only = re.compile(
-            r"(?:\\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\\]\\s*)+",
+            r"(?:\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]\s*)+",
             re.IGNORECASE,
         )
         for unit_index, unit in enumerate(claim_units):
