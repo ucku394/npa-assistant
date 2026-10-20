@@ -3412,6 +3412,27 @@ def _select_legal_diverse_chunks(
                 if len(selected) >= limit:
                     return selected
 
+        # Preserve high-confidence direct-reporting evidence found by hybrid search
+        # even when its act is outside the two legacy document-name filters below.
+        # A candidate must independently match the narrow reporting relevance score;
+        # semantic similarity alone is not enough to bypass the allowlist.
+        supplemental_pool = [
+            chunk for chunk in ranked_chunks
+            if not chunk.get("_accident_worker_not_report_targeted")
+            and _accident_worker_not_report_relevance_score(chunk) >= 0.60
+        ]
+        supplemental_pool.sort(
+            key=lambda chunk: (
+                _safe_float(chunk.get("_combined_score")),
+                _accident_worker_not_report_relevance_score(chunk),
+            ),
+            reverse=True,
+        )
+        for chunk in supplemental_pool:
+            if _add(chunk, max_per_document=4, max_per_point=1):
+                if len(selected) >= limit:
+                    return selected
+
         # Добор разрешён только из основных НПА №30 и №81-144
         # и только при наличии прямой связи с сообщением о НС.
         fallback_pool = [
