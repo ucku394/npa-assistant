@@ -321,3 +321,23 @@ def test_claim_evidence_accepts_citation_on_immediately_following_line():
         question="Что обязан сделать работодатель?",
     )
     assert result["passed"] is True
+
+
+def test_claim_evidence_accepts_height_work_scope_with_fall_protection_terms():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "При выполнении работ на высоте в страховочной системе предельное усилие при падении не должно превышать 6 кН, "
+            "а длина стропа с амортизатором — не более 2 м. [SOURCE:NPA_HEIGHT_RULES_11]"
+        ),
+        evidence_map=[
+            {
+                "source_id": "NPA_HEIGHT_RULES_11",
+                "document": "Правила по охране труда при выполнении работ на высоте от 6 февраля 2025 г. № 11",
+                "point": "п. 120",
+                "excerpt": "В страховочной системе усилие при остановке падения человека с амортизатором не более 6 кН, длина стропа с амортизатором не более 2 м.",
+            },
+        ],
+        query_profile={"question_type": "limit"},
+        question="Какое предельное усилие допускается при остановке падения человека в страховочной системе и какова максимальная длина стропа с амортизатором?",
+    )
+    assert result["passed"] is True

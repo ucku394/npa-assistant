@@ -137,6 +137,20 @@ def detect_legal_domain(user_query: str) -> str:
         r"\bтранспортирующ\w*\s+устройств\w*",
         r"\bтранспортн\w*\s+средств\w*\s+непрерывн\w*",
         r"\bаварийн\w*\s+останов\w*",
+        # Fall protection equipment and height work safety belong to OHS.
+        r"\bстраховочн\w*",
+        r"\bстроп\w*",
+        r"\bамортизатор\w*",
+        r"\bпривяз\w*",
+        r"\bпредохранительн\w*\s+пояс\w*",
+        r"\bпояс\w*\s+предохранительн\w*",
+        r"\bпадени\w*.*\bвысот\w*",
+        r"\bвысот\w*.*\bпадени\w*",
+        r"\bостановк\w*\s+падени\w*",
+        r"\bанкерн\w*",
+        r"\bулавливающ\w*\s+сет\w*",
+        r"\bсистем\w*\s+безопасност\w*.*\bвысот\w*",
+        r"\bсистем\w*\s+канатного\s+доступ\w*",
     ]
 
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in occupational_patterns):
@@ -300,6 +314,27 @@ def detect_topic(user_query: str) -> str:
     ]
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in portable_ladder_patterns):
         return "portable_ladder"
+
+    # Отдельный режим для средств индивидуальной защиты и систем безопасности
+    # при работах на высоте (Правила № 11 от 06.02.2025: страховочные, удерживающие системы,
+    # стропы, амортизаторы, привязи, предельное усилие при остановке падения).
+    fall_protection_patterns = [
+        r"\bстраховочн\w*",
+        r"\bстроп\w*",
+        r"\bамортизатор\w*",
+        r"\bпривяз\w*",
+        r"\bпредохранительн\w*\s+пояс\w*",
+        r"\bпояс\w*\s+предохранительн\w*",
+        r"\bостановк\w*\s+падени\w*",
+        r"\bанкерн\w*",
+        r"\bулавливающ\w*\s+сет\w*",
+        r"\bудерживающ\w*\s+систем\w*",
+        r"\bсистем\w*\s+позиционирован\w*",
+        r"\bсистем\w*\s+канатного\s+доступ\w*",
+        r"\bсистем\w*\s+остановки\s+падения\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in fall_protection_patterns):
+        return "fall_protection"
 
     # Специальный режим для работ на высоте: вопрос о 1 группе должен
     # приоритетно искать нормы Правил № 11, а не только общую Инструкцию № 175.

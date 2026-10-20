@@ -9,6 +9,7 @@ import pytest
 
 from rag_query_classifier import detect_legal_domain, detect_topic
 from rag_query_generator import build_search_queries
+from rag_query_profile import build_universal_query_profile
 
 
 @pytest.mark.parametrize(
@@ -21,6 +22,8 @@ from rag_query_generator import build_search_queries
         ("Как организовать обязательный медицинский осмотр работников?", "occupational_safety"),
         ("Как расследовать несчастный случай на производстве?", "occupational_safety"),
         ("Какие санитарно-эпидемиологические требования действуют на производстве?", "sanitary"),
+        ("Какое предельное усилие допускается при остановке падения человека в страховочной системе и какова максимальная длина стропа с амортизатором?", "occupational_safety"),
+        ("Какие требования предъявляются к страховочной привязи?", "occupational_safety"),
     ],
 )
 def test_legal_domain_routing_across_domains(query, expected_domain):
@@ -34,6 +37,8 @@ def test_legal_domain_routing_across_domains(query, expected_domain):
         ("Как организовать медицинский осмотр работников?", "medical_examinations"),
         ("Как расследовать несчастный случай на производстве?", "accident_investigation"),
         ("Помоги составить алгоритм обучения работников при работе на высоте 1 группа", "height_work_training"),
+        ("Какое предельное усилие допускается при остановке падения человека в страховочной системе и какова максимальная длина стропа с амортизатором?", "fall_protection"),
+        ("Какова максимальная длина стропа с амортизатором?", "fall_protection"),
         ("Как провести инструктаж по охране труда для работника?", "occupational_briefing"),
         ("Какие требования безопасности при работе на токарном станке?", "lathe_work"),
         ("Как проводится аттестация рабочих мест по условиям труда?", "workplace_attestation"),
@@ -101,3 +106,26 @@ def test_accident_selection_preserves_directly_relevant_hybrid_candidate_outside
         user_query="Работник не сообщил о несчастном случае непосредственному руководителю",
     )
     assert any("№ 260" in chunk["doc_name"] for chunk in selected)
+
+
+def test_fall_protection_search_generates_decree_11_queries():
+    query = "Какое предельное усилие допускается при остановке падения человека в страховочной системе и какова максимальная длина стропа с амортизатором?"
+    assert detect_legal_domain(query) == "occupational_safety"
+    assert detect_topic(query) == "fall_protection"
+
+    profile = build_universal_query_profile(query)
+    assert profile["event"] == "fall_protection_equipment"
+    assert profile["question_type"] == "limit"
+
+    queries = build_search_queries(
+        query,
+        detect_topic(query),
+        detect_legal_domain(query),
+        [],
+        profile,
+    )
+    combined = " ".join(queries).lower()
+    assert "11" in combined
+    assert "страховочн" in combined
+    assert "амортизатор" in combined
+    assert "строп" in combined

@@ -523,14 +523,46 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             "периодический медицинский осмотр",
         ])
 
-    # Работы на высоте — отдельный профиль запроса.
+    # Средства индивидуальной защиты от падения с высоты и страховочные системы (Правила № 11).
+    fall_protection_pattern = (
+        r"\bстраховочн\w*|"
+        r"\bстроп\w*|"
+        r"\bамортизатор\w*|"
+        r"\bпривяз\w*|"
+        r"\bпредохранительн\w*\s+пояс\w*|"
+        r"\bпояс\w*\s+предохранительн\w*|"
+        r"\bостановк\w*\s+падени\w*|"
+        r"\bпадени\w*.*\bвысот\w*|"
+        r"\bвысот\w*.*\bпадени\w*|"
+        r"\bанкерн\w*|"
+        r"\bулавливающ\w*\s+сет\w*|"
+        r"\bудерживающ\w*\s+систем\w*|"
+        r"\bсистем\w*\s+позиционирован\w*"
+    )
     height_training_pattern = (
         r"\bработ\w*\s+на\s+высот\w*|"
         r"\bработающ\w*\s+1\s+групп\w*|"
         r"\bпервая\s+групп\w*.*\bвысот\w*|"
         r"\b1[-–—]?й\s+групп\w*.*\bвысот\w*"
     )
-    if re.search(height_training_pattern, query, re.IGNORECASE):
+    if re.search(fall_protection_pattern, query, re.IGNORECASE):
+        profile.update({
+            "subject": "fall_protection_system",
+            "event": "fall_protection_equipment",
+            "object": "fall_arrest_and_harness",
+            "action": "use_protective_equipment",
+        })
+        profile["legal_phrases"].extend([
+            "Правила по охране труда при выполнении работ на высоте постановление № 11",
+            "постановление Министерства труда и социальной защиты Республики Беларусь от 6 февраля 2025 г. № 11",
+            "страховочная система остановки падения человека предельное усилие",
+            "максимальная длина стропа с амортизатором не более 2 м",
+            "усилие передаваемое на человека при торможении падения не более 6 кН",
+            "соединительно-амортизирующая подсистема строп амортизатор",
+        ])
+        if re.search(r"\bпредельн\w*|\bмаксимальн\w*|\bдлин\w*|\bусили\w*|\bскольк\w*|\bкаков\w*", query, re.IGNORECASE):
+            profile["question_type"] = "limit"
+    elif re.search(height_training_pattern, query, re.IGNORECASE):
         profile.update({
             "subject": "height_work_group_1",
             "event": "height_work_training",

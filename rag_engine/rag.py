@@ -461,6 +461,19 @@ def _topic_relevance_score(
         ):
             score += 1.50
 
+    elif topic == "fall_protection":
+        if db_topic in {"fall_protection", "occupational_safety"}:
+            score += 0.80
+        if re.search(r"№\s*11\b", document_name, flags=re.IGNORECASE):
+            score += 1.60
+        if "работ" in document_name and "высот" in document_name:
+            score += 1.20
+        fall_markers = (
+            "страховочн", "строп", "амортизатор", "привязь",
+            "остановк", "паден", "усили", "нагрузк", "кн", "анкерн",
+        )
+        score += min(sum(0.35 for m in fall_markers if m in content), 1.75)
+
     elif topic == "height_work_training":
         if db_topic == "height_work_training":
             score += 1.50
@@ -869,6 +882,40 @@ def _targeted_portable_ladder_search(supabase, user_query: str = "") -> List[Dic
     except Exception as exc:
         logger.warning("RAG | portable ladder targeted search failed: %s", exc)
         return []
+
+
+def _targeted_fall_protection_search(supabase, user_query: str = "") -> List[Dict[str, Any]]:
+    """Адресный поиск действующих требований к страховочным системам и СИЗ от падения по Правилам № 11."""
+    try:
+        response = (
+            supabase.table("npa_chunks")
+            .select("doc_name,doc_type,point_num,content,legal_domain,topic,source_url")
+            .eq("legal_domain", "occupational_safety")
+            .ilike("doc_name", "%№ 11%")
+            .or_(
+                "content.ilike.%страховочн%,"
+                "content.ilike.%строп%,"
+                "content.ilike.%амортизатор%,"
+                "content.ilike.%привязь%,"
+                "content.ilike.%паден%,"
+                "content.ilike.%усили%,"
+                "content.ilike.%кН%"
+            )
+            .limit(40)
+            .execute()
+        )
+        results = _deduplicate_chunks(response.data or [])
+        for chunk in results:
+            chunk["_fall_protection_targeted"] = True
+        logger.info(
+            "RAG | fall protection targeted | points=%s",
+            [f"{_get_document_name(x)}#{_get_point_number(x)}" for x in results],
+        )
+        return results
+    except Exception as exc:
+        logger.warning("RAG | fall protection targeted search failed: %s", exc)
+        return []
+
 
 def _targeted_height_work_training_search(supabase) -> List[Dict[str, Any]]:
     """Нормативно полный набор именно для алгоритма обучения 1 группы.
@@ -1987,6 +2034,8 @@ async def _get_targeted_chunks(
         return await asyncio.to_thread(_targeted_portable_ladder_search, supabase, user_query)
     if topic == "occupational_training":
         return await asyncio.to_thread(_targeted_occupational_training_search, supabase)
+    if topic == "fall_protection":
+        return await asyncio.to_thread(_targeted_fall_protection_search, supabase, user_query)
     if topic == "height_work_training":
         return await asyncio.to_thread(_targeted_height_work_training_search, supabase)
     if topic == "ppe_nonprovision":
@@ -3906,6 +3955,20 @@ async def retrieve_context(
         # The indexed Belarusian rules on continuous-transport equipment are
         # stored in occupational_safety; never route these questions as general.
         legal_domain = "occupational_safety"
+
+    fall_protection_query = bool(re.search(
+        r"\bстраховочн\w*|\bстроп\w*|\bамортизатор\w*|\bпривяз\w*|"
+        r"\bпредохранительн\w*\s+пояс\w*|\bпояс\w*\s+предохранительн\w*|"
+        r"\bостановк\w*\s+падени\w*|\bпадени\w*.*\bвысот\w*|"
+        r"\bвысот\w*.*\bпадени\w*|\bанкерн\w*",
+        _q_lower,
+        re.IGNORECASE,
+    ))
+    if fall_protection_query:
+        if legal_domain == "general":
+            legal_domain = "occupational_safety"
+        if topic == "general":
+            topic = "fall_protection"
 
     query_terms = _extract_query_terms(user_query)
     intents = detect_query_intents(user_query)

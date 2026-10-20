@@ -117,6 +117,16 @@ _RULES: Dict[str, Dict[str, List[Tuple[str, int]]]] = {
         "instructions": [
             (r"\bинструкци\w*\s+по\s+охран\w*\s+труд\w*", 10),
         ],
+        "fall_protection": [
+            (r"\bстраховочн\w*", 10),
+            (r"\bстроп\w*", 10),
+            (r"\bамортизатор\w*", 10),
+            (r"\bпривяз\w*", 10),
+            (r"\bпадени\w*.*\bвысот\w*", 10),
+            (r"\bостановк\w*\s+падени\w*", 10),
+            (r"\bанкерн\w*", 9),
+            (r"\bработ\w*\s+на\s+высот\w*", 8),
+        ],
         "general": [
             (r"\bохран\w*\s+труд\w*", 6),
         ],
@@ -189,6 +199,7 @@ def build_topic_hierarchy(user_query: str, base_topic: str = "general") -> Dict[
         ("occupational_safety", "employee_rights"): "employee_ohs_rights",
         ("occupational_safety", "management_system"): "ohs_management_system",
         ("occupational_safety", "instructions"): "ohs_instructions",
+        ("occupational_safety", "fall_protection"): "fall_protection_system",
     }
 
     return {

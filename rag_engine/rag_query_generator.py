@@ -127,6 +127,16 @@ def build_universal_search_queries(profile: Dict[str, Any], original: str) -> Li
             ])
 
         queries.extend(profile.get("legal_phrases") or [])
+    elif event == "fall_protection_equipment":
+        queries.extend([
+            "постановление Министерства труда и социальной защиты Республики Беларусь от 6 февраля 2025 г. № 11",
+            "Правила по охране труда при выполнении работ на высоте № 11 страховочная система усилие остановка падения",
+            "страховочная система предельное усилие при остановке падения человека 6 кН",
+            "максимальная длина стропа с амортизатором не более 2 м Правила на высоте № 11",
+            "строп с амортизатором длина не более 2 м",
+            "усилие передаваемое на человека при падении не более 6 кН амортизатор",
+        ])
+        queries.extend(profile.get("legal_phrases") or [])
     else:
         if "osh_knowledge_check_frequency_managers_specialists" in (profile.get("qualifiers") or []):
             queries.extend([
@@ -254,6 +264,15 @@ def build_search_queries(
             "замена молока",
             "равноценными пищевыми продуктами",
             "молока товарами продуктами",
+        ])
+
+    if topic == "fall_protection" or universal_profile.get("event") == "fall_protection_equipment":
+        queries.extend([
+            "постановление Минтруда от 6 февраля 2025 г. № 11 Правила по охране труда при выполнении работ на высоте",
+            "страховочная система предельное усилие остановка падения 6 кН",
+            "максимальная длина стропа с амортизатором не более 2 м",
+            "строп с амортизатором 2 м усилие 6 кН",
+            "усилие при остановке падения человека страховочная система",
         ])
 
     if universal_profile.get("event") == "law_scope":
