@@ -12,6 +12,7 @@ from .legal_query_planner import build_legal_query_plan
 from .legal_target_discovery import discover_legal_targets
 from .rag_query_modes import _attestation_query_mode, _accident_query_mode
 from legal_rules_registry import RAG_SELECTION_RULES
+from .reranker import rerank_chunks
 from .rag_query_classifier import (
     detect_legal_domain,
     detect_topic,
@@ -4322,6 +4323,7 @@ async def retrieve_context(
         key=lambda chunk: chunk.get("_combined_score", 0.0),
         reverse=True,
     )
+    ranked_chunks = rerank_chunks(user_query, ranked_chunks)
 
     for rank, chunk in enumerate(ranked_chunks[:10], start=1):
         logger.info(

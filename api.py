@@ -20,6 +20,14 @@ from pydantic import BaseModel, Field
 from core.chat_service import chat_service
 from services.inspection_service import verify_findings
 from services.prescription_service import build_draft_prescription
+from services.document_generator import (
+    ActN1Request,
+    WorkPermitRequest,
+    auto_suggest_act_n1_rules,
+    auto_suggest_work_permit_measures,
+    generate_act_n1_docx,
+    generate_work_permit_docx,
+)
 from services.vision_service import analyze_image, VisionUnavailableError
 
 
@@ -290,3 +298,73 @@ async def create_prescription(request: PrescriptionRequest):
     except Exception:
         logger.exception("WEB API | prescription generation failed")
         raise HTTPException(status_code=500, detail="Не удалось сформировать проект предписания.")
+
+
+# ============================================================
+# DOCUMENT GENERATION ENDPOINTS (ACT H-1 & WORK PERMIT)
+# ============================================================
+
+@app.post("/api/documents/act-n1")
+async def create_act_n1(request: ActN1Request):
+    """Validate and auto-enrich Act H-1 (несчастный случай на производстве)."""
+    auto = auto_suggest_act_n1_rules(request.incident_description)
+    data = request.model_dump()
+    if not data.get("violated_npa"):
+        data["violated_npa"] = auto["violated_npa"]
+    if not data.get("causes"):
+        data["causes"] = auto["causes"]
+    if not data.get("corrective_measures"):
+        data["corrective_measures"] = auto["corrective_measures"]
+    return {
+        "status": "success",
+        "document_type": "act_n1",
+        "title": "Акт о несчастном случае на производстве формы Н-1",
+        "data": data,
+    }
+
+
+@app.post("/api/documents/act-n1/download")
+async def download_act_n1(request: ActN1Request):
+    """Generate and stream official Belarus Act H-1 as DOCX."""
+    try:
+        content_io = await asyncio.to_thread(generate_act_n1_docx, request)
+        return StreamingResponse(
+            content_io,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="Akt_formy_H1.docx"'},
+        )
+    except Exception:
+        logger.exception("WEB API | Act H-1 generation failed")
+        raise HTTPException(status_code=500, detail="Не удалось сформировать Акт формы Н-1.")
+
+
+@app.post("/api/documents/work-permit")
+async def create_work_permit(request: WorkPermitRequest):
+    """Validate and auto-enrich Work Permit (наряд-допуск на работы повышенной опасности)."""
+    auto = auto_suggest_work_permit_measures(request.work_type)
+    data = request.model_dump()
+    if not data.get("safety_measures"):
+        data["safety_measures"] = auto["safety_measures"]
+    if not data.get("required_ppe"):
+        data["required_ppe"] = auto["required_ppe"]
+    return {
+        "status": "success",
+        "document_type": "work_permit",
+        "title": "Наряд-допуск на выполнение работ с повышенной опасностью",
+        "data": data,
+    }
+
+
+@app.post("/api/documents/work-permit/download")
+async def download_work_permit(request: WorkPermitRequest):
+    """Generate and stream official Belarus Work Permit as DOCX."""
+    try:
+        content_io = await asyncio.to_thread(generate_work_permit_docx, request)
+        return StreamingResponse(
+            content_io,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="Naryad_dopusk.docx"'},
+        )
+    except Exception:
+        logger.exception("WEB API | Work Permit generation failed")
+        raise HTTPException(status_code=500, detail="Не удалось сформировать наряд-допуск.")

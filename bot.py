@@ -43,6 +43,14 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
 )
+from services.document_generator import (
+    ActN1Request,
+    WorkPermitRequest,
+    auto_suggest_act_n1_rules,
+    auto_suggest_work_permit_measures,
+    generate_act_n1_docx,
+    generate_work_permit_docx,
+)
 
 
 from core.chat_service import chat_service
@@ -349,8 +357,11 @@ async def start(
     await update.effective_message.reply_text(
         "Здравствуйте! Я помощник по охране труда и "
         "промышленной безопасности в Республике Беларусь.\n\n"
-        "Задайте вопрос текстом или отправьте фотографию — "
-        "я помогу разобрать ситуацию."
+        "💬 <b>Задайте вопрос</b> текстом (например: <i>Какова максимальная длина стропа с амортизатором?</i>)\n"
+        "📷 <b>Отправьте фото</b> с объекта для проверки нарушений требований безопасности\n"
+        "📝 <b>/act_n1 [описание]</b> — генерация проекта Акта формы Н-1 о несчастном случае на производстве\n"
+        "📋 <b>/permit [вид работ]</b> — генерация Наряда-допуска на работы повышенной опасности",
+        parse_mode="HTML",
     )
 
 
@@ -911,6 +922,109 @@ async def error_handler(
 # MAIN
 # ============================================================
 
+
+
+# ============================================================
+# DOCUMENT GENERATION COMMANDS (/act_n1, /permit)
+# ============================================================
+
+async def act_n1_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message:
+        return
+    text_args = " ".join(context.args or []).strip()
+    if not text_args:
+        await update.effective_message.reply_text(
+            "📝 <b>Генератор Акта формы Н-1 (несчастный случай на производстве)</b>\n\n"
+            "Пожалуйста, укажите краткое описание происшествия после команды:\n"
+            "<code>/act_n1 При падении со стремянки на складе рабочий получил травму руки</code>\n\n"
+            "Я автоматически подберу нарушенные нормы белорусских НПА и сформирую файл .docx.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await update.effective_message.reply_text("⏳ <i>Формирую проект Акта формы Н-1 и подбираю нормы НПА...</i>", parse_mode="HTML")
+    try:
+        req = ActN1Request(
+            organization_name="Организация (по наряду)",
+            subdivision="Производственный участок",
+            accident_location="Рабочее место потерпевшего",
+            victim_fio="Ф.И.О. потерпевшего",
+            victim_profession="Профессия потерпевшего",
+            incident_description=text_args,
+        )
+        auto = auto_suggest_act_n1_rules(text_args)
+        docx_io = await asyncio.to_thread(generate_act_n1_docx, req)
+        docx_io.name = "Akt_formy_H1.docx"
+
+        summary = (
+            "✅ <b>Проект Акта формы Н-1 сформирован!</b>\n\n"
+            f"<b>Фабула:</b> {html.escape(text_args)}\n\n"
+            "<b>Предварительно выявленные нарушения НПА РБ:</b>\n"
+            + "\n".join(f"• <i>{html.escape(r)}</i>" for r in auto["violated_npa"])
+            + "\n\n<i>Готовый документ во вложении:</i>"
+        )
+        await status_msg.delete()
+        await update.effective_message.reply_document(
+            document=docx_io,
+            filename="Akt_formy_H1.docx",
+            caption=summary[:1024],
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.exception("Bot act_n1 command failed")
+        await update.effective_message.reply_text("❌ Произошла ошибка при генерации Акта Н-1.")
+
+
+async def permit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message:
+        return
+    text_args = " ".join(context.args or []).strip()
+    if not text_args:
+        await update.effective_message.reply_text(
+            "📋 <b>Генератор Наряда-допуска на работы повышенной опасности</b>\n\n"
+            "Укажите вид работ после команды, например:\n"
+            "<code>/permit Работы на высоте по ремонту кровли</code>\n"
+            "<code>/permit Огневые сварочные работы на трубопроводе</code>\n"
+            "<code>/permit Работы в замкнутом пространстве емкости</code>\n\n"
+            "Я сформирую наряд-допуск с перечнем обязательных СИЗ и мер безопасности по НПА РБ.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await update.effective_message.reply_text("⏳ <i>Формирую наряд-допуск и подбираю меры безопасности...</i>", parse_mode="HTML")
+    try:
+        req = WorkPermitRequest(
+            organization_name="Организация (наниматель)",
+            subdivision="Участок производства работ",
+            work_type=text_args,
+            work_location="Объект производства работ",
+            permit_issuer="Лицо, выдающее наряд-допуск",
+            work_leader="Ответственный руководитель работ",
+            work_supervisor="Ответственный производитель работ",
+        )
+        auto = auto_suggest_work_permit_measures(text_args)
+        docx_io = await asyncio.to_thread(generate_work_permit_docx, req)
+        docx_io.name = "Naryad_dopusk.docx"
+
+        summary = (
+            "✅ <b>Наряд-допуск сформирован!</b>\n\n"
+            f"<b>Вид работ:</b> {html.escape(text_args)}\n\n"
+            "<b>Обязательные СИЗ по правилам:</b>\n"
+            + "\n".join(f"• {html.escape(p)}" for p in auto["required_ppe"])
+            + "\n\n<i>Готовый документ во вложении:</i>"
+        )
+        await status_msg.delete()
+        await update.effective_message.reply_document(
+            document=docx_io,
+            filename="Naryad_dopusk.docx",
+            caption=summary[:1024],
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.exception("Bot permit command failed")
+        await update.effective_message.reply_text("❌ Произошла ошибка при генерации наряда-допуска.")
+
+
 def build_application() -> Application:
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
@@ -926,6 +1040,8 @@ def build_application() -> Application:
         group=-100,
     )
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("act_n1", act_n1_command))
+    application.add_handler(CommandHandler("permit", permit_command))
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     application.add_handler(CallbackQueryHandler(inspection_callback, pattern=r"^inspection:"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
