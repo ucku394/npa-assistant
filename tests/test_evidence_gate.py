@@ -284,3 +284,40 @@ def test_claim_evidence_accepts_source_marker_on_immediately_following_line():
         question="Какие обязанности установлены?",
     )
     assert result["passed"] is True
+
+
+def test_claim_evidence_rejects_legal_claim_without_local_citation():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Работодатель обязан провести обучение. "
+            "Обучение проводится в установленном порядке [SOURCE:NPA_RULE_1]."
+        ),
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила охраны труда",
+            "point": "1",
+            "excerpt": "Работодатель обязан провести обучение.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Что обязан сделать работодатель?",
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "legal_claim_missing_local_source_citation"
+
+
+def test_claim_evidence_accepts_citation_on_immediately_following_line():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Работодатель обязан провести обучение.\n"
+            "[SOURCE:NPA_RULE_1]"
+        ),
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила охраны труда",
+            "point": "1",
+            "excerpt": "Работодатель обязан провести обучение.",
+        }],
+        query_profile={"question_type": "general"},
+        question="Что обязан сделать работодатель?",
+    )
+    assert result["passed"] is True
