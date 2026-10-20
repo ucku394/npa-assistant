@@ -156,32 +156,32 @@ class ChatService:
             "ответствен", "согласно пункту", "согласно п.", "согласно статье",
             "согласно ст.", "пункт ", "статья ",
         )
-        answer_lines = str(answer or "").splitlines()
-        for line_index, line in enumerate(answer_lines):
-            normalized_line = line.strip().lower()
-            if not normalized_line or not any(
-                marker in normalized_line for marker in legal_claim_markers
-            ):
+        claim_units = [
+            unit.strip()
+            for unit in re.split(r"(?<=[.!?])\\s+(?=[А-ЯЁ])|\\n+", str(answer or ""))
+            if unit.strip()
+        ]
+        source_marker_only = re.compile(
+            r"(?:\\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\\]\\s*)+",
+            re.IGNORECASE,
+        )
+        for unit_index, unit in enumerate(claim_units):
+            normalized_unit = unit.lower()
+            if not any(marker in normalized_unit for marker in legal_claim_markers):
                 continue
-            if ChatService._extract_source_ids(line):
+            if ChatService._extract_source_ids(unit):
                 continue
-            next_nonempty = next(
-                (
-                    candidate.strip()
-                    for candidate in answer_lines[line_index + 1:]
-                    if candidate.strip()
-                ),
-                "",
-            )
-            if ChatService._extract_source_ids(next_nonempty):
+            next_unit = claim_units[unit_index + 1] if unit_index + 1 < len(claim_units) else ""
+            if source_marker_only.fullmatch(next_unit):
                 continue
             return {
                 "passed": False,
                 "reason": "legal_claim_missing_local_source_citation",
                 "question_type": qtype,
-                "uncited_claim_line": line.strip()[:240],
+                "uncited_claim_line": unit[:240],
                 "cited_evidence_count": len(cited_evidence),
             }
+
 
         evidence_reference_text = " ".join(
             [
