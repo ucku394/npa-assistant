@@ -145,6 +145,44 @@ class ChatService:
                 "cited_evidence_count": 0,
             }
 
+        # A valid source somewhere in the answer is not enough: legal claims
+        # must carry a nearby citation. Accept a SOURCE marker on the same line
+        # or on the immediately following non-empty line (the format used by
+        # the assistant prompt); otherwise fail closed.
+        legal_claim_markers = (
+            "обязан", "должен", "необходимо", "запрещ", "допускается",
+            "разрешается", "вправе", "имеет право", "не реже", "не чаще",
+            "не позднее", "в течение", "ежегодно", "ежемесячно",
+            "ответствен", "согласно пункту", "согласно п.", "согласно статье",
+            "согласно ст.", "пункт ", "статья ",
+        )
+        claim_units = [
+            unit.strip()
+            for unit in re.split(r"(?<=[.!?])\s+(?=[А-ЯЁ])|\n+", str(answer or ""))
+            if unit.strip()
+        ]
+        source_marker_only = re.compile(
+            r"(?:\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]\s*)+",
+            re.IGNORECASE,
+        )
+        for unit_index, unit in enumerate(claim_units):
+            normalized_unit = unit.lower()
+            if not any(marker in normalized_unit for marker in legal_claim_markers):
+                continue
+            if ChatService._extract_source_ids(unit):
+                continue
+            next_unit = claim_units[unit_index + 1] if unit_index + 1 < len(claim_units) else ""
+            if source_marker_only.fullmatch(next_unit):
+                continue
+            return {
+                "passed": False,
+                "reason": "legal_claim_missing_local_source_citation",
+                "question_type": qtype,
+                "uncited_claim_line": unit[:240],
+                "cited_evidence_count": len(cited_evidence),
+            }
+
+
         evidence_reference_text = " ".join(
             [
                 str(item.get("point") or "")

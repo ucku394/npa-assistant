@@ -70,3 +70,34 @@ def test_milk_substitution_is_routed_to_occupational_safety():
     query = "Можно ли молоко заменить денежной компенсацией или другими видами продукции?"
     assert detect_legal_domain(query) == "occupational_safety"
     assert detect_topic(query) == "milk_provision"
+
+
+def test_accident_selection_preserves_directly_relevant_hybrid_candidate_outside_legacy_act_filter():
+    from rag_engine.rag import _select_legal_diverse_chunks
+
+    direct_phrase = "Работник обязан сообщить непосредственному руководителю о несчастном случае."
+    candidates = [{
+        "doc_name": "Постановление № 260",
+        "point_num": "12",
+        "content": direct_phrase,
+        "_combined_score": 0.9174,
+    }]
+    candidates.extend(
+        {
+            "doc_name": "Положение о расследовании несчастных случаев № 30",
+            "point_num": str(point),
+            "content": direct_phrase,
+            "_combined_score": 0.70 - point * 0.01,
+        }
+        for point in range(1, 6)
+    )
+    selected = _select_legal_diverse_chunks(
+        ranked_chunks=candidates,
+        limit=5,
+        topic="accident_investigation",
+        intents=[],
+        cross_reference=False,
+        accident_mode="worker_did_not_report",
+        user_query="Работник не сообщил о несчастном случае непосредственному руководителю",
+    )
+    assert any("№ 260" in chunk["doc_name"] for chunk in selected)
