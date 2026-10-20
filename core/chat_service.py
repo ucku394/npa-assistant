@@ -280,7 +280,32 @@ class ChatService:
                     metadata_match = not point_is_paragraph or point_is_article
                 if metadata_match:
                     break
-            if not reference_re.search(reference_evidence_text) and not metadata_match:
+            # Appendix tables/figures often contain numbered rows (e.g. "№ п/п"),
+            # which are not legal paragraphs. When the answer explicitly identifies
+            # the appendix and the cited source itself is that appendix/table, do not
+            # misclassify its row number as a paragraph reference. This exception is
+            # deliberately narrow: it does not accept a bare invented "пункт N".
+            appendix_row_reference = False
+            if kind.startswith("пункт") or kind == "п.":
+                local_lower = local_text.lower()
+                appendix_mentions = re.findall(
+                    r"приложени[еяю]\s*(\d+(?:[.\-]\d+)*)",
+                    local_lower,
+                )
+                if appendix_mentions and re.search(
+                    r"приложени[еяю]\s*" + re.escape(appendix_mentions[-1]),
+                    reference_evidence_text,
+                ) and re.search(
+                    r"(?:№\s*п/п|графическ\w*\s+схем\w*|таблиц\w*)",
+                    reference_evidence_text,
+                ):
+                    appendix_row_reference = True
+
+            if (
+                not reference_re.search(reference_evidence_text)
+                and not metadata_match
+                and not appendix_row_reference
+            ):
                 unsupported_references.append(f"{canonical_kind} {number}")
 
         if unsupported_references:
@@ -526,8 +551,13 @@ class ChatService:
             + "Предыдущий вариант не прошёл Evidence Gate. Переформулируй ответ. "
             + "Каждое юридически значимое утверждение должно иметь [SOURCE:SOURCE_ID]. "
             + "Используй только SOURCE_ID из EVIDENCE MAP и фактический текст RAG. "
-            + "Не добавляй нормы по памяти. Если доказательств недостаточно, прямо укажи, "
-            + "что в предоставленных фрагментах НПА требование не раскрыто.\n"
+            + "Не добавляй нормы по памяти и не придумывай номер пункта/статьи. "
+            + "Если источник относится к приложению, таблице, схеме или рисунку, ссылайся на приложение "
+            + "или описание таблицы/схемы ровно так, как это указано в источнике; не называй строку "
+            + "или графическую позицию отдельным пунктом Правил. "
+            + "Сохрани SOURCE_ID непосредственно рядом с каждым юридически значимым утверждением, "
+            + "в том числе после переформулирования. Если прямое требование и его значения не подтверждаются "
+            + "фрагментом, укажи конкретно, что именно не удалось подтвердить.\n"
             + f"Причина проверки: {reason}"
         )
 
