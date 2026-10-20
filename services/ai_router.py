@@ -37,7 +37,7 @@ GEMINI_UNKNOWN_COOLDOWN_SECONDS = 120
 # Для 503 делаем две короткие повторные попытки в рамках одного запроса.
 # Задержки 2 и 5 секунд: сохраняем шанс переждать краткий всплеск,
 # но после второй неудачи сразу идём к Gemini fallback/OpenRouter.
-GEMINI_RETRY_ATTEMPTS = 1
+GEMINI_RETRY_ATTEMPTS = 2
 GEMINI_RETRY_DELAYS_SECONDS = (2, 5)
 
 # Резервная Gemini-модель. Основная модель остаётся CHAT_MODEL.
