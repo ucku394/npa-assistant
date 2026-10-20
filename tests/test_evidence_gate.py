@@ -328,8 +328,8 @@ def test_claim_evidence_accepts_citation_on_immediately_following_line():
 def test_claim_evidence_accepts_appendix_table_row_without_treating_it_as_rules_paragraph():
     result = ChatService._claim_evidence_check(
         answer=(
-            "В приложении 1 к Правилам приведена графическая схема страховочной системы; "
-            "для позиции 1 таблицы указаны параметры [SOURCE:NPA_11_APPENDIX_1]."
+            "Пункт 1 приложения 1 к Правилам содержит графическую схему страховочной системы "
+            "с параметрами [SOURCE:NPA_11_APPENDIX_1]."
         ),
         evidence_map=[{
             "source_id": "NPA_11_APPENDIX_1",
