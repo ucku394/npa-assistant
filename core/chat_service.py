@@ -722,6 +722,38 @@ class ChatService:
         return answer.strip()
 
     @staticmethod
+    def _build_extractable_evidence_fallback(
+        evidence_map: List[Dict[str, Any]], max_items: int = 5
+    ) -> str:
+        """Return verbatim retrieved excerpts; never infer legal requirements."""
+        blocks = []
+        seen = set()
+        for item in evidence_map or []:
+            source_id = str(item.get("source_id") or "").strip()
+            document = str(item.get("document") or "").strip()
+            excerpt = re.sub(r"\\s+", " ", str(item.get("excerpt") or "")).strip()
+            point = str(item.get("point") or "").strip()
+            if not source_id or not document or not excerpt or source_id in seen:
+                continue
+            seen.add(source_id)
+            if len(excerpt) > 520:
+                excerpt = excerpt[:517].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+            point_label = ""
+            if point:
+                point_label = point if re.match(r"^(?:пункт|п\\.|статья|ст\\.)", point, re.I) else f"п. {point}"
+                point_label = f", {point_label}"
+            blocks.append(f"**{document}{point_label}.** «{excerpt}» [SOURCE:{source_id}]")
+            if len(blocks) >= max_items:
+                break
+        if not blocks:
+            return ""
+        return (
+            "Не удалось автоматически сформировать связный ответ. Ниже приведены найденные "
+            "фрагменты нормативных актов дословно; выводы сверх приведённого текста не добавляю.\n\n"
+            + "\n\n".join(blocks)
+        )
+
+    @staticmethod
     def _build_evidence_map(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Build a compact evidence map from the exact RAG chunks."""
         evidence = []
@@ -1047,6 +1079,45 @@ class ChatService:
                 "missing": details.get("instruction_developer_missing", False),
                 "not_cited": details.get("instruction_developer_not_cited", False),
             }
+
+        # If generation fails validation, try a strictly extractive answer from retrieved
+        # evidence. The fallback must pass every existing gate; otherwise fail closed.
+        if not grounding["passed"] or not claim_evidence["passed"]:
+            fallback_answer = self._build_extractable_evidence_fallback(evidence_map)
+            if fallback_answer:
+                fallback_grounding = self._grounding_check(fallback_answer, valid_source_ids)
+                fallback_claim_evidence = self._claim_evidence_check(
+                    answer=fallback_answer,
+                    evidence_map=evidence_map,
+                    query_profile=query_profile,
+                    topic=str(rag_result.get("topic") or ""),
+                    question=question,
+                )
+                fallback_mandatory_gate = evaluate_mandatory_source_rules(
+                    query_profile=query_profile,
+                    chunks=chunks,
+                    answer=fallback_answer,
+                    extract_source_ids=self._extract_source_ids,
+                    build_source_id=build_source_id,
+                )
+                if (
+                    fallback_grounding["passed"]
+                    and fallback_claim_evidence["passed"]
+                    and fallback_mandatory_gate["passed"]
+                ):
+                    answer = fallback_answer
+                    grounding = fallback_grounding
+                    claim_evidence = fallback_claim_evidence
+                    final_mandatory_gate = fallback_mandatory_gate
+                    rag_meta["answer_fallback"] = "verbatim_evidence_excerpts"
+                    logger.info("CHAT | request_id=%s | accepted extractive evidence fallback", request_id)
+                else:
+                    logger.warning(
+                        "CHAT | request_id=%s | rejected extractive fallback | grounding=%s | claim=%s | mandatory=%s",
+                        request_id, fallback_grounding.get("passed"),
+                        fallback_claim_evidence.get("reason", fallback_claim_evidence.get("passed")),
+                        fallback_mandatory_gate.get("failures"),
+                    )
 
         rag_meta["grounding"] = grounding
         rag_meta["claim_evidence"] = claim_evidence

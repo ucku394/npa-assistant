@@ -390,3 +390,34 @@ def test_claim_evidence_accepts_height_work_scope_with_fall_protection_terms():
         question="Какое предельное усилие допускается при остановке падения человека в страховочной системе и какова максимальная длина стропа с амортизатором?",
     )
     assert result["passed"] is True
+
+
+def test_extractive_fallback_quotes_retrieved_evidence_and_cites_source():
+    evidence = [
+        {
+            "source_id": "NPA_RESOLUTION_253_P17",
+            "document": "Положение, утверждённое постановлением Совета Министров Республики Беларусь № 253",
+            "point": "17",
+            "excerpt": "Аттестация проводится в отношении рабочих мест, на которых заняты работники.",
+        },
+        {
+            "source_id": "NPA_RESOLUTION_253_P17",
+            "document": "Дубликат источника",
+            "point": "17",
+            "excerpt": "Не должен попасть повторно.",
+        },
+    ]
+
+    answer = ChatService._build_extractable_evidence_fallback(evidence)
+
+    assert "Аттестация проводится в отношении рабочих мест" in answer
+    assert "[SOURCE:NPA_RESOLUTION_253_P17]" in answer
+    assert "Дубликат источника" not in answer
+
+
+def test_extractive_fallback_returns_empty_without_citable_evidence():
+    assert ChatService._build_extractable_evidence_fallback([
+        {"source_id": "", "document": "НПА", "excerpt": "Текст нормы"},
+        {"source_id": "NPA_EMPTY", "document": "НПА", "excerpt": ""},
+    ]) == ""
+
