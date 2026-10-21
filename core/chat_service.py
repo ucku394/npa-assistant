@@ -731,7 +731,7 @@ class ChatService:
         for item in evidence_map or []:
             source_id = str(item.get("source_id") or "").strip()
             document = str(item.get("document") or "").strip()
-            excerpt = re.sub(r"\\s+", " ", str(item.get("excerpt") or "")).strip()
+            excerpt = re.sub(r"\s+", " ", str(item.get("excerpt") or "")).strip()
             point = str(item.get("point") or "").strip()
             if not source_id or not document or not excerpt or source_id in seen:
                 continue
@@ -742,7 +742,7 @@ class ChatService:
             # Evidence Gate checks each legal claim locally. Keep every sentence
             # verbatim, but attach its source marker directly to that sentence.
             cited_excerpt = re.sub(
-                r"(?<=[.!?])\\s+(?=[А-ЯЁ])",
+                r"(?<=[.!?])\s+(?=[А-ЯЁ])",
                 f" [SOURCE:{source_id}] ",
                 excerpt,
             )
@@ -750,7 +750,7 @@ class ChatService:
                 cited_excerpt = f"{cited_excerpt} [SOURCE:{source_id}]"
             point_label = ""
             if point:
-                point_label = point if re.match(r"^(?:пункт|п\\.|статья|ст\\.)", point, re.I) else f"п. {point}"
+                point_label = point if re.match(r"^(?:пункт|п\.|статья|ст\.)", point, re.I) else f"п. {point}"
                 point_label = f", {point_label}"
             blocks.append(f"**{document}{point_label}.** «{cited_excerpt}»")
             if len(blocks) >= max_items:
@@ -801,9 +801,9 @@ class ChatService:
             ).strip()
 
             fall_protection_appendix = bool(
-                re.search(r"\\b6\\s*кН\\b", text, re.IGNORECASE)
-                and re.search(r"максимальн\\w*\\s+длин\\w*\\s+строп\\w*", text, re.IGNORECASE)
-                and re.search(r"не\\s+более\\s+2\\s*м\\b", text, re.IGNORECASE)
+                re.search(r"\b6\s*кН\b", text, re.IGNORECASE)
+                and re.search(r"максимальн\w*\s+длин\w*\s+строп\w*", text, re.IGNORECASE)
+                and re.search(r"не\s+более\s+2\s*м\b", text, re.IGNORECASE)
             )
             evidence.append({
                 "index": index,
