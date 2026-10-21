@@ -4,19 +4,23 @@ The API uses the shared ChatService, so Telegram and Web have the same
 RAG, prompt, AI fallback and SOURCE_ID validation pipeline.
 """
 
-import logging
-import os
 import asyncio
+import logging
+import math
+import os
+import secrets
 from io import BytesIO
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from config import WEB_API_KEY, WEB_MAX_UPLOAD_MB, WEB_RATE_LIMIT_PER_MINUTE
+from core.access import SlidingWindowRateLimiter
 from core.chat_service import chat_service
 from services.inspection_service import verify_findings
 from services.prescription_service import build_draft_prescription
@@ -39,6 +43,7 @@ logging.basicConfig(
 # Prevent HTTP client logs from emitting credential-bearing Telegram API URLs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +59,81 @@ app = FastAPI(
 
 
 def _cors_origins() -> List[str]:
-    raw = os.getenv("WEB_CORS_ORIGINS", "*").strip()
-    if not raw:
-        return ["*"]
-    return [item.strip() for item in raw.split(",") if item.strip()] or ["*"]
+    # The bundled web UI is same-origin, so cross-origin access is opt-in.
+    raw = os.getenv("WEB_CORS_ORIGINS", "").strip()
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+MAX_UPLOAD_BYTES = WEB_MAX_UPLOAD_MB * 1024 * 1024
+# Multipart framing and form fields add some bytes on top of the file itself.
+MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024
+
+_rate_limiter = SlidingWindowRateLimiter(WEB_RATE_LIMIT_PER_MINUTE)
+
+if not WEB_API_KEY:
+    logger.warning(
+        "WEB_API_KEY is not set; the web API is open to everyone "
+        "(rate limit: %s requests/min per IP).",
+        WEB_RATE_LIMIT_PER_MINUTE or "off",
+    )
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _provided_api_key(request: Request) -> str:
+    key = request.headers.get("X-API-Key", "").strip()
+    if key:
+        return key
+    auth = request.headers.get("Authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return ""
+
+
+async def require_api_access(request: Request) -> None:
+    if WEB_API_KEY and not secrets.compare_digest(
+        _provided_api_key(request).encode(), WEB_API_KEY.encode()
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Требуется ключ доступа.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    retry_after = _rate_limiter.hit(_client_ip(request))
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много запросов. Повторите попытку позже.",
+            headers={"Retry-After": str(math.ceil(retry_after))},
+        )
+
+
+PROTECTED = [Depends(require_api_access)]
+
+_WEB_UI_CSP = (
+    "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; "
+    "script-src 'self'; connect-src 'self'; object-src 'none'; "
+    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length", "")
+    if content_length.isdigit() and int(content_length) > MAX_REQUEST_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"Размер запроса не должен превышать {WEB_MAX_UPLOAD_MB} МБ."},
+        )
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    if request.url.path == "/" or request.url.path.startswith("/web/"):
+        response.headers.setdefault("Content-Security-Policy", _WEB_UI_CSP)
+    return response
 
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -76,7 +152,7 @@ app.add_middleware(
     allow_origins=_cors_origins(),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 
@@ -124,7 +200,7 @@ async def health():
     }
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat", response_model=ChatResponse, dependencies=PROTECTED)
 async def chat(request: ChatRequest):
     question = request.question.strip()
 
@@ -210,17 +286,20 @@ class PrescriptionRequest(BaseModel):
     recipient_position: str = ""
 
 
-@app.post("/api/inspect")
+@app.post("/api/inspect", dependencies=PROTECTED)
 async def inspect_photo(file: UploadFile = File(...)):
     allowed = {"image/jpeg", "image/png", "image/webp"}
     mime = file.content_type or "image/jpeg"
     if mime not in allowed:
         raise HTTPException(status_code=400, detail="Поддерживаются JPG, PNG и WEBP.")
-    data = await file.read()
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
     if not data:
         raise HTTPException(status_code=400, detail="Файл фотографии пуст.")
-    if len(data) > 12 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Размер фотографии не должен превышать 12 МБ.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Размер фотографии не должен превышать {WEB_MAX_UPLOAD_MB} МБ.",
+        )
     try:
         vision = await asyncio.to_thread(analyze_image, data, mime, "")
         findings = await verify_findings(vision.get("potential_findings") or [], chat_service.supabase)
@@ -244,7 +323,7 @@ async def inspect_photo(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Не удалось выполнить фотоинспекцию.")
 
 
-@app.post("/api/prescription")
+@app.post("/api/prescription", dependencies=PROTECTED)
 async def create_prescription(request: PrescriptionRequest):
     # Never trust status/legal_basis supplied by the browser. Re-run legal
     # verification on the server and use only the fresh, source-validated result.
@@ -304,7 +383,7 @@ async def create_prescription(request: PrescriptionRequest):
 # DOCUMENT GENERATION ENDPOINTS (ACT H-1 & WORK PERMIT)
 # ============================================================
 
-@app.post("/api/documents/act-n1")
+@app.post("/api/documents/act-n1", dependencies=PROTECTED)
 async def create_act_n1(request: ActN1Request):
     """Validate and auto-enrich Act H-1 (несчастный случай на производстве)."""
     auto = auto_suggest_act_n1_rules(request.incident_description)
@@ -323,7 +402,7 @@ async def create_act_n1(request: ActN1Request):
     }
 
 
-@app.post("/api/documents/act-n1/download")
+@app.post("/api/documents/act-n1/download", dependencies=PROTECTED)
 async def download_act_n1(request: ActN1Request):
     """Generate and stream official Belarus Act H-1 as DOCX."""
     try:
@@ -338,7 +417,7 @@ async def download_act_n1(request: ActN1Request):
         raise HTTPException(status_code=500, detail="Не удалось сформировать Акт формы Н-1.")
 
 
-@app.post("/api/documents/work-permit")
+@app.post("/api/documents/work-permit", dependencies=PROTECTED)
 async def create_work_permit(request: WorkPermitRequest):
     """Validate and auto-enrich Work Permit (наряд-допуск на работы повышенной опасности)."""
     auto = auto_suggest_work_permit_measures(request.work_type)
@@ -355,7 +434,7 @@ async def create_work_permit(request: WorkPermitRequest):
     }
 
 
-@app.post("/api/documents/work-permit/download")
+@app.post("/api/documents/work-permit/download", dependencies=PROTECTED)
 async def download_work_permit(request: WorkPermitRequest):
     """Generate and stream official Belarus Work Permit as DOCX."""
     try:

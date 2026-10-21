@@ -34,6 +34,10 @@ async def run_services():
         port=port,
         log_level="info",
         access_log=False,
+        # Behind the hosting proxy (Railway) the real client IP is in
+        # X-Forwarded-For; it is needed for per-IP rate limiting.
+        proxy_headers=True,
+        forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "*"),
     )
     server = uvicorn.Server(config)
 
@@ -80,6 +84,7 @@ def main():
     # httpx/httpcore can leak credentials in logs
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
 
     try:
         asyncio.run(run_services())

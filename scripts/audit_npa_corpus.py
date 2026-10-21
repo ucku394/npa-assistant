@@ -64,7 +64,6 @@ def main():
         "id,doc_name,doc_number,doc_type,issuer,legal_domain,status,source_url,effective_from,effective_to,metadata",
     )
 
-    chunks_by_doc = Counter(str(row.get("doc_name") or "<missing doc_name>") for row in chunks)
     chunk_count_by_document_id = Counter(str(row.get("document_id")) for row in chunks if row.get("document_id"))
     topics_by_doc = defaultdict(Counter)
     domains_by_doc = defaultdict(Counter)
@@ -77,7 +76,6 @@ def main():
     domain_counts = Counter(str(row.get("legal_domain") or "<missing>") for row in chunks)
     status_counts = Counter(str(row.get("status") or "<missing>") for row in chunks)
 
-    chunk_ids = {str(row.get("document_id")) for row in chunks if row.get("document_id")}
     doc_ids = {str(row.get("id")) for row in documents if row.get("id")}
     missing_doc_links = sum(not row.get("document_id") for row in chunks)
     orphan_chunks = sum(
