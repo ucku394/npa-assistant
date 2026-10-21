@@ -746,8 +746,7 @@ class ChatService:
                 f" [SOURCE:{source_id}] ",
                 excerpt,
             )
-            if not ChatService._extract_source_ids(cited_excerpt):
-                cited_excerpt = f"{cited_excerpt} [SOURCE:{source_id}]"
+            cited_excerpt = f"{cited_excerpt} [SOURCE:{source_id}]"
             point_label = ""
             if point:
                 point_label = point if re.match(r"^(?:пункт|п\\.|статья|ст\\.)", point, re.I) else f"п. {point}"
