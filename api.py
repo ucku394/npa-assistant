@@ -7,12 +7,14 @@ RAG, prompt, AI fallback and SOURCE_ID validation pipeline.
 import logging
 import os
 import asyncio
+import time
+from collections import defaultdict, deque
 from io import BytesIO
 from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -54,10 +56,12 @@ app = FastAPI(
 
 
 def _cors_origins() -> List[str]:
-    raw = os.getenv("WEB_CORS_ORIGINS", "*").strip()
+    raw = os.getenv("WEB_CORS_ORIGINS", "").strip()
+    # Same-origin browser requests do not need CORS. Cross-origin access must
+    # be explicitly allowlisted by the operator.
     if not raw:
-        return ["*"]
-    return [item.strip() for item in raw.split(",") if item.strip()] or ["*"]
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -78,6 +82,63 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+# Lightweight process-local abuse controls. For multi-replica deployments,
+# enforce equivalent limits at the gateway/WAF as well.
+_RATE_WINDOWS = defaultdict(deque)
+_RATE_LIMITS = {
+    "/api/chat": (20, 60),
+    "/api/inspect": (5, 60),
+    "/api/prescription": (5, 60),
+    "/api/documents": (10, 60),
+}
+_RATE_DEFAULT = (60, 60)
+_RATE_CLEANUP_COUNTER = 0
+
+
+@app.middleware("http")
+async def api_abuse_controls(request, call_next):
+    global _RATE_CLEANUP_COUNTER
+    path = request.url.path
+    if not path.startswith("/api/") or path == "/api/health":
+        return await call_next(request)
+
+    # Reject oversized requests before FastAPI reads/parses the body.
+    try:
+        declared_length = int(request.headers.get("content-length", "0") or 0)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"detail": "Некорректный Content-Length."})
+    body_limit = 13 * 1024 * 1024 if path == "/api/inspect" else 256 * 1024
+    if declared_length > body_limit:
+        return JSONResponse(status_code=413, content={"detail": "Размер запроса превышает допустимый лимит."})
+
+    client_ip = request.client.host if request.client else "unknown"
+    route_key = next((key for key in _RATE_LIMITS if path == key or path.startswith(key + "/")), None)
+    limit, window_seconds = _RATE_LIMITS.get(route_key, _RATE_DEFAULT)
+    bucket_key = (client_ip, route_key or path)
+    now = time.monotonic()
+    events = _RATE_WINDOWS[bucket_key]
+    while events and now - events[0] >= window_seconds:
+        events.popleft()
+    if len(events) >= limit:
+        retry_after = max(1, int(window_seconds - (now - events[0])))
+        return JSONResponse(
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+            content={"detail": "Слишком много запросов. Повторите попытку позже."},
+        )
+    events.append(now)
+
+    _RATE_CLEANUP_COUNTER += 1
+    if _RATE_CLEANUP_COUNTER % 500 == 0:
+        for key in list(_RATE_WINDOWS):
+            queue = _RATE_WINDOWS[key]
+            while queue and now - queue[0] >= window_seconds:
+                queue.popleft()
+            if not queue:
+                _RATE_WINDOWS.pop(key, None)
+
+    return await call_next(request)
 
 
 class ChatRequest(BaseModel):
