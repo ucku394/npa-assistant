@@ -421,3 +421,44 @@ def test_extractive_fallback_returns_empty_without_citable_evidence():
         {"source_id": "NPA_EMPTY", "document": "НПА", "excerpt": ""},
     ]) == ""
 
+
+
+def test_fall_protection_appendix_keeps_both_numeric_limits_in_evidence():
+    content = (
+        "В страховочных системах усилие, передаваемое на работающего при остановке "
+        "падения, не должно превышать 6 кН. "
+        "Максимальная длина стропа, включая концевые соединения с учетом амортизатора, "
+        "должна быть не более 2 м."
+    )
+    evidence = ChatService._build_evidence_map([{
+        "doc_name": "Об утверждении Правил по охране труда при выполнении работ на высоте № 11",
+        "point_num": "06.02.",
+        "content": content,
+        "legal_domain": "occupational_safety",
+    }])
+
+    assert len(evidence) == 1
+    assert evidence[0]["fall_protection_appendix"] is True
+    assert "6 кН" in evidence[0]["excerpt"]
+    assert "не более 2 м" in evidence[0]["excerpt"]
+
+
+def test_fall_protection_extractive_fallback_preserves_and_cites_both_limits():
+    content = (
+        "В страховочных системах усилие, передаваемое на работающего при остановке "
+        "падения, не должно превышать 6 кН. "
+        "Максимальная длина стропа, включая концевые соединения с учетом амортизатора, "
+        "должна быть не более 2 м."
+    )
+    evidence = ChatService._build_evidence_map([{
+        "doc_name": "Об утверждении Правил по охране труда при выполнении работ на высоте № 11",
+        "point_num": "06.02.",
+        "content": content,
+        "legal_domain": "occupational_safety",
+    }])
+
+    answer = ChatService._build_extractable_evidence_fallback(evidence)
+
+    assert "6 кН" in answer
+    assert "не более 2 м" in answer
+    assert answer.count("[SOURCE:") >= 2

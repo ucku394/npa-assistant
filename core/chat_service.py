@@ -736,13 +736,22 @@ class ChatService:
             if not source_id or not document or not excerpt or source_id in seen:
                 continue
             seen.add(source_id)
-            if len(excerpt) > 520:
-                excerpt = excerpt[:517].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+            excerpt_limit = 2200 if item.get("fall_protection_appendix") else 520
+            if len(excerpt) > excerpt_limit:
+                excerpt = excerpt[:excerpt_limit - 3].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+            # Evidence Gate checks each legal claim locally. Keep every sentence
+            # verbatim, but attach its source marker directly to that sentence.
+            cited_excerpt = re.sub(
+                r"(?<=[.!?])\s+(?=[А-ЯЁ])",
+                f" [SOURCE:{source_id}] ",
+                excerpt,
+            )
+            cited_excerpt = f"{cited_excerpt} [SOURCE:{source_id}]"
             point_label = ""
             if point:
                 point_label = point if re.match(r"^(?:пункт|п\\.|статья|ст\\.)", point, re.I) else f"п. {point}"
                 point_label = f", {point_label}"
-            blocks.append(f"**{document}{point_label}.** «{excerpt}» [SOURCE:{source_id}]")
+            blocks.append(f"**{document}{point_label}.** «{cited_excerpt}»")
             if len(blocks) >= max_items:
                 break
         if not blocks:
@@ -790,11 +799,17 @@ class ChatService:
                 or ""
             ).strip()
 
+            fall_protection_appendix = bool(
+                re.search(r"\b6\s*кН\b", text, re.IGNORECASE)
+                and re.search(r"максимальн\w*\s+длин\w*\s+строп\w*", text, re.IGNORECASE)
+                and re.search(r"не\s+более\s+2\s*м\b", text, re.IGNORECASE)
+            )
             evidence.append({
                 "index": index,
                 "source_id": source_id,
                 "document": document,
                 "point": point,
+                "fall_protection_appendix": fall_protection_appendix,
                 "legal_domain": str(chunk.get("legal_domain") or "").strip(),
                 "topic": str(chunk.get("topic") or "").strip(),
                 "source_url": str(
@@ -806,7 +821,9 @@ class ChatService:
                 "current_status": str(chunk.get("current_status") or chunk.get("legal_status") or "").strip(),
                 "last_verified_at": chunk.get("last_verified_at"),
                 "jurisdiction": str(chunk.get("jurisdiction") or "").strip(),
-                "excerpt": text[:700],
+                # Appendix table stores both limits in one chunk; a 700-char
+                # excerpt cuts off the 2 m rule before Evidence Gate sees it.
+                "excerpt": text[:2200] if fall_protection_appendix else text[:700],
             })
         return evidence
 
