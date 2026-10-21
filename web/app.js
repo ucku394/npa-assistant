@@ -661,7 +661,9 @@ async function ask(text) {
     }
 
     if (!response.ok) {
-      throw new Error(data.detail || "Ошибка сервера");
+      const error = new Error(data.detail || "Ошибка сервера");
+      if ([401, 413, 429].includes(response.status) && data.detail) error.userMessage = data.detail;
+      throw error;
     }
 
     const answer = data.answer || "Ответ не получен.";
@@ -680,7 +682,7 @@ async function ask(text) {
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
     removeSearchProgress();
-    const errorText = "Не удалось получить ответ. Попробуйте повторить запрос.";
+    const errorText = error.userMessage || "Не удалось получить ответ. Попробуйте повторить запрос.";
     const wrap = document.createElement("div");
     wrap.className = "message assistant error-message";
     const bubble = document.createElement("div");
