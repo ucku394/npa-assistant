@@ -129,3 +129,37 @@ def test_fall_protection_search_generates_decree_11_queries():
     assert "страховочн" in combined
     assert "амортизатор" in combined
     assert "строп" in combined
+
+
+
+def test_workplace_attestation_search_keeps_short_lexical_queries_in_top_eight():
+    query = "Основания для проведения аттестации рабочих мест"
+    queries = build_search_queries(
+        query,
+        detect_topic(query),
+        detect_legal_domain(query),
+        [],
+        build_universal_query_profile(query),
+    )
+    normalized = [item.casefold() for item in queries]
+
+    assert len(queries) <= 8
+    assert "аттестация рабочих мест" in normalized
+    assert "основания проведения аттестации" in normalized
+    assert any("№ 253" in item for item in queries)
+
+
+def test_ptm_search_keeps_abbreviation_and_expanded_lexical_queries():
+    query = "ПТМ"
+    queries = build_search_queries(
+        query,
+        detect_topic(query),
+        detect_legal_domain(query),
+        [],
+        build_universal_query_profile(query),
+    )
+    normalized = [item.casefold() for item in queries]
+
+    assert len(queries) <= 8
+    assert "птм" in normalized
+    assert "пожарно-технический минимум" in normalized

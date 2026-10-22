@@ -4272,6 +4272,67 @@ async def retrieve_context(
         ]
         logger.info("RAG | conveyor evidence gate | retained=%s", len(candidate_chunks))
 
+    # Recovery for classifier/domain-filter misses: if filtered and targeted
+    # searches yield no candidates, retry the original query without a domain
+    # filter. This broadens retrieval only; the evidence gate remains unchanged.
+    if not candidate_chunks and legal_domain != "general" and valid_pairs:
+        fallback_query, fallback_vector = valid_pairs[0]
+        try:
+            fallback_results = await asyncio.to_thread(
+                _search_chunks,
+                supabase,
+                fallback_vector,
+                fallback_query,
+                None,
+                None,
+            )
+        except Exception as fallback_error:
+            fallback_results = []
+            logger.warning(
+                "RAG | request_id=%s | unfiltered recovery failed | query=%s | error=%s",
+                request_id,
+                fallback_query,
+                fallback_error,
+            )
+
+        logger.info(
+            "RAG | request_id=%s | unfiltered recovery | prior_candidates=0 | query=%s | result_count=%s",
+            request_id,
+            fallback_query,
+            len(fallback_results),
+        )
+        search_diagnostics.append({
+            "query": fallback_query,
+            "mode": "unfiltered_recovery",
+            "result_count": len(fallback_results),
+            "error": None,
+            "top_results": [
+                {
+                    "document": _get_document_name(chunk),
+                    "point": _get_point_number(chunk),
+                    "semantic_score": round(_safe_float(chunk.get("semantic_score", chunk.get("similarity"))), 4),
+                    "search_mode": chunk.get("_search_mode", "hybrid"),
+                }
+                for chunk in fallback_results[:5]
+            ],
+        })
+        if fallback_results:
+            candidate_chunks = _merge_search_results(
+                [candidate_chunks, fallback_results],
+                ["merged", "unfiltered_recovery"],
+            )
+            if conveyor_query:
+                conveyor_evidence = re.compile(
+                    r"конвейер\w*|ленточн\w*|транспортирующ\w*\s+устройств\w*|"
+                    r"транспортн\w*\s+средств\w*\s+непрерывн\w*|"
+                    r"аварийн\w*\s+останов\w*|огражден\w*\s+движущ\w*",
+                    re.IGNORECASE,
+                )
+                candidate_chunks = [
+                    chunk for chunk in candidate_chunks
+                    if conveyor_evidence.search(str(chunk))
+                ]
+
     candidate_count = len(candidate_chunks)
 
     if not candidate_chunks:
