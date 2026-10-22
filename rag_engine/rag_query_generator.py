@@ -253,7 +253,7 @@ def build_search_queries(
             "внеочередная аттестация рабочих мест",
         ])
 
-    if re.search(r"\\bптм\\b|пожарно[- ]техническ\\w*\\s+минимум", original, re.IGNORECASE):
+    if re.search(r"\bптм\b|пожарно[- ]техническ\w*\s+минимум", original, re.IGNORECASE):
         queries.extend([
             "ПТМ",
             "пожарно-технический минимум",
