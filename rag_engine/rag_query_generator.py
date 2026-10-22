@@ -241,6 +241,25 @@ def build_search_queries(
     universal_profile["legal_query_plan"] = legal_plan
     queries: List[str] = [original]
 
+    # Short, high-recall lexical variants must be inserted before generic
+    # expansions because the final query budget is limited to eight. PGroonga
+    # can return zero hits when a long natural-language query requires too many
+    # terms to match in the same indexed fragment.
+    if topic == "workplace_attestation" or universal_profile.get("event") == "workplace_attestation":
+        queries.extend([
+            "аттестация рабочих мест",
+            "основания проведения аттестации",
+            "Положение об аттестации рабочих мест № 253",
+            "внеочередная аттестация рабочих мест",
+        ])
+
+    if re.search(r"\\bптм\\b|пожарно[- ]техническ\\w*\\s+минимум", original, re.IGNORECASE):
+        queries.extend([
+            "ПТМ",
+            "пожарно-технический минимум",
+            "подготовка по пожарной безопасности проверка знаний постановление МЧС № 82",
+        ])
+
     if "external_service_provider_briefing" in (universal_profile.get("qualifiers") or []):
         # Сначала короткие лексические запросы к норме № 175, п. 46:
         # длинный исходный вопрос может иначе проиграть тематике медосмотров.
