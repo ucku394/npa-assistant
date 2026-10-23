@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install PyTorch CPU-only first to avoid massive CUDA binaries (~4GB -> ~200MB)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+    pip install --no-cache-dir torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 
 # Copy requirements and install python packages
 COPY requirements.txt .
