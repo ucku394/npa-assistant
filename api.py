@@ -180,6 +180,8 @@ class RagMeta(BaseModel):
     final_count: int = 0
     legal_domain: str | None = None
     topic: str | None = None
+    answer_mode: str = "verified_npa"
+    ai_generated: bool = False
 
 
 class ChatResponse(BaseModel):
