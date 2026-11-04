@@ -3915,7 +3915,6 @@ async def retrieve_context(
 ) -> Dict[str, Any]:
     request_id = str(request_id or "untracked")
     logger.info("RAG | request_id=%s | query_len=%s", request_id, len(user_query or ""))
-    logger.debug("RAG | request_id=%s | query=%s", request_id, user_query)
 
     legal_domain = detect_legal_domain(user_query)
     topic = detect_topic(user_query)
@@ -4013,11 +4012,6 @@ async def retrieve_context(
     )
 
     logger.info(
-        "RAG | request_id=%s | query_input | %r",
-        request_id,
-        user_query,
-    )
-    logger.info(
         "RAG | request_id=%s | classify | domain=%s | topic=%s | intents=%s | primary=%s | cross_reference=%s | labor_code=%s | special_category=%s | special_issue=%s | question_type=%s | subject=%s | event=%s | action=%s | state=%s | target_document=%s | target_article=%s",
         request_id,
         legal_domain,
@@ -4055,11 +4049,7 @@ async def retrieve_context(
         legal_query_plan.get("legal_concepts"),
         legal_query_plan.get("legal_targets"),
     )
-    logger.info(
-        "RAG | search_queries | count=%s | queries=%s",
-        len(search_queries),
-        search_queries,
-    )
+    logger.info("RAG | search_queries | count=%s", len(search_queries))
 
     query_vectors = await asyncio.to_thread(
         get_query_embeddings,
@@ -4288,16 +4278,14 @@ async def retrieve_context(
         except Exception as fallback_error:
             fallback_results = []
             logger.warning(
-                "RAG | request_id=%s | unfiltered recovery failed | query=%s | error=%s",
+                "RAG | request_id=%s | unfiltered recovery failed | error=%s",
                 request_id,
-                fallback_query,
                 fallback_error,
             )
 
         logger.info(
-            "RAG | request_id=%s | unfiltered recovery | prior_candidates=0 | query=%s | result_count=%s",
+            "RAG | request_id=%s | unfiltered recovery | prior_candidates=0 | result_count=%s",
             request_id,
-            fallback_query,
             len(fallback_results),
         )
         search_diagnostics.append({
