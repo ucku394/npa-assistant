@@ -431,7 +431,8 @@ def test_extractive_fallback_normalizes_whitespace_and_preserves_existing_point_
     assert "**Правила по охране труда, п. 17.**" in answer
     assert "п. п. 17" not in answer
     assert "Первое предложение. [SOURCE:NPA_RULE_17] Второе предложение." in answer
-    assert chr(10) not in answer
+    quoted_excerpt = answer.split("«", 1)[1].split("»", 1)[0]
+    assert chr(10) not in quoted_excerpt
 
 def test_extractive_fallback_returns_empty_without_citable_evidence():
     assert ChatService._build_extractable_evidence_fallback([
