@@ -131,7 +131,7 @@ class ChatService:
         )
 
         excerpts = " ".join(
-            str(item.get("excerpt") or "").lower()
+            str(item.get("full_text") or item.get("excerpt") or "").lower()
             for item in cited_evidence
         )
 
@@ -253,7 +253,7 @@ class ChatService:
             )
             reference_evidence_text = " ".join(
                 str(item.get("point") or "") + " " + str(item.get("document") or "") + " "
-                + str(item.get("excerpt") or "")
+                + str(item.get("full_text") or item.get("excerpt") or "")
                 for item in reference_evidence
             ).lower()
             metadata_match = False
@@ -813,6 +813,7 @@ class ChatService:
                 "jurisdiction": str(chunk.get("jurisdiction") or "").strip(),
                 # Appendix table stores both limits in one chunk; a 700-char
                 # excerpt cuts off the 2 m rule before Evidence Gate sees it.
+                "full_text": text,
                 "excerpt": text[:2200] if fall_protection_appendix else text[:700],
             })
         return evidence
@@ -834,6 +835,77 @@ class ChatService:
                 f"Фрагмент: {item['excerpt']}"
             )
         return "\n\n".join(blocks)
+
+
+    @staticmethod
+    def _is_safe_ai_fallback(text: str) -> bool:
+        """Reject fallback text that could be mistaken for a legal conclusion."""
+        value = str(text or "").strip()
+        if not value or ChatService._extract_source_ids(value):
+            return False
+        unsafe = re.compile(
+            r"обязан\w*|долж\w*|необходим\w*|запрещ\w*|допуска\w*|"
+            r"разреша\w*|вправе|имеет право|срок\w*|периодич\w*|"
+            r"ответствен\w*|штраф\w*|санкци\w*|пункт\w*|стать\w*|"
+            r"постановлен\w*|законодательств\w*|нормативн\w* акт\w*|\bнпа\b|требу\w*|подлеж\w*|предусмотрен\w*|"
+            r"согласно\s+(?:п\.?|стать|пункт|закону|постановлению)",
+            re.IGNORECASE,
+        )
+        return not unsafe.search(value)
+
+    async def _generate_ai_fallback_answer(
+        self,
+        question: str,
+        request_id: str,
+        evidence_map: List[Dict[str, Any]] | None = None,
+    ) -> str | None:
+        """Generate non-normative practical guidance; never bypass legal validation."""
+        evidence = []
+        for item in (evidence_map or [])[:5]:
+            excerpt = str(item.get("excerpt") or "").strip()
+            if excerpt:
+                evidence.append(
+                    f"{item.get('document') or 'Источник'}: {excerpt[:1200]}"
+                )
+        context = "\n\n".join(evidence) or "Релевантные фрагменты не найдены."
+        prompt = (
+            "Ты — эксперт-консультант по организации охраны труда, пожарной и "
+            "промышленной безопасности на предприятиях Республики Беларусь. "
+            "Дай только справочное, организационно-практическое объяснение ситуации. "
+            "Это НЕ юридическое заключение и НЕ изложение требований законодательства. "
+            "Не утверждай, что кто-либо обязан, должен, вправе или не вправе что-либо делать. "
+            "Не формулируй запреты, разрешения, сроки, периодичность, ответственность, "
+            "штрафы, основания, номера НПА, статей или пунктов. Не используй нормы РФ "
+            "или других государств. Не выдавай предположения за установленные факты. "
+            "Предлагай нейтральные вопросы для проверки, факторы риска и добровольные "
+            "организационные меры. Если данных мало, прямо перечисли, что нужно уточнить. "
+            "Пиши по-русски, конкретно и кратко. Верни только текст ответа.\n\n"
+            f"Вопрос пользователя: {question}\n\n"
+            f"Контекст для понимания ситуации (не считать доказательством нормы):\n{context}"
+        )
+        try:
+            generated = await asyncio.to_thread(
+                generate_answer,
+                prompt,
+                enforce_source_grounding=False,
+                request_id=request_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "CHAT | request_id=%s | ai_fallback_failed | error_type=%s",
+                request_id,
+                type(exc).__name__,
+            )
+            return None
+
+        generated = str(generated or "").strip()
+        if not self._is_safe_ai_fallback(generated):
+            logger.warning(
+                "CHAT | request_id=%s | ai_fallback_rejected | reason=legal_claim_or_empty",
+                request_id,
+            )
+            return None
+        return generated
 
     async def process_text(self, question: str) -> Dict[str, Any]:
         """Process one legal text question and return a transport-neutral result."""
@@ -884,10 +956,41 @@ class ChatService:
 
         if not rag_meta["found"]:
             logger.warning(
-                "CHAT | request_id=%s | stopped | reason=no_relevant_context | search_diagnostics=%s",
+                "CHAT | request_id=%s | no_relevant_context | attempting_non_normative_fallback",
                 request_id,
-                rag_meta.get("search_diagnostics"),
             )
+            fallback = await self._generate_ai_fallback_answer(
+                question=question,
+                request_id=request_id,
+            )
+            if fallback:
+                rag_meta["answer_mode"] = "ai_fallback"
+                rag_meta["ai_generated"] = True
+                return {
+                    "success": True,
+                    "error": None,
+                    "request_id": request_id,
+                    "question": question,
+                    "answer": (
+                        "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
+                        + fallback
+                    ),
+                    "answer_with_citations": (
+                        "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
+                        + fallback
+                    ),
+                    "telegram_answer": (
+                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\n\n"
+                        + fallback
+                    ),
+                    "answer_mode": "ai_fallback",
+                    "ai_generated": True,
+                    "sources": [],
+                    "rag": rag_meta,
+                    "evidence_map": evidence_map,
+                    "evidence_map_text": evidence_map_text,
+                }
+            rag_meta["answer_mode"] = "insufficient_evidence"
             return {
                 "success": False,
                 "error": "no_relevant_context",
@@ -1117,6 +1220,7 @@ class ChatService:
                     claim_evidence = fallback_claim_evidence
                     final_mandatory_gate = fallback_mandatory_gate
                     rag_meta["answer_fallback"] = "verbatim_evidence_excerpts"
+                    rag_meta["answer_mode"] = "verified_npa"
                     logger.info("CHAT | request_id=%s | accepted extractive evidence fallback", request_id)
                 else:
                     logger.warning(
@@ -1138,6 +1242,42 @@ class ChatService:
                 grounding.get("legal_claim_markers"),
                 claim_evidence.get("reason"),
             )
+            fallback = await self._generate_ai_fallback_answer(
+                question=question,
+                request_id=request_id,
+                evidence_map=evidence_map,
+            )
+            if fallback:
+                rag_meta["answer_mode"] = "ai_fallback"
+                rag_meta["ai_generated"] = True
+                rag_meta["legal_validation"] = "failed; fallback contains non-normative guidance only"
+                safe_text = (
+                    "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
+                    "Найденные фрагменты не позволили подтвердить нормативный ответ. "
+                    "Ниже приведены только ориентиры для анализа ситуации.\n\n"
+                    + fallback
+                )
+                return {
+                    "success": True,
+                    "error": None,
+                    "request_id": request_id,
+                    "question": question,
+                    "answer": safe_text,
+                    "answer_with_citations": safe_text,
+                    "telegram_answer": (
+                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\n\n"
+                        "Найденные фрагменты не позволили подтвердить нормативный ответ. "
+                        "Ниже приведены только ориентиры для анализа ситуации.\n\n"
+                        + fallback
+                    ),
+                    "answer_mode": "ai_fallback",
+                    "ai_generated": True,
+                    "sources": [],
+                    "rag": rag_meta,
+                    "evidence_map": evidence_map,
+                    "evidence_map_text": evidence_map_text,
+                }
+            rag_meta["answer_mode"] = "insufficient_evidence"
             return {
                 "success": False,
                 "error": "grounding_failed",
@@ -1149,6 +1289,22 @@ class ChatService:
                 "evidence_map": evidence_map,
                 "evidence_map_text": evidence_map_text,
             }
+
+        answer_mode = str(rag_meta.get("answer_mode") or "verified_npa")
+        if rag_meta.get("answer_fallback") == "verbatim_evidence_excerpts":
+            commentary = await self._generate_ai_fallback_answer(
+                question=question,
+                request_id=request_id,
+                evidence_map=evidence_map,
+            )
+            if commentary:
+                answer += (
+                    "\n\n**Экспертный комментарий ИИ (не нормативное требование):**\n"
+                    + commentary
+                )
+                answer_mode = "hybrid_ai"
+                rag_meta["ai_generated"] = True
+                rag_meta["answer_mode"] = answer_mode
 
         used_source_ids = self._extract_source_ids(answer)
         sources = self._build_sources(chunks, used_source_ids)
@@ -1168,6 +1324,8 @@ class ChatService:
             "answer": answer,
             "answer_with_citations": answer_with_citations,
             "telegram_answer": telegram_answer,
+            "answer_mode": answer_mode,
+            "ai_generated": answer_mode in ("ai_fallback", "hybrid_ai"),
             "sources": sources,
             "rag": rag_meta,
             "evidence_map": evidence_map,

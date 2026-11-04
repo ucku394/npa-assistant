@@ -180,6 +180,8 @@ class RagMeta(BaseModel):
     final_count: int = 0
     legal_domain: str | None = None
     topic: str | None = None
+    answer_mode: str = "verified_npa"
+    ai_generated: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -188,6 +190,8 @@ class ChatResponse(BaseModel):
     question: str
     answer: str
     answer_with_citations: str = ""
+    answer_mode: str = "verified_npa"
+    ai_generated: bool = False
     sources: list[SourceItem] = []
     rag: RagMeta = RagMeta()
 
@@ -230,6 +234,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             success=False,
             error="no_relevant_context",
+            answer_mode="insufficient_evidence",
             question=question,
             answer_with_citations="",
             answer=(
@@ -244,6 +249,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             success=False,
             error="grounding_failed",
+            answer_mode="insufficient_evidence",
             question=question,
             answer=(
                 "Не удалось подтвердить ответ найденными фрагментами нормативных "
@@ -268,6 +274,8 @@ async def chat(request: ChatRequest):
         question=question,
         answer=result.get("answer") or "",
         answer_with_citations=result.get("answer_with_citations") or result.get("answer") or "",
+        answer_mode=result.get("answer_mode") or (result.get("rag") or {}).get("answer_mode") or "verified_npa",
+        ai_generated=bool(result.get("ai_generated") or (result.get("rag") or {}).get("ai_generated")),
         sources=result.get("sources") or [],
         rag=result.get("rag") or {},
     )

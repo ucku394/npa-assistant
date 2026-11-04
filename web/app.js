@@ -311,7 +311,21 @@ function addMessage(role, text, sources = [], meta = "", rag = null, citationTex
   bubble.className = "bubble";
 
   if (role === "assistant") {
-    bubble.innerHTML = renderAnswer(citationText || text, sources.length, sources);
+    const mode = rag?.answer_mode || "verified_npa";
+    const modeLabels = {
+      verified_npa: "Подтверждено фрагментами НПА",
+      hybrid_ai: "Нормы НПА + комментарий ИИ",
+      ai_fallback: "Справочное объяснение ИИ · не нормативное требование"
+    };
+    if (modeLabels[mode]) {
+      const modeBadge = document.createElement("div");
+      modeBadge.className = "answer-mode-badge answer-mode-" + mode;
+      modeBadge.textContent = modeLabels[mode];
+      bubble.appendChild(modeBadge);
+    }
+    const answerBody = document.createElement("div");
+    answerBody.innerHTML = renderAnswer(citationText || text, sources.length, sources);
+    bubble.appendChild(answerBody);
   } else {
     bubble.textContent = text;
   }
