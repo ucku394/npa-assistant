@@ -721,7 +721,7 @@ class ChatService:
         for item in evidence_map or []:
             source_id = str(item.get("source_id") or "").strip()
             document = str(item.get("document") or "").strip()
-            excerpt = re.sub(r"\\s+", " ", str(item.get("excerpt") or "")).strip()
+            excerpt = re.sub(r"\s+", " ", str(item.get("excerpt") or "")).strip()
             point = str(item.get("point") or "").strip()
             if not source_id or not document or not excerpt or source_id in seen:
                 continue
@@ -739,7 +739,7 @@ class ChatService:
             cited_excerpt = f"{cited_excerpt} [SOURCE:{source_id}]"
             point_label = ""
             if point:
-                point_label = point if re.match(r"^(?:пункт|п\\.|статья|ст\\.)", point, re.I) else f"п. {point}"
+                point_label = point if re.match(r"^(?:пункт|п\.|статья|ст\.)", point, re.I) else f"п. {point}"
                 point_label = f", {point_label}"
             blocks.append(f"**{document}{point_label}.** «{cited_excerpt}»")
             if len(blocks) >= max_items:
