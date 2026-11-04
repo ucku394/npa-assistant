@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#175cd3">
+  <meta name="description" content="Ассистент по охране труда, пожарной и промышленной безопасности Республики Беларусь">
+  <title>Ассистент по ОТ и ПБ РБ</title>
+  <link rel="stylesheet" href="/web/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">ОТ</div>
+        <div>
+          <div class="brand-title">Ассистент по ОТ и ПБ РБ</div>
+          <div class="brand-subtitle">Нормативный поиск по законодательству Республики Беларусь</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="status" id="status"><span class="status-dot"></span> Готов</div>
+        <button class="new-chat" id="newChat" type="button" title="Начать новый диалог">＋ Новый чат</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="hero" id="hero">
+        <div class="eyebrow">Охрана труда · Пожарная безопасность · Промышленная безопасность</div>
+        <h1>Задайте вопрос по НПА Республики Беларусь</h1>
+        <p>Поиск по нормативным документам с указанием конкретных источников, использованных для ответа.</p>
+      </section>
+
+      <section class="history-panel" id="historyPanel" aria-label="История вопросов">
+        <div class="history-header">
+          <div>
+            <div class="history-title">История вопросов</div>
+            <div class="history-subtitle">Сохранена только в этом браузере</div>
+          </div>
+          <button class="history-clear" id="clearHistory" type="button">Очистить</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </section>
+
+      <section class="chat" id="chat" aria-live="polite" aria-label="Диалог"></section>
+
+      <section class="inspection-panel" id="inspectionPanel"><div class="inspection-head"><div><strong>Фотоинспекция</strong><div class="inspection-subtitle">Проверка визуальных признаков по НПА Республики Беларусь</div></div><label class="upload-button">📷 Загрузить фото<input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div><div id="inspectionResult" class="inspection-result" hidden></div></section><form class="composer" id="composer">
+        <textarea id="question" maxlength="4000" rows="2" placeholder="Например: Имеет ли право работник отказаться от работы без СИЗ?" autocomplete="off"></textarea>
+        <div class="composer-bottom">
+          <span class="hint"><kbd>Enter</kbd> — отправить · <kbd>Shift</kbd> + <kbd>Enter</kbd> — новая строка</span>
+          <span class="counter" id="counter">0 / 4000</span>
+          <button id="send" type="submit">Спросить <span>→</span></button>
+        </div>
+      </form>
+
+      <div class="examples" id="examples">
+        <button type="button" data-question="Имеет ли право работник отказаться от работы без СИЗ?">Отказ от работы без СИЗ</button>
+        <button type="button" data-question="Какой инструктаж проводится при перерыве в работе более шести месяцев?">Инструктаж после перерыва</button>
+        <button type="button" data-question="Сколько разрешено поднимать мужчинам?">Подъем тяжестей мужчинами</button>
+      </div>
+
+      <footer>
+        <span>Ответы формируются по найденным фрагментам НПА Республики Беларусь.</span>
+        <a href="/docs" target="_blank" rel="noreferrer">API / документация</a>
+      </footer>
+    </main>
+  </div>
+  <script src="/web/app.js"></script>
+</body>
+</html>

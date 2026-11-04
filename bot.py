@@ -1,0 +1,1134 @@
+"""
+Telegram bot for Belarus occupational / industrial safety questions.
+
+TEXT:
+Telegram
+    -> local multilingual-e5-small query embedding
+    -> Supabase vector search
+    -> semantic similarity sorting
+    -> TOP-N RAG chunks
+    -> Gemini
+    -> OpenRouter fallback
+    -> SOURCE_ID validation
+    -> Telegram
+
+PHOTO:
+Telegram
+    -> OpenRouter free multimodal vision
+    -> structured visual findings
+    -> Belarus NPA RAG verification
+    -> human-confirmed draft prescription
+"""
+
+import asyncio
+import html
+import logging
+import math
+import re
+from contextlib import asynccontextmanager
+from io import BytesIO
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ChatAction
+from telegram.ext import (
+    Application,
+    ApplicationHandlerStop,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
+
+
+from config import (
+    TELEGRAM_ALLOWED_USER_IDS,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_MESSAGE_LIMIT,
+    TELEGRAM_RATE_LIMIT_PER_MINUTE,
+)
+from core.access import SlidingWindowRateLimiter
+from services.document_generator import (
+    ActN1Request,
+    WorkPermitRequest,
+    auto_suggest_act_n1_rules,
+    auto_suggest_work_permit_measures,
+    generate_act_n1_docx,
+    generate_work_permit_docx,
+)
+
+
+from core.chat_service import chat_service
+from services.vision_service import VisionUnavailableError, analyze_image
+from services.inspection_service import verify_findings
+from services.prescription_service import build_draft_prescription
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=(
+        "%(asctime)s | "
+        "%(levelname)s | "
+        "%(name)s | "
+        "%(message)s"
+    ),
+)
+
+# httpx INFO logs may include Telegram API URLs with bot credentials.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# CONCURRENT ACTION MANAGER
+# ============================================================
+
+@asynccontextmanager
+async def continuous_typing(chat, interval: float = 4.0):
+    """
+    Фоновая задача, которая периодически обновляет статус 'печатает' в чате,
+    пока выполняются операции поиска в базе и генерации ответа.
+    """
+    async def _send_action():
+        try:
+            while True:
+                await chat.send_action(ChatAction.TYPING)
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            pass
+
+    task = asyncio.create_task(_send_action())
+    try:
+        yield
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+# ============================================================
+# TEXT UTILITIES
+# ============================================================
+
+def normalize_whitespace(text: str) -> str:
+    text = str(text or "")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def clean_ai_markup(text: str) -> str:
+    text = str(text or "")
+    replacements = {
+        "<br>": "\n",
+        "<br/>": "\n",
+        "<br />": "\n",
+        "</p>": "\n\n",
+        "<p>": "",
+        "<strong>": "",
+        "</strong>": "",
+        "<b>": "",
+        "</b>": "",
+        "<i>": "",
+        "</i>": "",
+        "<em>": "",
+        "</em>": "",
+    }
+
+    for old, new in replacements.items():
+        text = re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
+
+    text = re.sub(r"```(?:html|markdown|text)?", "", text, flags=re.IGNORECASE)
+    text = text.replace("```", "")
+    return normalize_whitespace(text)
+
+
+def ensure_numbered_list_spacing(text: str) -> str:
+    text = normalize_whitespace(text)
+    text = re.sub(r"(?m)(^|\n)(\s*)(\d{1,2})[.)]\s+", r"\1\2\3. ", text)
+    text = re.sub(r"(?m)([^\n])\n(\s*\d{1,2}\.\s+)", r"\1\n\n\2", text)
+    return text
+
+
+def to_telegram_html(text: str) -> str:
+    # Input is normalized once in send_long_message before splitting.
+    text = html.escape(str(text or ""), quote=False)
+
+    text = re.sub(r"(?m)^\s*#{1,6}\s*(.+?)\s*$", r"<b>\1</b>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
+    text = re.sub(r"(?m)^\s*[-*]\s+", "• ", text)
+    text = re.sub(r"(?m)^\s*([-_])(?:\s*\1){2,}\s*$", "────────", text)
+    text = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<i>\1</i>", text)
+
+    return text.strip()
+
+
+# ============================================================
+# TELEGRAM MESSAGE SPLITTING
+# ============================================================
+
+def split_text_smart(
+    text: str,
+    limit: int = TELEGRAM_MESSAGE_LIMIT,
+) -> list[str]:
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return [text]
+
+    parts = []
+    remaining = text
+
+    while len(remaining) > limit:
+        cut = remaining.rfind("\n\n", 0, limit)
+        if cut < limit // 2:
+            cut = remaining.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = remaining.rfind(" ", 0, limit)
+        if cut < limit // 2:
+            cut = limit
+
+        part = remaining[:cut].strip()
+        if part:
+            parts.append(part)
+        remaining = remaining[cut:].strip()
+
+    if remaining:
+        parts.append(remaining)
+
+    return parts
+
+
+async def send_long_message(
+    update: Update,
+    text: str,
+    use_html: bool = True,
+):
+    if not update.effective_message:
+        return
+
+    # Normalize once before splitting; HTML conversion must not repeat text cleanup.
+    text = ensure_numbered_list_spacing(clean_ai_markup(text))
+
+    for chunk in split_text_smart(text):
+        if use_html:
+            rendered = to_telegram_html(chunk)
+            try:
+                await update.effective_message.reply_text(
+                    rendered,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+                continue
+            except Exception:
+                logger.exception("Telegram HTML send failed; retrying plain text.")
+
+        await update.effective_message.reply_text(
+            html.unescape(str(chunk)),
+            disable_web_page_preview=True,
+        )
+
+
+def split_html_message(
+    text: str,
+    limit: int = TELEGRAM_MESSAGE_LIMIT,
+) -> list[str]:
+    """
+    Разбивает уже подготовленный Telegram HTML на безопасные по длине
+    блоки. Старается резать только по строкам/абзацам и не оставляет
+    незакрытые HTML-теги.
+    """
+    text = str(text or "").strip()
+    if len(text) <= limit:
+        return [text]
+
+    lines = text.splitlines()
+    parts = []
+    current = ""
+
+    def flush():
+        nonlocal current
+        if current.strip():
+            parts.append(current.strip())
+        current = ""
+
+    for line in lines:
+        candidate = line if not current else current + "\n" + line
+
+        if len(candidate) <= limit:
+            current = candidate
+            continue
+
+        if current:
+            flush()
+
+        if len(line) <= limit:
+            current = line
+            continue
+
+        remaining = line
+        while len(remaining) > limit:
+            cut = remaining.rfind(" ", 0, limit)
+            if cut < limit // 2:
+                cut = limit
+
+            chunk = remaining[:cut].strip()
+            if chunk:
+                parts.append(chunk)
+            remaining = remaining[cut:].strip()
+
+        if remaining:
+            current = remaining
+
+    flush()
+    return parts
+
+
+async def send_inspection_message(
+    update: Update,
+    text: str,
+    reply_markup=None,
+):
+    """
+    Отправляет профессиональный результат фотоинспекции без риска
+    Telegram BadRequest: Message is too long.
+
+    Кнопки прикрепляются только к последней части.
+    """
+    if not update.effective_message:
+        return
+
+    parts = split_html_message(text)
+
+    for index, part in enumerate(parts):
+        markup = reply_markup if index == len(parts) - 1 else None
+
+        try:
+            await update.effective_message.reply_text(
+                part,
+                parse_mode="HTML",
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Inspection HTML send failed for part %s/%s: %s. "
+                "Retrying plain text.",
+                index + 1,
+                len(parts),
+                exc,
+            )
+            await update.effective_message.reply_text(
+                re.sub(r"<[^>]+>", "", html.unescape(part)),
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+
+
+# ============================================================
+# DEBUG UPDATE
+# ============================================================
+
+async def debug_update(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    # Message text is not logged: questions may contain personal data.
+    message = update.effective_message
+    logger.debug(
+        "TELEGRAM UPDATE | update_id=%s | user_id=%s | chat_id=%s | text_len=%s | photo=%s",
+        update.update_id,
+        update.effective_user.id if update.effective_user else None,
+        update.effective_chat.id if update.effective_chat else None,
+        len(message.text or "") if message else 0,
+        bool(message and message.photo),
+    )
+
+
+# ============================================================
+# ACCESS CONTROL
+# ============================================================
+
+_user_rate_limiter = SlidingWindowRateLimiter(TELEGRAM_RATE_LIMIT_PER_MINUTE)
+
+
+def _is_start_command(update: Update) -> bool:
+    message = update.effective_message
+    text = (message.text or "").strip() if message else ""
+    if not text.startswith("/"):
+        return False
+    return text.split(maxsplit=1)[0].split("@", 1)[0] == "/start"
+
+
+async def _reply_gate(update: Update, text: str) -> None:
+    try:
+        if update.callback_query:
+            await update.callback_query.answer(text, show_alert=True)
+        elif update.effective_message:
+            await update.effective_message.reply_text(text)
+    except Exception as exc:
+        logger.warning("TELEGRAM ACCESS | reply failed | error=%s", exc)
+
+
+async def access_gate(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not isinstance(update, Update) or update.effective_user is None:
+        return
+    user_id = update.effective_user.id
+
+    is_start = _is_start_command(update)
+    is_allowed = not TELEGRAM_ALLOWED_USER_IDS or user_id in TELEGRAM_ALLOWED_USER_IDS
+
+    # Limit rejected users as well as authorized users; otherwise an unknown
+    # account can generate an unbounded stream of access-denied replies.
+    if not is_start or not is_allowed:
+        retry_after = _user_rate_limiter.hit(str(user_id))
+        if retry_after:
+            logger.info("TELEGRAM ACCESS | rate limited | user_id=%s", user_id)
+            await _reply_gate(
+                update,
+                f"⏳ Слишком много запросов. Повторите через {math.ceil(retry_after)} с.",
+            )
+            raise ApplicationHandlerStop
+
+    if not is_allowed:
+        logger.warning("TELEGRAM ACCESS | denied | user_id=%s", user_id)
+        await _reply_gate(
+            update,
+            "⛔ Доступ к ассистенту ограничен. Обратитесь к администратору.",
+        )
+        raise ApplicationHandlerStop
+
+    if is_start:
+        return
+
+
+# ============================================================
+# /START
+# ============================================================
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not update.effective_message:
+        return
+
+    await update.effective_message.reply_text(
+        "Здравствуйте! Я помощник по охране труда и "
+        "промышленной безопасности в Республике Беларусь.\n\n"
+        "💬 <b>Задайте вопрос</b> текстом (например: <i>Какова максимальная длина стропа с амортизатором?</i>)\n"
+        "📷 <b>Отправьте фото</b> с объекта для проверки нарушений требований безопасности\n"
+        "📝 <b>/act_n1 [описание]</b> — генерация проекта Акта формы Н-1 о несчастном случае на производстве\n"
+        "📋 <b>/permit [вид работ]</b> — генерация Наряда-допуска на работы повышенной опасности",
+        parse_mode="HTML",
+    )
+
+
+# ============================================================
+# TEXT HANDLER
+# ============================================================
+
+async def text_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not update.effective_message:
+        return
+
+    question = (update.effective_message.text or "").strip()
+    if not question:
+        return
+
+    status_message = None
+    try:
+        status_message = await update.effective_message.reply_text(
+            "🔍 <i>Ищу в базе НПА Республики Беларусь...</i>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.warning("Не удалось отправить статусное сообщение: %s", e)
+
+    try:
+        async with continuous_typing(update.effective_chat):
+            # Единый AI Core: RAG -> prompt -> AI -> SOURCE_ID.
+            result = await chat_service.process_text(question)
+
+            if not result.get("success"):
+                if status_message:
+                    try:
+                        await status_message.delete()
+                    except Exception:
+                        pass
+
+                error = result.get("error")
+                if error == "no_relevant_context":
+                    await update.effective_message.reply_text(
+                        "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
+                        "поэтому не буду придумывать нормативное требование."
+                    )
+                else:
+                    if error == "grounding_failed":
+                        await update.effective_message.reply_text(
+                            "⚠️ Не удалось получить ответ, который можно надёжно подтвердить найденными фрагментами НПА. "
+                            "Я не буду подменять это предположением. Попробуйте уточнить вопрос."
+                        )
+                    else:
+                        await update.effective_message.reply_text(
+                            "Не удалось обработать вопрос."
+                        )
+                return
+
+            if status_message:
+                try:
+                    await status_message.edit_text(
+                        "⚖️ <i>Анализирую требования законодательства...</i>",
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    logger.debug("Не удалось обновить статус анализа: %s", e)
+
+            answer = (
+                result.get("telegram_answer")
+                or result.get("answer_with_citations")
+                or result.get("answer")
+                or ""
+            )
+
+            sources = result.get("sources") or []
+            if not sources and result.get("answer_mode", "verified_npa") == "verified_npa":
+                logger.warning(
+                    "LEGAL | Evidence Gate passed but no validated sources were returned."
+                )
+
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
+        await send_long_message(
+            update,
+            answer,
+            use_html=True,
+        )
+
+    except Exception:
+        logger.exception("Text handler failed.")
+
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+
+        await update.effective_message.reply_text(
+            "Произошла ошибка при обработке запроса. "
+            "Попробуйте ещё раз через несколько секунд."
+        )
+
+
+# ============================================================
+# ============================================================
+# PHOTO INSPECTION / PRESCRIPTION
+# ============================================================
+
+def _format_inspection_result(vision: dict, verified: list[dict]) -> str:
+    """
+    Профессиональное представление результата фотоинспекции.
+
+    Принцип:
+    1. Что объективно видно на фотографии.
+    2. Какие признаки требуют внимания.
+    3. Какие нарушения подтверждены конкретным НПА.
+    4. Какие факты необходимо проверить на месте.
+
+    Технические поля AI/RAG пользователю не показываются.
+    """
+    category_map = {
+        "occupational_safety": "Охрана труда",
+        "fire_safety": "Пожарная безопасность",
+        "industrial_safety": "Промышленная безопасность",
+        "radiation_safety": "Радиационная безопасность",
+        "unknown": "Требует определения",
+    }
+
+    def esc(value) -> str:
+        return html.escape(str(value or "").strip())
+
+    def first_text(item: dict, *keys: str) -> str:
+        for key in keys:
+            value = str(item.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    category_raw = str(vision.get("category") or "").strip()
+    category = category_map.get(category_raw, category_raw or "Требует определения")
+    scene = str(vision.get("scene") or "").strip()
+    observations = vision.get("observations") or []
+
+    confirmed = [
+        item for item in verified
+        if item.get("status") == "confirmed"
+    ]
+    potential = [
+        item for item in verified
+        if item.get("status") == "potential"
+    ]
+    not_confirmed = [
+        item for item in verified
+        if item.get("status") == "not_confirmed"
+    ]
+
+    lines = [
+        "📷 <b>Фотоинспекция</b>",
+        "",
+        f"🏷️ <b>Область:</b> {esc(category)}",
+    ]
+
+    # --------------------------------------------------------
+    # 1. OBJECTIVE VISUAL DESCRIPTION
+    # --------------------------------------------------------
+    lines.extend(["", "👁️ <b>Что видно на фото</b>"])
+
+    if scene:
+        lines.append(esc(scene))
+
+    visible_observations = []
+    for item in observations[:5]:
+        if not isinstance(item, dict):
+            continue
+
+        description = first_text(item, "description", "observation")
+        evidence = first_text(item, "evidence", "visual_evidence")
+
+        if description:
+            visible_observations.append((description, evidence))
+
+    if visible_observations:
+        for description, evidence in visible_observations:
+            lines.append(f"• {esc(description)}")
+            if evidence and evidence != description:
+                lines.append(f"  <i>Визуальный признак: {esc(evidence)}</i>")
+    elif not scene:
+        lines.append(
+            "• На фотографии недостаточно данных для уверенного "
+            "описания обстановки."
+        )
+
+    # --------------------------------------------------------
+    # 2. CONFIRMED VIOLATIONS
+    # --------------------------------------------------------
+    if confirmed:
+        lines.extend(["", "🚨 <b>Подтверждённые нарушения</b>"])
+
+        for index, item in enumerate(confirmed, 1):
+            violation = first_text(
+                item,
+                "violation",
+                "description",
+            ) or "Подтверждённое нарушение"
+
+            lines.append(f"<b>{index}. {esc(violation)}</b>")
+
+            evidence = first_text(
+                item,
+                "evidence",
+                "visual_evidence",
+            )
+            if evidence:
+                lines.append(
+                    f"   👁️ <b>Визуальный признак:</b> {esc(evidence)}"
+                )
+
+            legal_basis = item.get("legal_basis") or []
+            if legal_basis:
+                lines.append("   📚 <b>Нормативное основание:</b>")
+                for ref in legal_basis[:3]:
+                    if not isinstance(ref, dict):
+                        continue
+
+                    document = first_text(
+                        ref,
+                        "document",
+                        "doc_name",
+                    ) or "НПА Республики Беларусь"
+                    point = first_text(
+                        ref,
+                        "point",
+                        "article",
+                    )
+
+                    reference = esc(document)
+                    if point:
+                        reference += f", {esc(point)}"
+
+                    lines.append(f"   • {reference}")
+
+            action = first_text(
+                item,
+                "corrective_action",
+                "action",
+            )
+            if action:
+                lines.append(
+                    f"   🛠️ <b>Рекомендуемое действие:</b> {esc(action)}"
+                )
+
+    # --------------------------------------------------------
+    # 3. POTENTIAL / NEEDS ON-SITE VERIFICATION
+    # --------------------------------------------------------
+    if potential:
+        lines.extend(["", "⚠️ <b>Признаки, требующие проверки</b>"])
+
+        for index, item in enumerate(potential, 1):
+            description = first_text(
+                item,
+                "violation",
+                "description",
+            ) or "Возможный риск или признак несоответствия"
+
+            lines.append(f"<b>{index}. {esc(description)}</b>")
+
+            evidence = first_text(
+                item,
+                "evidence",
+                "visual_evidence",
+            )
+            if evidence:
+                lines.append(
+                    f"   👁️ <b>Визуальный признак:</b> {esc(evidence)}"
+                )
+
+            checks = [
+                str(value).strip()
+                for value in (item.get("verification_needed") or [])
+                if str(value).strip()
+            ]
+
+            if checks:
+                lines.append("   🔎 <b>Что проверить на месте:</b>")
+                for check in checks[:4]:
+                    lines.append(f"   • {esc(check)}")
+
+            legal_basis = item.get("legal_basis") or []
+            if legal_basis:
+                lines.append("   📚 <b>Нормативная проверка:</b>")
+                for ref in legal_basis[:3]:
+                    if not isinstance(ref, dict):
+                        continue
+
+                    document = first_text(
+                        ref,
+                        "document",
+                        "doc_name",
+                    ) or "НПА Республики Беларусь"
+                    point = first_text(
+                        ref,
+                        "point",
+                        "article",
+                    )
+
+                    reference = esc(document)
+                    if point:
+                        reference += f", {esc(point)}"
+
+                    lines.append(f"   • {reference}")
+
+    # --------------------------------------------------------
+    # 4. NOT CONFIRMED / NO FINDINGS
+    # --------------------------------------------------------
+    if not confirmed and not potential:
+        if not_confirmed:
+            lines.extend([
+                "",
+                "ℹ️ <b>Результат проверки</b>",
+                "По отдельным визуальным признакам фотография "
+                "не позволяет достоверно установить нарушение.",
+                "",
+                "📌 <i>Для окончательной оценки необходимо проверить "
+                "фактические условия выполнения работ на месте.</i>",
+            ])
+        else:
+            lines.extend([
+                "",
+                "✅ <b>Явных признаков нарушений не обнаружено</b>",
+                "",
+                "По фотографии не выявлено визуальных признаков, "
+                "которые можно обоснованно отнести к нарушению "
+                "требований безопасности.",
+                "",
+                "📌 <i>Фотоанализ не заменяет проверку условий "
+                "выполнения работ на месте.</i>",
+            ])
+    elif potential and not confirmed:
+        lines.extend([
+            "",
+            "📌 <i>Выявленные признаки не считаются подтверждённым "
+            "нарушением до проверки факта и применимого нормативного "
+            "требования.</i>",
+        ])
+    elif confirmed and potential:
+        lines.extend([
+            "",
+            "📌 <i>Часть выявленных признаков подтверждена нормативно, "
+            "остальные требуют дополнительной проверки на месте.</i>",
+        ])
+
+    return "\n".join(lines)
+
+async def photo_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not update.effective_message or not update.effective_message.photo:
+        return
+
+    status_message = None
+    try:
+        status_message = await update.effective_message.reply_text(
+            "📷 <i>1/3 Анализирую фотографию...</i>",
+            parse_mode="HTML",
+        )
+
+        async with continuous_typing(update.effective_chat):
+            photo = update.effective_message.photo[-1]
+            telegram_file = await context.bot.get_file(photo.file_id)
+
+            buffer = BytesIO()
+            await telegram_file.download_to_memory(out=buffer)
+            image_bytes = buffer.getvalue()
+
+            if len(image_bytes) > 12 * 1024 * 1024:
+                raise ValueError("Фотография слишком большая для анализа (максимум 12 МБ).")
+
+            caption = (update.effective_message.caption or "").strip()
+
+            vision = await asyncio.to_thread(
+                analyze_image,
+                image_bytes,
+                "image/jpeg",
+                caption,
+            )
+
+            if status_message:
+                await status_message.edit_text(
+                    "⚖️ <i>2/3 Проверяю потенциальные нарушения по базе НПА РБ...</i>",
+                    parse_mode="HTML",
+                )
+
+            verified = await verify_findings(
+                vision.get("potential_findings") or [],
+                chat_service.supabase,
+            )
+
+            # Keep only Telegram's file ID and the compact inspection result in user_data.
+            # The original image bytes are fetched again only if a prescription is requested.
+            context.user_data.pop("pending_inspection", None)
+            context.user_data["pending_inspection"] = {
+                "vision": vision,
+                "verified": verified,
+                "photo_file_id": photo.file_id,
+                "caption": caption,
+            }
+
+            answer = _format_inspection_result(vision, verified)
+            confirmed = [
+                item for item in verified
+                if item.get("status") == "confirmed" and item.get("legal_basis")
+            ]
+
+            if confirmed:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "📄 Оформить ПРОЕКТ предписания",
+                        callback_data="inspection:prescription",
+                    )],
+                    [InlineKeyboardButton(
+                        "❌ Отклонить результаты",
+                        callback_data="inspection:reject",
+                    )],
+                ])
+            else:
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "❌ Закрыть результат",
+                        callback_data="inspection:reject",
+                    )],
+                ])
+
+            if status_message:
+                await status_message.delete()
+
+            await send_inspection_message(
+                update,
+                answer,
+                reply_markup=keyboard,
+            )
+
+    except VisionUnavailableError:
+        logger.warning("Photo inspection temporarily unavailable: vision providers are unavailable")
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+        await update.effective_message.reply_text(
+            "⚠️ Фото получено, но сейчас недоступен сервис визуального анализа, временно перегружен.\n\n"
+            "Попробуйте отправить фото ещё раз немного позже."
+        )
+    except Exception as exc:
+        logger.exception("Photo inspection failed: %s", exc)
+        if status_message:
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+        await update.effective_message.reply_text(
+            "Не удалось выполнить фотоинспекцию. Проверьте доступность сервиса и повторите отправку фотографии."
+        )
+
+
+async def inspection_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    query = update.callback_query
+    if not query:
+        return
+
+    await query.answer()
+
+    pending = context.user_data.get("pending_inspection")
+    if not pending:
+        await query.edit_message_text(
+            "Результат фотоинспекции больше недоступен. Отправьте фотографию заново."
+        )
+        return
+
+    if query.data == "inspection:reject":
+        context.user_data.pop("pending_inspection", None)
+        await query.edit_message_text("Результат фотоинспекции отклонён.")
+        return
+
+    if query.data != "inspection:prescription":
+        return
+
+    confirmed = [
+        item for item in pending.get("verified", [])
+        if item.get("status") == "confirmed" and item.get("legal_basis")
+    ]
+    if not confirmed:
+        await query.edit_message_text(
+            "Нет подтверждённых нарушений с валидным нормативным основанием."
+        )
+        return
+
+    await query.edit_message_text(
+        "📄 <b>Формирую проект предписания...</b>",
+        parse_mode="HTML",
+    )
+
+    try:
+        photo_file_id = pending.get("photo_file_id")
+        photo_bytes = None
+        if photo_file_id:
+            telegram_file = await context.bot.get_file(photo_file_id)
+            buffer = BytesIO()
+            await telegram_file.download_to_memory(out=buffer)
+            photo_bytes = buffer.getvalue()
+            if len(photo_bytes) > 12 * 1024 * 1024:
+                raise ValueError("Фотография слишком большая для включения в предписание (максимум 12 МБ).")
+
+        docx_bytes = await asyncio.to_thread(
+            build_draft_prescription,
+            confirmed,
+            photo_bytes,
+        )
+        del photo_bytes
+        await query.message.reply_document(
+            document=BytesIO(docx_bytes),
+            filename="proekt_predpisaniya_po_foto.docx",
+            caption=(
+                "📄 Проект предписания сформирован. "
+                "Перед официальным применением проверьте факты, "
+                "сроки, ответственных и нормативное основание."
+            ),
+        )
+        context.user_data.pop("pending_inspection", None)
+    except Exception:
+        logger.exception("Prescription generation failed.")
+        await query.message.reply_text(
+            "Не удалось сформировать DOCX проекта предписания."
+        )
+
+
+# GLOBAL ERROR HANDLER
+# ============================================================
+
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    logger.error(
+        "UNHANDLED TELEGRAM ERROR: %s",
+        context.error,
+        exc_info=context.error,
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+
+
+# ============================================================
+# DOCUMENT GENERATION COMMANDS (/act_n1, /permit)
+# ============================================================
+
+async def act_n1_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message:
+        return
+    text_args = " ".join(context.args or []).strip()
+    if not text_args:
+        await update.effective_message.reply_text(
+            "📝 <b>Генератор Акта формы Н-1 (несчастный случай на производстве)</b>\n\n"
+            "Пожалуйста, укажите краткое описание происшествия после команды:\n"
+            "<code>/act_n1 При падении со стремянки на складе рабочий получил травму руки</code>\n\n"
+            "Я автоматически подберу нарушенные нормы белорусских НПА и сформирую файл .docx.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await update.effective_message.reply_text("⏳ <i>Формирую проект Акта формы Н-1 и подбираю нормы НПА...</i>", parse_mode="HTML")
+    try:
+        req = ActN1Request(
+            organization_name="Организация (по наряду)",
+            subdivision="Производственный участок",
+            accident_location="Рабочее место потерпевшего",
+            victim_fio="Ф.И.О. потерпевшего",
+            victim_profession="Профессия потерпевшего",
+            incident_description=text_args,
+        )
+        auto = auto_suggest_act_n1_rules(text_args)
+        docx_io = await asyncio.to_thread(generate_act_n1_docx, req)
+        docx_io.name = "Akt_formy_H1.docx"
+
+        summary = (
+            "✅ <b>Проект Акта формы Н-1 сформирован!</b>\n\n"
+            f"<b>Фабула:</b> {html.escape(text_args)}\n\n"
+            "<b>Предварительно выявленные нарушения НПА РБ:</b>\n"
+            + "\n".join(f"• <i>{html.escape(r)}</i>" for r in auto["violated_npa"])
+            + "\n\n<i>Готовый документ во вложении:</i>"
+        )
+        await status_msg.delete()
+        await update.effective_message.reply_document(
+            document=docx_io,
+            filename="Akt_formy_H1.docx",
+            caption=summary[:1024],
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Bot act_n1 command failed")
+        await update.effective_message.reply_text("❌ Произошла ошибка при генерации Акта Н-1.")
+
+
+async def permit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_message:
+        return
+    text_args = " ".join(context.args or []).strip()
+    if not text_args:
+        await update.effective_message.reply_text(
+            "📋 <b>Генератор Наряда-допуска на работы повышенной опасности</b>\n\n"
+            "Укажите вид работ после команды, например:\n"
+            "<code>/permit Работы на высоте по ремонту кровли</code>\n"
+            "<code>/permit Огневые сварочные работы на трубопроводе</code>\n"
+            "<code>/permit Работы в замкнутом пространстве емкости</code>\n\n"
+            "Я сформирую наряд-допуск с перечнем обязательных СИЗ и мер безопасности по НПА РБ.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await update.effective_message.reply_text("⏳ <i>Формирую наряд-допуск и подбираю меры безопасности...</i>", parse_mode="HTML")
+    try:
+        req = WorkPermitRequest(
+            organization_name="Организация (наниматель)",
+            subdivision="Участок производства работ",
+            work_type=text_args,
+            work_location="Объект производства работ",
+            permit_issuer="Лицо, выдающее наряд-допуск",
+            work_leader="Ответственный руководитель работ",
+            work_supervisor="Ответственный производитель работ",
+        )
+        auto = auto_suggest_work_permit_measures(text_args)
+        docx_io = await asyncio.to_thread(generate_work_permit_docx, req)
+        docx_io.name = "Naryad_dopusk.docx"
+
+        summary = (
+            "✅ <b>Наряд-допуск сформирован!</b>\n\n"
+            f"<b>Вид работ:</b> {html.escape(text_args)}\n\n"
+            "<b>Обязательные СИЗ по правилам:</b>\n"
+            + "\n".join(f"• {html.escape(p)}" for p in auto["required_ppe"])
+            + "\n\n<i>Готовый документ во вложении:</i>"
+        )
+        await status_msg.delete()
+        await update.effective_message.reply_document(
+            document=docx_io,
+            filename="Naryad_dopusk.docx",
+            caption=summary[:1024],
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Bot permit command failed")
+        await update.effective_message.reply_text("❌ Произошла ошибка при генерации наряда-допуска.")
+
+
+def build_application() -> Application:
+    if not TELEGRAM_BOT_TOKEN:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
+
+    application = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .build()
+    )
+
+    application.add_handler(
+        MessageHandler(filters.ALL, debug_update),
+        group=-100,
+    )
+    application.add_handler(TypeHandler(Update, access_gate), group=-90)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("act_n1", act_n1_command))
+    application.add_handler(CommandHandler("permit", permit_command))
+    application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    application.add_handler(CallbackQueryHandler(inspection_callback, pattern=r"^inspection:"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+    application.add_error_handler(error_handler)
+
+    return application
+
+
+def main():
+    logger.info("Bot started.")
+    application = build_application()
+    application.run_polling(
+        drop_pending_updates=False,
+        allowed_updates=Update.ALL_TYPES,
+        close_loop=False,
+    )
+
+
+if __name__ == "__main__":
+    main()

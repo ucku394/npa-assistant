@@ -1005,7 +1005,10 @@ class ChatService:
                     "evidence_map": evidence_map,
                     "evidence_map_text": evidence_map_text,
                 }
-            rag_meta["answer_mode"] = "insufficient_evidence"
+            presentation = build_answer_presentation("insufficient_evidence")
+            rag_meta["answer_mode"] = presentation["mode"]
+            rag_meta["ai_generated"] = False
+            rag_meta["answer_presentation"] = presentation
             return {
                 "success": False,
                 "error": "no_relevant_context",
@@ -1311,7 +1314,10 @@ class ChatService:
                     "evidence_map": evidence_map,
                     "evidence_map_text": evidence_map_text,
                 }
-            rag_meta["answer_mode"] = "insufficient_evidence"
+            presentation = build_answer_presentation("insufficient_evidence")
+            rag_meta["answer_mode"] = presentation["mode"]
+            rag_meta["ai_generated"] = False
+            rag_meta["answer_presentation"] = presentation
             return {
                 "success": False,
                 "error": "grounding_failed",
