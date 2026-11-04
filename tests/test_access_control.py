@@ -101,6 +101,29 @@ def test_api_rate_limit_returns_429(client, monkeypatch):
     assert int(response.headers["Retry-After"]) > 0
 
 
+
+
+
+def test_api_key_failures_are_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(api, "WEB_API_KEY", "expected-secret")
+    monkeypatch.setattr(api, "_rate_limiter", SlidingWindowRateLimiter(2))
+
+    for _ in range(2):
+        response = client.post(
+            "/api/documents/act-n1",
+            json=ACT_N1_PAYLOAD,
+            headers={"X-API-Key": "wrong-secret"},
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/api/documents/act-n1",
+        json=ACT_N1_PAYLOAD,
+        headers={"X-API-Key": "wrong-secret"},
+    )
+    assert blocked.status_code == 429
+
+
 def test_oversized_request_rejected_before_processing(client):
     response = client.post(
         "/api/inspect",
@@ -161,3 +184,19 @@ async def test_bot_gate_rate_limits_but_not_start(gate, monkeypatch):
         await bot.access_gate(_update(5, "второй"), None)
     await bot.access_gate(_update(5, "/start"), None)
     assert gate.await_count == 1
+
+
+
+@pytest.mark.anyio
+async def test_bot_gate_rate_limits_denied_users(gate, monkeypatch):
+    monkeypatch.setattr(bot, "TELEGRAM_ALLOWED_USER_IDS", frozenset({42}))
+    monkeypatch.setattr(bot, "_user_rate_limiter", SlidingWindowRateLimiter(1))
+
+    with pytest.raises(ApplicationHandlerStop):
+        await bot.access_gate(_update(7, "первый запрос"), None)
+    with pytest.raises(ApplicationHandlerStop):
+        await bot.access_gate(_update(7, "второй запрос"), None)
+
+    assert gate.await_count == 2
+    assert "Доступ к ассистенту ограничен" in gate.await_args_list[0].args[1]
+    assert "Слишком много запросов" in gate.await_args_list[1].args[1]
