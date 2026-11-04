@@ -423,7 +423,7 @@ def test_extractive_fallback_normalizes_whitespace_and_preserves_existing_point_
         "source_id": "NPA_RULE_17",
         "document": "Правила по охране труда",
         "point": "п. 17",
-        "excerpt": "Первое предложение.\\n\\nВторое предложение.",
+        "excerpt": "Первое предложение.\n\nВторое предложение.",
     }]
 
     answer = ChatService._build_extractable_evidence_fallback(evidence)
@@ -431,7 +431,7 @@ def test_extractive_fallback_normalizes_whitespace_and_preserves_existing_point_
     assert "**Правила по охране труда, п. 17.**" in answer
     assert "п. п. 17" not in answer
     assert "Первое предложение. Второе предложение." in answer
-    assert "\\n" not in answer
+    assert "\n" not in answer
 
 def test_extractive_fallback_returns_empty_without_citable_evidence():
     assert ChatService._build_extractable_evidence_fallback([
