@@ -82,6 +82,27 @@ def _safe_rate(rows, key):
     return round(sum(bool(row.get(key)) for row in rows) / max(len(rows), 1), 3)
 
 
+def _coverage_rate(rows, target_key):
+    return round(sum(bool(row.get(target_key)) for row in rows) / max(len(rows), 1), 3)
+
+
+def _retrieval_metrics(rows):
+    topic_rows = [row for row in rows if row["topic_targeted"]]
+    document_rows = [row for row in rows if row["document_targeted"]]
+    point_rows = [row for row in rows if row["point_targeted"]]
+    source_id_rows = [row for row in rows if row["source_id_targeted"]]
+    return {
+        "topic_accuracy": _safe_rate(topic_rows, "topic_hit"),
+        "topic_target_coverage": _coverage_rate(rows, "topic_targeted"),
+        "document_recall": _safe_rate(document_rows, "document_hit"),
+        "document_target_coverage": _coverage_rate(rows, "document_targeted"),
+        "point_recall": _safe_rate(point_rows, "point_hit"),
+        "point_target_coverage": _coverage_rate(rows, "point_targeted"),
+        "source_id_recall": _safe_rate(source_id_rows, "source_id_hit"),
+        "source_id_target_coverage": _coverage_rate(rows, "source_id_targeted"),
+    }
+
+
 def summarize(rows):
     by_category = defaultdict(list)
     for row in rows:
@@ -90,17 +111,13 @@ def summarize(rows):
     for category, items in sorted(by_category.items()):
         category_metrics[category] = {
             "cases": len(items),
-            "topic_accuracy": _safe_rate(items, "topic_hit"),
-            "document_recall": _safe_rate(items, "document_hit"),
-            "point_recall": _safe_rate(items, "point_hit"),
+            **_retrieval_metrics(items),
             "grounding_rate": _safe_rate(items, "grounded"),
             "grounding_metadata_coverage": _safe_rate(items, "grounding_known"),
         }
     return {
         "cases": len(rows),
-        "topic_accuracy": _safe_rate(rows, "topic_hit"),
-        "document_recall": _safe_rate(rows, "document_hit"),
-        "point_recall": _safe_rate(rows, "point_hit"),
+        **_retrieval_metrics(rows),
         "grounding_rate": _safe_rate(rows, "grounded"),
         "grounding_metadata_coverage": _safe_rate(rows, "grounding_known"),
         "official_reference_coverage": _safe_rate(rows, "reference_verified"),
@@ -129,8 +146,10 @@ def summarize(rows):
             }
             for x in rows
             if (
-                not x["grounded"] or not x["topic_hit"] or not x["document_hit"]
-                or not x["point_hit"] or not x["source_id_hit"] or x["error"]
+                not x["grounded"] or (x["topic_targeted"] and not x["topic_hit"])
+                or (x["document_targeted"] and not x["document_hit"])
+                or (x["point_targeted"] and not x["point_hit"])
+                or (x["source_id_targeted"] and not x["source_id_hit"]) or x["error"]
             )
         ],
     }
@@ -191,9 +210,13 @@ async def run(path: str) -> None:
             "question": question,
             "category": str(case.get("category") or case.get("expected_topic") or "uncategorized"),
             "topic_hit": topic_hit,
+            "topic_targeted": bool(case.get("expected_topic")),
             "document_hit": doc_hit,
+            "document_targeted": bool(expected_docs),
             "point_hit": point_hit,
+            "point_targeted": bool(expected_points),
             "source_id_hit": source_id_hit,
+            "source_id_targeted": bool(expected_source_ids),
             "grounded": grounded,
             "grounding_known": grounding_known,
             "reference_verified": case.get("reference_verified") is True,
