@@ -813,7 +813,8 @@ class ChatService:
                 "jurisdiction": str(chunk.get("jurisdiction") or "").strip(),
                 # Appendix table stores both limits in one chunk; a 700-char
                 # excerpt cuts off the 2 m rule before Evidence Gate sees it.
-                "full_text": text,\n                "excerpt": text[:2200] if fall_protection_appendix else text[:700],
+                "full_text": text,
+                "excerpt": text[:2200] if fall_protection_appendix else text[:700],
             })
         return evidence
 
@@ -1250,9 +1251,9 @@ class ChatService:
                 rag_meta["ai_generated"] = True
                 rag_meta["legal_validation"] = "failed; fallback contains non-normative guidance only"
                 safe_text = (
-                    "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\\n\\n"
+                    "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
                     "Найденные фрагменты не позволили подтвердить нормативный ответ. "
-                    "Ниже приведены только ориентиры для анализа ситуации.\\n\\n"
+                    "Ниже приведены только ориентиры для анализа ситуации.\n\n"
                     + fallback
                 )
                 return {
@@ -1263,9 +1264,9 @@ class ChatService:
                     "answer": safe_text,
                     "answer_with_citations": safe_text,
                     "telegram_answer": (
-                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\\n\\n"
+                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\n\n"
                         "Найденные фрагменты не позволили подтвердить нормативный ответ. "
-                        "Ниже приведены только ориентиры для анализа ситуации.\\n\\n"
+                        "Ниже приведены только ориентиры для анализа ситуации.\n\n"
                         + fallback
                     ),
                     "answer_mode": "ai_fallback",
@@ -1296,7 +1297,7 @@ class ChatService:
             )
             if commentary:
                 answer += (
-                    "\\n\\n**Экспертный комментарий ИИ (не нормативное требование):**\\n"
+                    "\n\n**Экспертный комментарий ИИ (не нормативное требование):**\n"
                     + commentary
                 )
                 answer_mode = "hybrid_ai"
