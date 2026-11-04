@@ -31,8 +31,8 @@ def test_telegram_uses_canonical_label_and_only_shows_sources_for_npa_modes():
         [{"document": "Закон № 356-З", "point": "статья 11"}],
         fallback,
     )
-    assert "ОТВЕТ ИИ — СПРАВОЧНАЯ ИНФОРМАЦИЯ" in rendered
-    assert "не нормативное требование" in rendered
+    assert "ПРЕДВАРИТЕЛЬНЫЙ ОТВЕТ ИИ — ПРОВЕРИТЬ ПО НПА" in rendered
+    assert "не подтверждённое правовое заключение" in rendered
     assert "Закон № 356-З" not in rendered
 
 

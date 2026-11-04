@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from config import WEB_API_KEY, WEB_MAX_UPLOAD_MB, WEB_RATE_LIMIT_PER_MINUTE
 from core.access import SlidingWindowRateLimiter
 from core.chat_service import chat_service
+from core.answer_presentation import build_answer_presentation
 from services.inspection_service import verify_findings
 from services.prescription_service import build_draft_prescription
 from services.document_generator import (
