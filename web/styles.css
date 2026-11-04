@@ -652,3 +652,16 @@ footer a:hover { text-decoration: underline; }
   color: #067647;
   background: #ecfdf3;
 }
+
+
+.answer-mode-notice {
+  margin: -3px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.answer-mode-insufficient_evidence {
+  border-color: #fda29b;
+  color: #912018;
+  background: #fef3f2;
+}

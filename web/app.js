@@ -311,17 +311,24 @@ function addMessage(role, text, sources = [], meta = "", rag = null, citationTex
   bubble.className = "bubble";
 
   if (role === "assistant") {
-    const mode = rag?.answer_mode || "verified_npa";
+    const presentation = rag?.answer_presentation || {};
+    const mode = presentation.mode || rag?.answer_mode || "verified_npa";
     const modeLabels = {
-      verified_npa: "Подтверждено фрагментами НПА",
-      hybrid_ai: "Нормы НПА + комментарий ИИ",
-      ai_fallback: "Справочное объяснение ИИ · не нормативное требование"
+      verified_npa: "ПОДТВЕРЖДЕНО НПА",
+      hybrid_ai: "НОРМЫ НПА + ОТВЕТ ИИ",
+      ai_fallback: "ОТВЕТ ИИ — СПРАВОЧНАЯ ИНФОРМАЦИЯ",
+      insufficient_evidence: "НЕДОСТАТОЧНО ДАННЫХ"
     };
-    if (modeLabels[mode]) {
-      const modeBadge = document.createElement("div");
-      modeBadge.className = "answer-mode-badge answer-mode-" + mode;
-      modeBadge.textContent = modeLabels[mode];
-      bubble.appendChild(modeBadge);
+    const label = presentation.label || modeLabels[mode] || modeLabels.insufficient_evidence;
+    const modeBadge = document.createElement("div");
+    modeBadge.className = "answer-mode-badge answer-mode-" + mode;
+    modeBadge.textContent = label;
+    bubble.appendChild(modeBadge);
+    if (presentation.notice) {
+      const notice = document.createElement("div");
+      notice.className = "answer-mode-notice";
+      notice.textContent = presentation.notice;
+      bubble.appendChild(notice);
     }
     const answerBody = document.createElement("div");
     answerBody.innerHTML = renderAnswer(citationText || text, sources.length, sources);
