@@ -73,8 +73,12 @@ def test_summary_reports_per_category_and_grounding():
         {
             "category": "ppe",
             "topic_hit": True,
+            "topic_targeted": True,
             "document_hit": True,
+            "document_targeted": True,
             "point_hit": True,
+            "point_targeted": True,
+            "source_id_targeted": True,
             "grounded": True,
             "grounding_known": True,
             "reference_verified": True,
@@ -108,3 +112,45 @@ def test_point_normalization_accepts_prefix_and_trailing_period():
     assert _normalize_point("пункт 54.") == "54"
     assert _normalize_point("54") == "54"
     assert _normalize_point("2.3.") == "2.3"
+
+
+
+def test_retrieval_metrics_exclude_cases_without_expected_labels():
+    rows = [
+        {
+            "category": "ppe",
+            "topic_hit": True, "topic_targeted": True,
+            "document_hit": False, "document_targeted": True,
+            "point_hit": True, "point_targeted": False,
+            "source_id_hit": True, "source_id_targeted": False,
+            "grounded": True, "grounding_known": True, "reference_verified": False,
+            "candidate_count": 1, "final_count": 1, "evidence_count": 1,
+            "id": "RAG-001", "question": "Question?",
+            "grounding_reason": None, "failure_reason": None, "error": None, "request_id": "a",
+            "expected_documents": ["№ 175"], "retrieved_documents": [],
+            "expected_points": [], "retrieved_points": [],
+        },
+        {
+            "category": "ppe",
+            "topic_hit": True, "topic_targeted": True,
+            "document_hit": True, "document_targeted": False,
+            "point_hit": True, "point_targeted": True,
+            "source_id_hit": False, "source_id_targeted": True,
+            "grounded": True, "grounding_known": True, "reference_verified": False,
+            "candidate_count": 1, "final_count": 1, "evidence_count": 1,
+            "id": "RAG-002", "question": "Question?",
+            "grounding_reason": None, "failure_reason": None, "error": None, "request_id": "b",
+            "expected_documents": [], "retrieved_documents": ["some document"],
+            "expected_points": ["54"], "retrieved_points": ["54"],
+        },
+    ]
+
+    report = summarize(rows)
+
+    assert report["document_recall"] == 0.0
+    assert report["document_target_coverage"] == 0.5
+    assert report["point_recall"] == 1.0
+    assert report["point_target_coverage"] == 0.5
+    assert report["source_id_recall"] == 0.0
+    assert report["source_id_target_coverage"] == 0.5
+    assert report["by_category"]["ppe"]["document_recall"] == 0.0

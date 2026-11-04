@@ -6,7 +6,7 @@ Provides structured data models, regulatory auto-enrichment against BY NPA,
 and DOCX export with official Belarusian styling.
 """
 
-from datetime import datetime, date
+from datetime import date
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
@@ -297,7 +297,7 @@ def generate_act_n1_docx(req: ActN1Request) -> BytesIO:
     _p(doc, f"   Структурное подразделение: {req.subdivision}", size=10)
 
     # Section 2
-    _p(doc, f"2. Сведения о потерпевшем:", size=10, bold=True)
+    _p(doc, "2. Сведения о потерпевшем:", size=10, bold=True)
     _p(doc, f"   Фамилия, собственное имя, отчество: {req.victim_fio}", size=10)
     _p(doc, f"   Профессия (должность): {req.victim_profession}", size=10)
     if req.victim_age:
@@ -453,9 +453,9 @@ def generate_work_permit_docx(req: WorkPermitRequest) -> BytesIO:
 
     # Signatures
     _p(doc, f"8. Наряд-допуск выдал: {req.permit_issuer}  Подпись: ___________  Дата: {req.start_date}", size=9)
-    _p(doc, f"9. Мероприятия выполнены, рабочее место подготовлено.", size=9, bold=True)
+    _p(doc, "9. Мероприятия выполнены, рабочее место подготовлено.", size=9, bold=True)
     _p(doc, f"   Ответственный руководитель работ: _________ / {req.work_leader} /  Подпись: ___________", size=9)
-    _p(doc, f"10. Разрешаю допуск к выполнению работ: _________ / __________________ /", size=9)
+    _p(doc, "10. Разрешаю допуск к выполнению работ: _________ / __________________ /", size=9)
 
     out = BytesIO()
     doc.save(out)

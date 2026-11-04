@@ -1,7 +1,7 @@
 """Universal legal query planner for the Belarusian legal RAG."""
 from __future__ import annotations
 import json, logging, re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 

@@ -1,3 +1,24 @@
+const API_KEY_STORAGE_KEY = "npa_api_key";
+
+function readStoredApiKey() {
+  try { return localStorage.getItem(API_KEY_STORAGE_KEY) || ""; } catch { return ""; }
+}
+
+async function apiFetch(url, options = {}, retried = false) {
+  const headers = new Headers(options.headers || {});
+  const key = readStoredApiKey();
+  if (key) headers.set("X-API-Key", key);
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401 && !retried) {
+    const entered = (window.prompt("Введите ключ доступа к ассистенту:") || "").trim();
+    if (entered) {
+      try { localStorage.setItem(API_KEY_STORAGE_KEY, entered); } catch {}
+      return apiFetch(url, options, true);
+    }
+  }
+  return response;
+}
+
 const photoInput = document.getElementById("photoInput");
 const inspectionResult = document.getElementById("inspectionResult");
 let lastInspectionFindings = [];
@@ -24,7 +45,7 @@ function renderInspection(data) {
 async function createPrescription() {
   const button = document.getElementById("makePrescription"); if (button) {button.disabled=true;button.textContent="Формирую DOCX…";}
   try {
-    const response = await fetch("/api/prescription",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({findings:lastInspectionFindings})});
+    const response = await apiFetch("/api/prescription",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({findings:lastInspectionFindings})});
     if (!response.ok) { let msg="Не удалось сформировать предписание."; try {const d=await response.json();msg=d.detail||msg;} catch {} throw new Error(msg); }
     const blob=await response.blob(), url=URL.createObjectURL(blob), a=document.createElement("a");
     a.href=url;a.download="proekt_predpisaniya.docx";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
@@ -37,7 +58,7 @@ if (photoInput) photoInput.addEventListener("change", async () => {
   inspectionResult.hidden=false; inspectionResult.innerHTML='<div class="inspection-loading">📷 Анализирую фотографию и проверяю признаки по НПА…</div>';
   try {
     const form=new FormData(); form.append("file",file);
-    const response=await fetch("/api/inspect",{method:"POST",body:form}), data=await response.json();
+    const response=await apiFetch("/api/inspect",{method:"POST",body:form}), data=await response.json();
     if(!response.ok)throw new Error(data.detail||"Ошибка фотоинспекции."); renderInspection(data);
   } catch(e) {inspectionResult.innerHTML='<div class="inspection-error">'+escapeHtml(e.message||"Не удалось выполнить фотоинспекцию.")+'</div>';}
   finally {photoInput.value="";}
@@ -626,7 +647,7 @@ async function ask(text) {
   addSearchProgress();
 
   try {
-    const response = await fetch("/api/chat", {
+    const response = await apiFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: value })
@@ -640,7 +661,9 @@ async function ask(text) {
     }
 
     if (!response.ok) {
-      throw new Error(data.detail || "Ошибка сервера");
+      const error = new Error(data.detail || "Ошибка сервера");
+      if ([401, 413, 429].includes(response.status) && data.detail) error.userMessage = data.detail;
+      throw error;
     }
 
     const answer = data.answer || "Ответ не получен.";
@@ -659,7 +682,7 @@ async function ask(text) {
     setStatus(data.success ? "Готов" : "Недостаточно данных");
   } catch (error) {
     removeSearchProgress();
-    const errorText = "Не удалось получить ответ. Попробуйте повторить запрос.";
+    const errorText = error.userMessage || "Не удалось получить ответ. Попробуйте повторить запрос.";
     const wrap = document.createElement("div");
     wrap.className = "message assistant error-message";
     const bubble = document.createElement("div");

@@ -415,6 +415,25 @@ def test_extractive_fallback_quotes_retrieved_evidence_and_cites_source():
     assert "Дубликат источника" not in answer
 
 
+
+
+
+def test_extractive_fallback_normalizes_whitespace_and_preserves_existing_point_labels():
+    evidence = [{
+        "source_id": "NPA_RULE_17",
+        "document": "Правила по охране труда",
+        "point": "п. 17",
+        "excerpt": "Первое предложение." + chr(10) + chr(10) + "Второе предложение.",
+    }]
+
+    answer = ChatService._build_extractable_evidence_fallback(evidence)
+
+    assert "**Правила по охране труда, п. 17.**" in answer
+    assert "п. п. 17" not in answer
+    assert "Первое предложение. [SOURCE:NPA_RULE_17] Второе предложение." in answer
+    quoted_excerpt = answer.split("«", 1)[1].split("»", 1)[0]
+    assert chr(10) not in quoted_excerpt
+
 def test_extractive_fallback_returns_empty_without_citable_evidence():
     assert ChatService._build_extractable_evidence_fallback([
         {"source_id": "", "document": "НПА", "excerpt": "Текст нормы"},

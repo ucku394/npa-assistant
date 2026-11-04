@@ -165,3 +165,34 @@ EMBEDDING_CPU_THREADS = int(
 # ============================================================
 
 TELEGRAM_MESSAGE_LIMIT = 4000
+
+
+# ============================================================
+# ACCESS CONTROL
+# ============================================================
+
+def _parse_id_set(raw: str) -> frozenset[int]:
+    return frozenset(
+        int(item.strip())
+        for item in raw.replace(";", ",").split(",")
+        if item.strip()
+    )
+
+
+# Optional shared key for the web API (X-API-Key header). Empty = open API.
+WEB_API_KEY = os.getenv("WEB_API_KEY", "").strip()
+
+# Per client IP; 0 disables the limit.
+WEB_RATE_LIMIT_PER_MINUTE = int(os.getenv("WEB_RATE_LIMIT_PER_MINUTE", "20"))
+
+WEB_MAX_UPLOAD_MB = int(os.getenv("WEB_MAX_UPLOAD_MB", "12"))
+
+# Comma-separated Telegram user IDs. Empty = bot is open to everyone.
+TELEGRAM_ALLOWED_USER_IDS = _parse_id_set(
+    os.getenv("TELEGRAM_ALLOWED_USER_IDS", "")
+)
+
+# Per Telegram user; 0 disables the limit.
+TELEGRAM_RATE_LIMIT_PER_MINUTE = int(
+    os.getenv("TELEGRAM_RATE_LIMIT_PER_MINUTE", "10")
+)
