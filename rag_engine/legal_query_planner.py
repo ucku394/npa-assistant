@@ -64,9 +64,32 @@ def build_legal_query_plan(original: str, profile: Dict[str, Any], topic: str, l
         if intent not in allowed_intents: intent = "general"
         if action not in allowed_actions: action = "none"
         normalized = {"version":"1.0","original_query":original,"jurisdiction":"BY","domain":domain,"intent":intent,"action":action,"subject":plan.get("subject"),"actor":plan.get("actor"),"object":plan.get("object"),"condition":plan.get("condition"),"question_type":plan.get("question_type") or "general","legal_concepts":_clean(plan.get("legal_concepts"),10),"legal_phrases":_clean(plan.get("legal_phrases"),10),"search_queries":_clean(plan.get("search_queries"),8),"keywords":_clean(plan.get("keywords"),12),"legal_targets":plan.get("legal_targets") if isinstance(plan.get("legal_targets"),list) else [],"confidence":max(0,min(1,float(plan.get("confidence",0) or 0))),"planner_source":"llm"}
+        # Deterministic safety-critical routing must take precedence over an LLM
+        # planner's generic "general" classification. The profile is produced by
+        # explicit lexical rules and is more reliable for this narrow legal scenario.
+        priority_qualifiers = set(profile.get("qualifiers") or [])
+        if priority_qualifiers.intersection({"ppe_nonprovision_action", "refusal_due_to_no_ppe"}):
+            normalized["domain"] = "occupational_safety"
+            normalized["intent"] = "rights"
+            normalized["action"] = "refuse_work"
+            normalized["legal_phrases"] = _clean(
+                normalized["legal_phrases"] + fallback.get("legal_phrases", []), 10
+            )
+            normalized["legal_concepts"] = _clean(
+                normalized["legal_concepts"] + fallback.get("legal_concepts", []), 10
+            )
+            normalized["keywords"] = _clean(
+                normalized["keywords"] + fallback.get("keywords", []), 12
+            )
+            logger.info(
+                "LEGAL_QUERY_PLAN | deterministic_override=ppe_nonprovision | intent=%s | action=%s",
+                normalized["intent"],
+                normalized["action"],
+            )
+
         if not fallback.get("legal_targets"): normalized["legal_targets"] = []
         if not normalized["search_queries"]: normalized["search_queries"] = _clean(normalized["legal_phrases"]+normalized["legal_concepts"],8)
-        logger.info("LEGAL_QUERY_PLAN | source=llm | domain=%s | intent=%s | action=%s | targets=%s | queries=%s",domain,intent,action,normalized["legal_targets"],len(normalized["search_queries"]))
+        logger.info("LEGAL_QUERY_PLAN | source=llm | domain=%s | intent=%s | action=%s | targets=%s | queries=%s",normalized["domain"],normalized["intent"],normalized["action"],normalized["legal_targets"],len(normalized["search_queries"]))
         return normalized
     except Exception as exc:
         logger.warning("LEGAL_QUERY_PLAN | LLM unavailable; deterministic fallback | error=%s", exc)

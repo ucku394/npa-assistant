@@ -526,3 +526,38 @@ def test_claim_evidence_uses_full_chunk_beyond_prompt_excerpt():
         query_profile={"question_type": "general"},
     )
     assert result["passed"] is True
+
+def test_claim_evidence_accepts_source_marker_on_labeled_adjacent_line():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Работник должен руководствоваться подтверждённым требованием.\n"
+            "Источник: [SOURCE:NPA_RULE_1]"
+        ),
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1.",
+            "excerpt": "Работник должен руководствоваться подтверждённым требованием.",
+        }],
+        query_profile={"question_type": "general"},
+    )
+    assert result["passed"] is True
+
+
+def test_claim_evidence_does_not_accept_unrelated_text_as_adjacent_source_line():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Работник должен руководствоваться подтверждённым требованием.\n"
+            "Дополнительное действие: немедленно прекратить работу. [SOURCE:NPA_RULE_1]"
+        ),
+        evidence_map=[{
+            "source_id": "NPA_RULE_1",
+            "document": "Правила по охране труда",
+            "point": "1.",
+            "excerpt": "Работник должен руководствоваться подтверждённым требованием.",
+        }],
+        query_profile={"question_type": "general"},
+    )
+    assert result["passed"] is False
+    assert result["reason"] == "legal_claim_missing_local_source_citation"
+

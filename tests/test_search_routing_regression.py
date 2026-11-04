@@ -186,3 +186,58 @@ def test_ppe_nonprovision_action_queries_require_article_11(query):
         profile,
     )
     assert any("356-З" in item or "статья 11" in item.lower() for item in queries)
+
+def test_ppe_nonprovision_llm_planner_cannot_override_deterministic_rights_intent(monkeypatch):
+    import json
+    import services.ai_router
+    from rag_engine.legal_query_planner import build_legal_query_plan
+
+    query = "Что должен сделать работник, если ему не выдали СИЗ?"
+    profile = build_universal_query_profile(query)
+
+    monkeypatch.setattr(
+        services.ai_router,
+        "generate_answer",
+        lambda *args, **kwargs: json.dumps({
+            "domain": "occupational_safety",
+            "intent": "general",
+            "action": "none",
+            "question_type": "general",
+            "legal_concepts": ["средства индивидуальной защиты"],
+            "legal_phrases": [],
+            "search_queries": [],
+            "keywords": [],
+            "legal_targets": [],
+            "confidence": 0.99,
+        }, ensure_ascii=False),
+    )
+
+    plan = build_legal_query_plan(
+        query,
+        profile,
+        detect_topic(query),
+        detect_legal_domain(query),
+    )
+
+    assert plan["intent"] == "rights"
+    assert plan["action"] == "refuse_work"
+    assert "статья 11 Закон 356-З средства индивидуальной защиты отказ от работы" in plan["legal_phrases"]
+
+
+def test_ppe_evidence_retry_prompt_requires_per_claim_source_citations():
+    from core.chat_service import ChatService
+
+    prompt = ChatService._build_grounding_retry_prompt(
+        "BASE PROMPT",
+        {
+            "query_profile": {"qualifiers": ["ppe_nonprovision_action"]},
+            "claim_evidence": {
+                "reason": "legal_claim_missing_local_source_citation",
+                "uncited_claim_line": "Работник должен сообщить руководителю.",
+            },
+        },
+    )
+
+    assert "СПЕЦИАЛЬНЫЙ СЦЕНАРИЙ: НЕОБЕСПЕЧЕНИЕ СИЗ" in prompt
+    assert "после КАЖДОГО юридически значимого" in prompt
+
