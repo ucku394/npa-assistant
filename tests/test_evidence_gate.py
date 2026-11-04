@@ -230,7 +230,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
 def test_grounding_retry_prompt_uses_real_line_breaks():
     prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
 
-    assert "\n\n===" not in prompt
+    assert "\\n\\n===" not in prompt
     assert "\n\n===" in prompt
 
 
