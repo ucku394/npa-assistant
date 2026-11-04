@@ -131,7 +131,7 @@ class ChatService:
         )
 
         excerpts = " ".join(
-            str(item.get("excerpt") or "").lower()
+            str(item.get("full_text") or item.get("excerpt") or "").lower()
             for item in cited_evidence
         )
 
@@ -253,7 +253,7 @@ class ChatService:
             )
             reference_evidence_text = " ".join(
                 str(item.get("point") or "") + " " + str(item.get("document") or "") + " "
-                + str(item.get("excerpt") or "")
+                + str(item.get("full_text") or item.get("excerpt") or "")
                 for item in reference_evidence
             ).lower()
             metadata_match = False
@@ -813,7 +813,7 @@ class ChatService:
                 "jurisdiction": str(chunk.get("jurisdiction") or "").strip(),
                 # Appendix table stores both limits in one chunk; a 700-char
                 # excerpt cuts off the 2 m rule before Evidence Gate sees it.
-                "excerpt": text[:2200] if fall_protection_appendix else text[:700],
+                "full_text": text,\n                "excerpt": text[:2200] if fall_protection_appendix else text[:700],
             })
         return evidence
 
