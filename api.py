@@ -93,6 +93,14 @@ def _provided_api_key(request: Request) -> str:
 
 
 async def require_api_access(request: Request) -> None:
+    # Rate-limit before authentication so invalid-key attempts are bounded too.
+    retry_after = _rate_limiter.hit(_client_ip(request))
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много запросов. Повторите попытку позже.",
+            headers={"Retry-After": str(math.ceil(retry_after))},
+        )
     if WEB_API_KEY and not secrets.compare_digest(
         _provided_api_key(request).encode(), WEB_API_KEY.encode()
     ):
@@ -100,13 +108,6 @@ async def require_api_access(request: Request) -> None:
             status_code=401,
             detail="Требуется ключ доступа.",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    retry_after = _rate_limiter.hit(_client_ip(request))
-    if retry_after:
-        raise HTTPException(
-            status_code=429,
-            detail="Слишком много запросов. Повторите попытку позже.",
-            headers={"Retry-After": str(math.ceil(retry_after))},
         )
 
 
