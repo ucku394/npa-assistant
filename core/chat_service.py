@@ -1082,6 +1082,20 @@ class ChatService:
             extract_source_ids=self._extract_source_ids,
             build_source_id=build_source_id,
         )
+        if {"refusal_due_to_no_ppe", "ppe_nonprovision_action"}.intersection(
+            set(query_profile.get("qualifiers") or [])
+        ):
+            logger.info(
+                "LEGAL | PPE evidence trace | request_id=%s | qualifiers=%s | retrieved_chunks=%s | documents=%s | points=%s | article_11_source_ids=%s | gate_failures=%s",
+                request_id,
+                query_profile.get("qualifiers") or [],
+                len(chunks),
+                sorted({str(item.get("doc_name") or "") for item in chunks})[:10],
+                sorted({str(item.get("point_num") or "") for item in chunks})[:10],
+                mandatory_gate["details"].get("article_11_source_ids", []),
+                mandatory_gate["failures"],
+            )
+
         for rule_id in mandatory_gate["active_rules"]:
             details = mandatory_gate["details"]
             if details.get(f"{rule_id}_missing"):
