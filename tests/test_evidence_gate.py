@@ -230,7 +230,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
 def test_grounding_retry_prompt_uses_real_line_breaks():
     prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
 
-    assert "\\n\\n===" not in prompt
+    assert "\n\n===" not in prompt
     assert "\n\n===" in prompt
 
 
@@ -530,7 +530,7 @@ def test_claim_evidence_uses_full_chunk_beyond_prompt_excerpt():
 def test_claim_evidence_accepts_source_marker_on_labeled_adjacent_line():
     result = ChatService._claim_evidence_check(
         answer=(
-            "Работник должен руководствоваться подтверждённым требованием.\\n"
+            "Работник должен руководствоваться подтверждённым требованием.\n"
             "Источник: [SOURCE:NPA_RULE_1]"
         ),
         evidence_map=[{
@@ -547,7 +547,7 @@ def test_claim_evidence_accepts_source_marker_on_labeled_adjacent_line():
 def test_claim_evidence_does_not_accept_unrelated_text_as_adjacent_source_line():
     result = ChatService._claim_evidence_check(
         answer=(
-            "Работник должен руководствоваться подтверждённым требованием.\\n"
+            "Работник должен руководствоваться подтверждённым требованием.\n"
             "Дополнительное действие: немедленно прекратить работу. [SOURCE:NPA_RULE_1]"
         ),
         evidence_map=[{
