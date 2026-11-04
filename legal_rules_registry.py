@@ -76,10 +76,10 @@ def _normalize_legal_identifier(value: Any) -> str:
 
 def _point_number(value: Any) -> str:
     text = str(value or '').casefold().replace('ё', 'е').strip()
-    match = re.search(r'(?:статья|ст\\.?|пункт|п\\.?)\\s*№?\\s*(\\d+)', text)
+    match = re.search(r'(?:статья|ст\.?|пункт|п\.?)\s*№?\s*(\d+)', text)
     if match:
         return match.group(1)
-    match = re.fullmatch(r'\\s*(\\d+)\\s*\\.?\\s*', text)
+    match = re.fullmatch(r'\s*(\d+)\s*\.?\s*', text)
     return match.group(1) if match else ''
 
 def evaluate_mandatory_source_rules(
