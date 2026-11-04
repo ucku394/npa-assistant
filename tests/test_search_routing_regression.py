@@ -163,3 +163,26 @@ def test_ptm_search_keeps_abbreviation_and_expanded_lexical_queries():
     assert len(queries) <= 8
     assert "птм" in normalized
     assert "пожарно-технический минимум" in normalized
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Что должен сделать работник, если ему не выдали СИЗ?",
+        "Работника не обеспечили средствами индивидуальной защиты. Как поступить?",
+        "Куда обращаться, если работнику не выдали средства индивидуальной защиты?",
+    ],
+)
+def test_ppe_nonprovision_action_queries_require_article_11(query):
+    profile = build_universal_query_profile(query)
+    assert "ppe_nonprovision_action" in profile["qualifiers"]
+    assert detect_topic(query) == "ppe_nonprovision"
+
+    queries = build_search_queries(
+        query,
+        detect_topic(query),
+        detect_legal_domain(query),
+        [],
+        profile,
+    )
+    assert any("356-З" in item or "статья 11" in item.lower() for item in queries)
