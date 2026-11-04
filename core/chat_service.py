@@ -162,7 +162,8 @@ class ChatService:
             if unit.strip()
         ]
         source_marker_only = re.compile(
-            r"(?:\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]\s*)+",
+            r"(?:[-*•]\\s*)?(?:источник(?:и)?\\s*:\\s*)?"
+            r"(?:\\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\\]\\s*)+",
             re.IGNORECASE,
         )
         for unit_index, unit in enumerate(claim_units):
