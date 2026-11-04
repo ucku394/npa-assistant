@@ -230,7 +230,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
 def test_grounding_retry_prompt_uses_real_line_breaks():
     prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
 
-    assert "\\n\\n===" not in prompt
+    assert "\n\n===" not in prompt
     assert "\n\n===" in prompt
 
 
@@ -564,9 +564,9 @@ def test_claim_evidence_does_not_accept_unrelated_text_as_adjacent_source_line()
 def test_legal_reference_gate_accepts_labeled_adjacent_source_lines_for_multiple_acts():
     result = ChatService._claim_evidence_check(
         answer=(
-            "Согласно пункту 17 Положения, применяется установленное требование.\\n"
-            "Источник: [SOURCE:NPA_253_P17]\\n"
-            "Согласно статье 10 Закона, действует соответствующее правило.\\n"
+            "Согласно пункту 17 Положения, применяется установленное требование.\n"
+            "Источник: [SOURCE:NPA_253_P17]\n"
+            "Согласно статье 10 Закона, действует соответствующее правило.\n"
             "Источник: [SOURCE:NPA_356_ART10]"
         ),
         evidence_map=[
