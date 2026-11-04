@@ -89,7 +89,7 @@ def build_legal_query_plan(original: str, profile: Dict[str, Any], topic: str, l
 
         if not fallback.get("legal_targets"): normalized["legal_targets"] = []
         if not normalized["search_queries"]: normalized["search_queries"] = _clean(normalized["legal_phrases"]+normalized["legal_concepts"],8)
-        logger.info("LEGAL_QUERY_PLAN | source=llm | domain=%s | intent=%s | action=%s | targets=%s | queries=%s",domain,intent,action,normalized["legal_targets"],len(normalized["search_queries"]))
+        logger.info("LEGAL_QUERY_PLAN | source=llm | domain=%s | intent=%s | action=%s | targets=%s | queries=%s",normalized["domain"],normalized["intent"],normalized["action"],normalized["legal_targets"],len(normalized["search_queries"]))
         return normalized
     except Exception as exc:
         logger.warning("LEGAL_QUERY_PLAN | LLM unavailable; deterministic fallback | error=%s", exc)
