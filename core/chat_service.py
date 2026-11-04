@@ -858,25 +858,39 @@ class ChatService:
 
     @staticmethod
     def _is_safe_ai_fallback(text: str) -> bool:
-        """Reject fallback text that could be mistaken for a legal conclusion."""
+        """Reject unverified legal conclusions while allowing cautious orientation."""
         value = str(text or "").strip()
         if not value or ChatService._extract_source_ids(value):
             return False
-        unsafe = re.compile(
-            r"обязан\w*|долж\w*|необходим\w*|обязательн\w*|"
-            r"запрещ\w*|допуска\w*|разреша\w*|вправе|право\s+на|"
-            r"срок\w*|периодич\w*|ответствен\w*|штраф\w*|санкци\w*|"
-            r"пункт\w*|стать\w*|постановлен\w*|законодательств\w*|"
-            r"нормативн\w* акт\w*|\bнпа\b|требу\w*|подлеж\w*|"
-            r"предусмотрен\w*|установлен\w*|в соответствии с|на основании|"
-            r"выда\w*|обеспечива\w*|предоставля\w*|соблюда\w*|"
-            r"назнача\w*|утвержда\w*|организу\w*|осуществля\w*|"
-            r"оформля\w*|оформить|провод\w*|проход\w*|хранить|вести|"
-            r"следует|требуется|не допускается|"
-            r"согласно\s+(?:п\.?|стать|пункт|закону|постановлению)",
-            re.IGNORECASE,
+
+        # This is a preliminary, non-authoritative mode. It may explain what
+        # information to collect, but must not state legal duties, permissions,
+        # prohibitions, deadlines, sanctions or cite unverified legal provisions.
+        unsafe_patterns = (
+            r"\b(?:обязан\w*|долж\w*|обязательн\w*|необходим\w*|"
+            r"запрещ\w*|допуска\w*|разреша\w*|вправе|имеет\s+право|"
+            r"право\s+на|срок\w*|периодич\w*|ответствен\w*|"
+            r"штраф\w*|санкци\w*|подлеж\w*|требуется|требует|"
+            r"предусмотрен\w*|установлен\w*)\b",
+            r"\b(?:работодател\w*|нанимател\w*|работник\w*|руководител\w*|специалист\w*)\b"
+            r".{0,100}\b(?:обеспечива\w*|предоставля\w*|выда\w*|организу\w*|"
+            r"провод\w*|проход\w*|назнача\w*|утвержда\w*|оформля\w*|"
+            r"хранит|ведёт|ведет)\b",
+            r"\b(?:согласно|на\s+основании|в\s+соответствии\s+с)\b",
+            r"\b(?:пункт\w*|стать\w*|постановлен\w*|"
+            r"указ\w*|приказ\w*|закон\s+республики\s+беларусь)\s*"
+            r"(?:№\s*)?\d+",
+            r"\b\d+\s*(?:дн\w*|месяц\w*|год\w*|час\w*|минут\w*)\b",
+            r"(?:основани\w*|услови\w*).{0,60}"
+            r"(?:является|служит|считается|возникает|предусмотрен|включа\w*|следующ\w*)",
+            r"(?:законодательств\w*|нпа|нормативн\w+\s+акт\w*).{0,80}"
+            r"(?:предусматр|устанавлива|требу|содерж|определя)",
+            r"(?:аттестаци\w*).{0,80}(?:проводится|обязательна|подлежит)",
         )
-        return not unsafe.search(value)
+        return not any(
+            re.search(pattern, value, re.IGNORECASE | re.DOTALL)
+            for pattern in unsafe_patterns
+        )
 
     async def _generate_ai_fallback_answer(
         self,
@@ -884,7 +898,7 @@ class ChatService:
         request_id: str,
         evidence_map: List[Dict[str, Any]] | None = None,
     ) -> str | None:
-        """Generate non-normative practical guidance; never bypass legal validation."""
+        """Generate a cautious preliminary orientation without asserting legal rules."""
         evidence = []
         for item in (evidence_map or [])[:5]:
             excerpt = str(item.get("excerpt") or "").strip()
@@ -894,19 +908,31 @@ class ChatService:
                 )
         context = "\n\n".join(evidence) or "Релевантные фрагменты не найдены."
         prompt = (
-            "Ты — эксперт-консультант по организации охраны труда, пожарной и "
-            "промышленной безопасности на предприятиях Республики Беларусь. "
-            "Дай только справочное, организационно-практическое объяснение ситуации. "
-            "Это НЕ юридическое заключение и НЕ изложение требований законодательства. "
-            "Не утверждай, что кто-либо обязан, должен, вправе или не вправе что-либо делать. "
-            "Не формулируй запреты, разрешения, сроки, периодичность, ответственность, "
-            "штрафы, основания, номера НПА, статей или пунктов. Не используй нормы РФ "
-            "или других государств. Не выдавай предположения за установленные факты. "
-            "Предлагай нейтральные вопросы для проверки, факторы риска и добровольные "
-            "организационные меры. Если данных мало, прямо перечисли, что нужно уточнить. "
-            "Пиши по-русски, конкретно и кратко. Верни только текст ответа.\n\n"
+            "Ты — эксперт-консультант по охране труда, пожарной и промышленной "
+            "безопасности на предприятиях Республики Беларусь. Подготовь полезный "
+            "ПРЕДВАРИТЕЛЬНЫЙ ОРИЕНТИР, если найденных источников недостаточно для "
+            "подтверждённого юридического ответа.\n\n"
+            "КРИТИЧЕСКИЕ ОГРАНИЧЕНИЯ:\n"
+            "1. Не выдавай ответ за юридическое заключение или подтверждённое требование НПА.\n"
+            "2. Не утверждай, что работодатель/наниматель/работник обязан, должен, вправе "
+            "или не вправе что-либо делать. Не формулируй запреты, разрешения, условия "
+            "обязательного применения, юридические основания, сроки, периодичность, "
+            "ответственность или санкции.\n"
+            "3. Не называй номера и даты НПА, статей, пунктов и не цитируй нормы по памяти. "
+            "Не используй законодательство РФ или других государств.\n"
+            "4. Можно объяснить предмет вопроса простыми словами, перечислить фактические "
+            "обстоятельства и документы, которые полезно собрать, и предложить направления "
+            "проверки. Представляй их именно как чек-лист для анализа, а не как перечень "
+            "установленных законом оснований или обязательных действий.\n"
+            "5. Если вопрос просит конкретное правовое основание, прямо скажи, что оно "
+            "не подтверждено доступными фрагментами и требует сверки с актуальной "
+            "нормативной базой Республики Беларусь. Не делай вид, что вопрос решён.\n"
+            "6. Будь конкретным: дай 2–5 полезных пунктов, затем укажи, какие сведения "
+            "нужно уточнить. Не отвечай одной фразой об отсутствии данных.\n"
+            "Пиши по-русски. Верни только текст ответа.\n\n"
             f"Вопрос пользователя: {question}\n\n"
-            f"Контекст для понимания ситуации (не считать доказательством нормы):\n{context}"
+            "Контекст для ориентации (не считать доказательством правовой нормы):\n"
+            f"{context}"
         )
         try:
             generated = await asyncio.to_thread(
@@ -917,7 +943,7 @@ class ChatService:
             )
         except Exception as exc:
             logger.warning(
-                "CHAT | request_id=%s | ai_fallback_failed | error_type=%s",
+                "CHAT | request_id=%s | preliminary_ai_failed | error_type=%s",
                 request_id,
                 type(exc).__name__,
             )
@@ -926,7 +952,7 @@ class ChatService:
         generated = str(generated or "").strip()
         if not self._is_safe_ai_fallback(generated):
             logger.warning(
-                "CHAT | request_id=%s | ai_fallback_rejected | reason=legal_claim_or_empty",
+                "CHAT | request_id=%s | preliminary_ai_rejected | reason=unverified_legal_claim",
                 request_id,
             )
             return None
@@ -981,7 +1007,7 @@ class ChatService:
 
         if not rag_meta["found"]:
             logger.warning(
-                "CHAT | request_id=%s | no_relevant_context | attempting_non_normative_fallback",
+                "CHAT | request_id=%s | no_relevant_context | attempting_preliminary_ai",
                 request_id,
             )
             fallback = await self._generate_ai_fallback_answer(
@@ -993,6 +1019,7 @@ class ChatService:
                 rag_meta["answer_mode"] = presentation["mode"]
                 rag_meta["ai_generated"] = presentation["ai_generated"]
                 rag_meta["answer_presentation"] = presentation
+                rag_meta["fallback_reason"] = "no_relevant_context"
                 safe_text = fallback
                 return {
                     "success": True,
@@ -1297,10 +1324,12 @@ class ChatService:
                 rag_meta["answer_mode"] = presentation["mode"]
                 rag_meta["ai_generated"] = presentation["ai_generated"]
                 rag_meta["answer_presentation"] = presentation
-                rag_meta["legal_validation"] = "failed; fallback contains non-normative guidance only"
+                rag_meta["legal_validation"] = "failed; preliminary guidance is not a verified legal answer"
+                rag_meta["fallback_reason"] = "evidence_gate_failed"
                 safe_text = (
                     "Найденные фрагменты не позволили подтвердить нормативный ответ. "
-                    "Ниже приведены только ориентиры для анализа ситуации.\n\n"
+                    "Ниже приведён предварительный ориентир ИИ; правовые основания и выводы "
+                    "требуют отдельной проверки по актуальным НПА.\n\n"
                     + fallback
                 )
                 return {

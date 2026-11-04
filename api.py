@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from config import WEB_API_KEY, WEB_MAX_UPLOAD_MB, WEB_RATE_LIMIT_PER_MINUTE
 from core.access import SlidingWindowRateLimiter
 from core.chat_service import chat_service
+from core.answer_presentation import build_answer_presentation
 from services.inspection_service import verify_findings
 from services.prescription_service import build_draft_prescription
 from services.document_generator import (
@@ -265,6 +266,27 @@ async def chat(request: ChatRequest):
         )
 
     if not result.get("success"):
+        error = str(result.get("error") or "processing_failed")
+        user_messages = {
+            "ai_generation_failed": (
+                "Не удалось сформировать предварительное пояснение ИИ. "
+                "Повторите запрос позже или уточните вопрос."
+            ),
+            "ai_empty_answer": (
+                "ИИ не вернул содержательный ответ. Повторите запрос позже."
+            ),
+        }
+        if error in user_messages:
+            return ChatResponse(
+                success=False,
+                error=error,
+                question=question,
+                answer=user_messages[error],
+                answer_mode="insufficient_evidence",
+                answer_presentation=build_answer_presentation("insufficient_evidence"),
+                sources=[],
+                rag=result.get("rag") or {},
+            )
         raise HTTPException(
             status_code=500,
             detail="Не удалось обработать вопрос.",
