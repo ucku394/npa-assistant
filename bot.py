@@ -60,6 +60,7 @@ from services.document_generator import (
 
 
 from core.chat_service import chat_service
+from core.answer_presentation import build_answer_presentation, format_telegram_answer
 from services.vision_service import VisionUnavailableError, analyze_image
 from services.inspection_service import verify_findings
 from services.prescription_service import build_draft_prescription
@@ -472,20 +473,27 @@ async def text_handler(
 
                 error = result.get("error")
                 if error == "no_relevant_context":
-                    await update.effective_message.reply_text(
+                    error_text = (
                         "Я не нашёл достаточно релевантных фрагментов НПА в базе, "
                         "поэтому не буду придумывать нормативное требование."
                     )
+                elif error == "grounding_failed":
+                    error_text = (
+                        "Не удалось получить ответ, который можно надёжно подтвердить найденными фрагментами НПА. "
+                        "Я не буду подменять это предположением. Попробуйте уточнить вопрос."
+                    )
                 else:
-                    if error == "grounding_failed":
-                        await update.effective_message.reply_text(
-                            "⚠️ Не удалось получить ответ, который можно надёжно подтвердить найденными фрагментами НПА. "
-                            "Я не буду подменять это предположением. Попробуйте уточнить вопрос."
-                        )
-                    else:
-                        await update.effective_message.reply_text(
-                            "Не удалось обработать вопрос."
-                        )
+                    error_text = "Не удалось обработать вопрос."
+
+                rag_meta = result.get("rag") or {}
+                presentation = rag_meta.get("answer_presentation") or build_answer_presentation(
+                    "insufficient_evidence"
+                )
+                await update.effective_message.reply_text(
+                    format_telegram_answer(error_text, [], presentation),
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
                 return
 
             if status_message:
