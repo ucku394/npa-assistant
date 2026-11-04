@@ -57,3 +57,61 @@ def test_inactive_rules_do_not_block_general_queries():
 def test_rag_topic_priorities_are_registry_data():
     assert RAG_SELECTION_RULES["lathe_work"]["priority_points"] == ("84", "85", "40")
     assert RAG_SELECTION_RULES["portable_ladder"]["priority_points"] == ("54", "53")
+
+
+def test_article_11_gate_accepts_document_and_point_metadata_variants():
+    variants = [
+        {
+            "doc_name": "Закон Республики Беларусь от 23.06.2008 № 356-З «Об охране труда»",
+            "point_num": "Статья 11.",
+            "_source_id": "NPA_LAW_356_ART_11",
+        },
+        {
+            "doc_name": "Закон об охране труда №356–З",
+            "point_num": "ст. 11",
+            "_source_id": "NPA_LAW_356_ART_11_ALT",
+        },
+        {
+            "doc_name": "Закон об охране труда № 356-З",
+            "point_num": "11.",
+            "_source_id": "NPA_LAW_356_ART_11_NUM",
+        },
+    ]
+    for chunk in variants:
+        result = _evaluate(
+            {"qualifiers": ["ppe_nonprovision_action"]},
+            [chunk],
+            f"Правовое основание {chunk['_source_id']}",
+        )
+        assert result["passed"] is True
+        assert result["failures"]["article_11_missing"] is False
+        assert result["failures"]["article_11_not_cited"] is False
+
+
+def test_article_11_gate_still_fails_when_source_is_not_cited():
+    result = _evaluate(
+        {"qualifiers": ["refusal_due_to_no_ppe"]},
+        [{
+            "doc_name": "Закон Республики Беларусь № 356-З",
+            "point_num": "Статья 11.",
+            "_source_id": "NPA_LAW_356_ART_11",
+        }],
+        "Ответ без ссылки NPA_OTHER",
+    )
+    assert result["passed"] is False
+    assert result["failures"]["article_11_missing"] is False
+    assert result["failures"]["article_11_not_cited"] is True
+
+
+def test_article_11_gate_does_not_accept_another_article():
+    result = _evaluate(
+        {"qualifiers": ["ppe_nonprovision_action"]},
+        [{
+            "doc_name": "Закон об охране труда № 356-З",
+            "point_num": "Статья 12.",
+            "_source_id": "NPA_LAW_356_ART_12",
+        }],
+        "Ответ NPA_LAW_356_ART_12",
+    )
+    assert result["passed"] is False
+    assert result["failures"]["article_11_missing"] is True
