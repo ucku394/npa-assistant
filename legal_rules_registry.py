@@ -5,6 +5,7 @@ ChatService and rag_engine.rag. Adding a rule should normally require registry d
 and a regression test, not another copy of the gate algorithm.
 """
 
+import re
 from typing import Any, Callable, Dict, List, Tuple
 
 
@@ -67,6 +68,20 @@ RAG_SELECTION_RULES: Dict[str, Dict[str, Any]] = {
 }
 
 
+def _normalize_legal_identifier(value: Any) -> str:
+    text = str(value or '').casefold().replace('ё', 'е')
+    text = text.replace('–', '-').replace('—', '-').replace('−', '-')
+    return re.sub(r'[^0-9a-zа-я]+', '', text)
+
+
+def _point_number(value: Any) -> str:
+    text = str(value or '').casefold().replace('ё', 'е').strip()
+    match = re.search(r'(?:статья|ст\\.?|пункт|п\\.?)\\s*№?\\s*(\\d+)', text)
+    if match:
+        return match.group(1)
+    match = re.fullmatch(r'\\s*(\\d+)\\s*\\.?\\s*', text)
+    return match.group(1) if match else ''
+
 def evaluate_mandatory_source_rules(
     query_profile: Dict[str, Any],
     chunks: List[Dict[str, Any]],
@@ -91,16 +106,14 @@ def evaluate_mandatory_source_rules(
 
         rule_id = rule["id"]
         active_rules.append(rule_id)
-        expected_points = {
-            str(point).strip().lower().rstrip(".")
-            for point in rule["points"]
-        }
+        expected_points = {_point_number(point) for point in rule["points"]}
         source_ids: List[str] = []
 
         for index, chunk in enumerate(chunks or [], start=1):
-            document = str(chunk.get("doc_name") or "").strip().lower()
-            point = str(chunk.get("point_num") or "").strip().lower().rstrip(".")
-            if rule["document_contains"] in document and point in expected_points:
+            document = _normalize_legal_identifier(chunk.get("doc_name"))
+            expected_document = _normalize_legal_identifier(rule["document_contains"])
+            point = _point_number(chunk.get("point_num"))
+            if expected_document in document and point in expected_points:
                 source_id = chunk.get("_source_id") or build_source_id(chunk, index)
                 if source_id:
                     source_ids.append(str(source_id))
