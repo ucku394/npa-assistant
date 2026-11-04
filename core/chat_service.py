@@ -232,8 +232,10 @@ class ChatService:
             # citation belonging to a different claim.
             adjacent_text = answer_text[sentence_end:]
             adjacent_marker = re.match(
-                r"\s*\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]",
+                r"\s*(?:[-*•]\s*)?(?:источник(?:и)?\s*:\s*)?"
+                r"(?:\[SOURCE:[A-Za-zА-Яа-яЁё0-9_./-]+\]\s*)+",
                 adjacent_text,
+                re.IGNORECASE,
             )
             if adjacent_marker:
                 local_text += adjacent_marker.group(0)
