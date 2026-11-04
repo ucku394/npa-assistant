@@ -19,6 +19,7 @@ from config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
 from prompts import LEGAL_ASSISTANT_PROMPT
 from rag_engine.rag import build_source_id, retrieve_context
 from legal_rules_registry import evaluate_mandatory_source_rules
+from core.answer_presentation import build_answer_presentation, format_telegram_answer
 
 logger = logging.getLogger(__name__)
 
@@ -862,10 +863,12 @@ class ChatService:
         if not value or ChatService._extract_source_ids(value):
             return False
         unsafe = re.compile(
-            r"обязан\w*|долж\w*|необходим\w*|запрещ\w*|допуска\w*|"
-            r"разреша\w*|вправе|имеет право|срок\w*|периодич\w*|"
-            r"ответствен\w*|штраф\w*|санкци\w*|пункт\w*|стать\w*|"
-            r"постановлен\w*|законодательств\w*|нормативн\w* акт\w*|\bнпа\b|требу\w*|подлеж\w*|предусмотрен\w*|"
+            r"обязан\w*|долж\w*|необходим\w*|обязательн\w*|"
+            r"запрещ\w*|допуска\w*|разреша\w*|вправе|право\s+на|"
+            r"срок\w*|периодич\w*|ответствен\w*|штраф\w*|санкци\w*|"
+            r"пункт\w*|стать\w*|постановлен\w*|законодательств\w*|"
+            r"нормативн\w* акт\w*|\bнпа\b|требу\w*|подлеж\w*|"
+            r"предусмотрен\w*|установлен\w*|в соответствии с|на основании|"
             r"согласно\s+(?:п\.?|стать|пункт|закону|постановлению)",
             re.IGNORECASE,
         )
@@ -982,27 +985,21 @@ class ChatService:
                 request_id=request_id,
             )
             if fallback:
-                rag_meta["answer_mode"] = "ai_fallback"
-                rag_meta["ai_generated"] = True
+                presentation = build_answer_presentation("ai_fallback")
+                rag_meta["answer_mode"] = presentation["mode"]
+                rag_meta["ai_generated"] = presentation["ai_generated"]
+                rag_meta["answer_presentation"] = presentation
+                safe_text = fallback
                 return {
                     "success": True,
                     "error": None,
                     "request_id": request_id,
                     "question": question,
-                    "answer": (
-                        "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
-                        + fallback
-                    ),
-                    "answer_with_citations": (
-                        "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
-                        + fallback
-                    ),
-                    "telegram_answer": (
-                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\n\n"
-                        + fallback
-                    ),
-                    "answer_mode": "ai_fallback",
-                    "ai_generated": True,
+                    "answer": safe_text,
+                    "answer_with_citations": safe_text,
+                    "telegram_answer": format_telegram_answer(safe_text, [], presentation),
+                    "answer_mode": presentation["mode"],
+                    "ai_generated": presentation["ai_generated"],
                     "sources": [],
                     "rag": rag_meta,
                     "evidence_map": evidence_map,
@@ -1289,11 +1286,12 @@ class ChatService:
                 evidence_map=evidence_map,
             )
             if fallback:
-                rag_meta["answer_mode"] = "ai_fallback"
-                rag_meta["ai_generated"] = True
+                presentation = build_answer_presentation("ai_fallback")
+                rag_meta["answer_mode"] = presentation["mode"]
+                rag_meta["ai_generated"] = presentation["ai_generated"]
+                rag_meta["answer_presentation"] = presentation
                 rag_meta["legal_validation"] = "failed; fallback contains non-normative guidance only"
                 safe_text = (
-                    "⚠️ **СПРАВОЧНОЕ ОБЪЯСНЕНИЕ ИИ — НЕ НОРМАТИВНОЕ ТРЕБОВАНИЕ**\n\n"
                     "Найденные фрагменты не позволили подтвердить нормативный ответ. "
                     "Ниже приведены только ориентиры для анализа ситуации.\n\n"
                     + fallback
@@ -1305,14 +1303,9 @@ class ChatService:
                     "question": question,
                     "answer": safe_text,
                     "answer_with_citations": safe_text,
-                    "telegram_answer": (
-                        "⚠️ <b>Справочное объяснение ИИ — не нормативное требование</b>\n\n"
-                        "Найденные фрагменты не позволили подтвердить нормативный ответ. "
-                        "Ниже приведены только ориентиры для анализа ситуации.\n\n"
-                        + fallback
-                    ),
-                    "answer_mode": "ai_fallback",
-                    "ai_generated": True,
+                    "telegram_answer": format_telegram_answer(safe_text, [], presentation),
+                    "answer_mode": presentation["mode"],
+                    "ai_generated": presentation["ai_generated"],
                     "sources": [],
                     "rag": rag_meta,
                     "evidence_map": evidence_map,
@@ -1347,13 +1340,22 @@ class ChatService:
                 rag_meta["ai_generated"] = True
                 rag_meta["answer_mode"] = answer_mode
 
+        presentation = build_answer_presentation(answer_mode)
+        rag_meta["answer_mode"] = presentation["mode"]
+        rag_meta["ai_generated"] = presentation["ai_generated"]
+        rag_meta["answer_presentation"] = presentation
+
         used_source_ids = self._extract_source_ids(answer)
         sources = self._build_sources(chunks, used_source_ids)
         answer_with_citations = self._build_citation_answer(
             answer=answer,
             sources=sources,
         )
-        telegram_answer = self._format_telegram_answer(answer_with_citations, sources)
+        telegram_answer = format_telegram_answer(
+            answer_with_citations,
+            sources,
+            presentation,
+        )
 
         answer = self._remove_source_markers(answer, valid_source_ids)
 
@@ -1366,7 +1368,8 @@ class ChatService:
             "answer_with_citations": answer_with_citations,
             "telegram_answer": telegram_answer,
             "answer_mode": answer_mode,
-            "ai_generated": answer_mode in ("ai_fallback", "hybrid_ai"),
+            "ai_generated": presentation["ai_generated"],
+            "answer_presentation": presentation,
             "sources": sources,
             "rag": rag_meta,
             "evidence_map": evidence_map,

@@ -182,6 +182,7 @@ class RagMeta(BaseModel):
     topic: str | None = None
     answer_mode: str = "verified_npa"
     ai_generated: bool = False
+    answer_presentation: dict = Field(default_factory=dict)
 
 
 class ChatResponse(BaseModel):
@@ -192,6 +193,7 @@ class ChatResponse(BaseModel):
     answer_with_citations: str = ""
     answer_mode: str = "verified_npa"
     ai_generated: bool = False
+    answer_presentation: dict = Field(default_factory=dict)
     sources: list[SourceItem] = []
     rag: RagMeta = RagMeta()
 
@@ -276,6 +278,7 @@ async def chat(request: ChatRequest):
         answer_with_citations=result.get("answer_with_citations") or result.get("answer") or "",
         answer_mode=result.get("answer_mode") or (result.get("rag") or {}).get("answer_mode") or "verified_npa",
         ai_generated=bool(result.get("ai_generated") or (result.get("rag") or {}).get("ai_generated")),
+        answer_presentation=result.get("answer_presentation") or (result.get("rag") or {}).get("answer_presentation") or {},
         sources=result.get("sources") or [],
         rag=result.get("rag") or {},
     )
