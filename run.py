@@ -37,7 +37,7 @@ async def run_services():
         # Behind the hosting proxy (Railway) the real client IP is in
         # X-Forwarded-For; it is needed for per-IP rate limiting.
         proxy_headers=True,
-        forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "*"),
+        forwarded_allow_ips=os.getenv("FORWARDED_ALLOW_IPS", "127.0.0.1"),
     )
     server = uvicorn.Server(config)
 
