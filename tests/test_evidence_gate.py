@@ -430,7 +430,7 @@ def test_extractive_fallback_normalizes_whitespace_and_preserves_existing_point_
 
     assert "**Правила по охране труда, п. 17.**" in answer
     assert "п. п. 17" not in answer
-    assert "Первое предложение. Второе предложение." in answer
+    assert "Первое предложение. [SOURCE:NPA_RULE_17] Второе предложение." in answer
     assert chr(10) not in answer
 
 def test_extractive_fallback_returns_empty_without_citable_evidence():
