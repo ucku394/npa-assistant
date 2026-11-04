@@ -1384,51 +1384,73 @@ def _targeted_ppe_refusal_search(
     supabase,
 ) -> List[Dict[str, Any]]:
     """
-    Точечный поиск ст. 11 Закона № 356-З:
-    право работника отказаться от порученной работы при
-    непредоставлении СИЗ, непосредственно обеспечивающих безопасность труда.
+    Адресный поиск ст. 11 Закона № 356-З.
+    Учитывает варианты хранения номера статьи и названия документа.
     """
+    selected_columns = (
+        "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
+    )
     try:
+        # Сначала наиболее точный вариант документа и номера статьи.
         response = (
             supabase.table("npa_chunks")
-            .select(
-                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
-            )
+            .select(selected_columns)
             .eq("legal_domain", "occupational_safety")
             .eq("doc_name", "Закон об охране труда от 23 июня 2008 г. № 356-З")
-            .or_("point_num.eq.Статья 11,point_num.eq.11")
-            .execute()
-        )
-        results = _deduplicate_chunks(response.data or [])
-        if results:
-            for chunk in results:
-                chunk["_ppe_refusal_targeted"] = True
-            return results
-
-        response = (
-            supabase.table("npa_chunks")
-            .select(
-                "doc_name,doc_type,point_num,content,legal_domain,topic,source_url"
-            )
-            .eq("legal_domain", "occupational_safety")
-            .ilike("doc_name", "%356-З%")
             .or_(
-                "content.ilike.%отказ от выполнения порученной работы%,"
-                "content.ilike.%непредоставлении ему средств индивидуальной защиты%,"
-                "content.ilike.%непосредственно обеспечивающих безопасность труда%"
+                "point_num.eq.Статья 11,"
+                "point_num.eq.Статья 11.,"
+                "point_num.eq.ст. 11,"
+                "point_num.eq.11,"
+                "point_num.eq.11."
             )
-            .limit(20)
             .execute()
         )
         results = _deduplicate_chunks(response.data or [])
+        search_mode = "exact_document_and_article"
+
+        if not results:
+            # Резерв: в разных загрузках doc_name и point_num могут иметь
+            # другое оформление (№356–З, «Ст. 11», «11.» и т.п.).
+            response = (
+                supabase.table("npa_chunks")
+                .select(selected_columns)
+                .eq("legal_domain", "occupational_safety")
+                .ilike("doc_name", "%356%")
+                .or_(
+                    "point_num.eq.Статья 11,"
+                    "point_num.eq.Статья 11.,"
+                    "point_num.eq.ст. 11,"
+                    "point_num.eq.статья 11,"
+                    "point_num.eq.11,"
+                    "point_num.eq.11.,"
+                    "content.ilike.%отказ от выполнения порученной работы%,"
+                    "content.ilike.%непредоставлении ему средств индивидуальной защиты%,"
+                    "content.ilike.%непосредственно обеспечивающих безопасность труда%"
+                )
+                .limit(30)
+                .execute()
+            )
+            results = _deduplicate_chunks(response.data or [])
+            search_mode = "normalized_metadata_or_normative_text"
+
         for chunk in results:
             chunk["_ppe_refusal_targeted"] = True
-        return results
-    except Exception as exc:
-        logger.warning(
-            "RAG | PPE refusal targeted search failed: %s",
-            exc,
+
+        logger.info(
+            "RAG | PPE article 11 targeted search | mode=%s | result_count=%s | documents=%s | points=%s",
+            search_mode,
+            len(results),
+            sorted({str(item.get("doc_name") or "") for item in results})[:10],
+            sorted({str(item.get("point_num") or "") for item in results})[:10],
         )
+        if not results:
+            logger.warning(
+                "RAG | PPE article 11 source not found in npa_chunks; mandatory source gate will fail closed"
+            )
+        return results
+    except Exception:
+        logger.exception("RAG | PPE article 11 targeted search failed")
         return []
 
 
