@@ -44,7 +44,7 @@ Railway / Docker: `Dockerfile` и `Procfile` запускают `python run.py`,
 | `WEB_RATE_LIMIT_PER_MINUTE` | 20 | Лимит запросов с одного IP (0 — без лимита). |
 | `WEB_MAX_UPLOAD_MB` | 12 | Максимальный размер фото. |
 | `WEB_CORS_ORIGINS` | пусто | Разрешённые сторонние origin (по умолчанию только same-origin). |
-| `FORWARDED_ALLOW_IPS` | `*` | Каким прокси доверять `X-Forwarded-For` (нужно для лимита по IP за прокси Railway). |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Доверенные reverse-proxy IP/CIDR для `X-Forwarded-For`. Не используйте `*`: это позволяет подменять IP через заголовок. Для Railway адреса прокси нужно отдельно подтвердить. |
 | `TELEGRAM_ALLOWED_USER_IDS` | пусто (все) | Список разрешённых Telegram user ID через запятую. |
 | `TELEGRAM_RATE_LIMIT_PER_MINUTE` | 10 | Лимит сообщений от одного пользователя (`/start` не учитывается). |
 
