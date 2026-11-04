@@ -183,16 +183,6 @@ class ChatService:
             }
 
 
-        evidence_reference_text = " ".join(
-            [
-                str(item.get("point") or "")
-                + " "
-                + str(item.get("document") or "")
-                + " "
-                + str(item.get("excerpt") or "")
-                for item in cited_evidence
-            ]
-        ).lower()
         reference_pattern = re.compile(
             r"\b(?P<kind>пункт(?:а|у|ом|е|ы|ов|ам|ах|ами)?|п\.|статья|статьи|статью|статьёй|статьей|статье|статьях|статьями|ст\.)"
             r"\s*(?P<number>\d+(?:[.\-]\d+)*)",

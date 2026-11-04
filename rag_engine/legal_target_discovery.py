@@ -6,7 +6,6 @@ from chunks that actually exist in the indexed npa_chunks table.
 
 from typing import Any, Dict, List
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 

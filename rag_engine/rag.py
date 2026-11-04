@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from embedding import get_query_embeddings
 from .rag_query_profile import build_universal_query_profile
-from .rag_query_generator import build_universal_search_queries, build_search_queries
+from .rag_query_generator import build_search_queries
 from .legal_query_planner import build_legal_query_plan
 from .legal_target_discovery import discover_legal_targets
 from .rag_query_modes import _attestation_query_mode, _accident_query_mode
@@ -2123,7 +2123,6 @@ def _is_attestation_document(chunk: Dict[str, Any]) -> bool:
 
 def _is_medical_exam_document(chunk: Dict[str, Any]) -> bool:
     document_name = _get_document_name(chunk).lower()
-    content = str(chunk.get("content") or "").lower()
 
     is_npa_74 = bool(
         re.search(r"№\s*74\b", document_name, flags=re.IGNORECASE)
@@ -2802,7 +2801,6 @@ def _legal_authority_relevance_score(
     profile = query_profile or {}
     document = _get_document_name(chunk).lower()
     point = _get_point_number(chunk).lower()
-    content = str(chunk.get("content") or chunk.get("text") or "").lower()
     query = re.sub(r"\s+", " ", str(user_query or "").strip().lower())
 
     score = 0.0
@@ -3916,7 +3914,8 @@ async def retrieve_context(
     request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     request_id = str(request_id or "untracked")
-    logger.info("RAG | request_id=%s | query=%s", request_id, user_query)
+    logger.info("RAG | request_id=%s | query_len=%s", request_id, len(user_query or ""))
+    logger.debug("RAG | request_id=%s | query=%s", request_id, user_query)
 
     legal_domain = detect_legal_domain(user_query)
     topic = detect_topic(user_query)
@@ -4139,8 +4138,8 @@ async def retrieve_context(
         for index, result in zip(batch_indices, batch_results):
             if isinstance(result, Exception):
                 logger.warning(
-                    "RAG | search failed | query=%s | error=%s",
-                    valid_queries[index],
+                    "RAG | search failed | query_index=%s | error=%s",
+                    index,
                     result,
                 )
                 clean_groups.append([])

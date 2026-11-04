@@ -23,6 +23,7 @@ Telegram
 import asyncio
 import html
 import logging
+import math
 import re
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -31,18 +32,23 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
 
 from config import (
+    TELEGRAM_ALLOWED_USER_IDS,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_MESSAGE_LIMIT,
+    TELEGRAM_RATE_LIMIT_PER_MINUTE,
 )
+from core.access import SlidingWindowRateLimiter
 from services.document_generator import (
     ActN1Request,
     WorkPermitRequest,
@@ -76,6 +82,7 @@ logging.basicConfig(
 # httpx INFO logs may include Telegram API URLs with bot credentials.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -333,14 +340,70 @@ async def debug_update(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    logger.info(
-        "TELEGRAM UPDATE | update_id=%s | user_id=%s | chat_id=%s | text=%r | photo=%s",
+    # Message text is not logged: questions may contain personal data.
+    message = update.effective_message
+    logger.debug(
+        "TELEGRAM UPDATE | update_id=%s | user_id=%s | chat_id=%s | text_len=%s | photo=%s",
         update.update_id,
         update.effective_user.id if update.effective_user else None,
         update.effective_chat.id if update.effective_chat else None,
-        update.effective_message.text if update.effective_message else None,
-        bool(update.effective_message and update.effective_message.photo),
+        len(message.text or "") if message else 0,
+        bool(message and message.photo),
     )
+
+
+# ============================================================
+# ACCESS CONTROL
+# ============================================================
+
+_user_rate_limiter = SlidingWindowRateLimiter(TELEGRAM_RATE_LIMIT_PER_MINUTE)
+
+
+def _is_start_command(update: Update) -> bool:
+    message = update.effective_message
+    text = (message.text or "").strip() if message else ""
+    if not text.startswith("/"):
+        return False
+    return text.split(maxsplit=1)[0].split("@", 1)[0] == "/start"
+
+
+async def _reply_gate(update: Update, text: str) -> None:
+    try:
+        if update.callback_query:
+            await update.callback_query.answer(text, show_alert=True)
+        elif update.effective_message:
+            await update.effective_message.reply_text(text)
+    except Exception as exc:
+        logger.warning("TELEGRAM ACCESS | reply failed | error=%s", exc)
+
+
+async def access_gate(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    if not isinstance(update, Update) or update.effective_user is None:
+        return
+    user_id = update.effective_user.id
+
+    if TELEGRAM_ALLOWED_USER_IDS and user_id not in TELEGRAM_ALLOWED_USER_IDS:
+        logger.warning("TELEGRAM ACCESS | denied | user_id=%s", user_id)
+        await _reply_gate(
+            update,
+            "⛔ Доступ к ассистенту ограничен. Обратитесь к администратору.",
+        )
+        raise ApplicationHandlerStop
+
+    if _is_start_command(update):
+        return
+
+    retry_after = _user_rate_limiter.hit(str(user_id))
+    if retry_after:
+        logger.info("TELEGRAM ACCESS | rate limited | user_id=%s", user_id)
+        await _reply_gate(
+            update,
+            f"⏳ Слишком много запросов. Повторите через {math.ceil(retry_after)} с.",
+        )
+        raise ApplicationHandlerStop
 
 
 # ============================================================
@@ -970,7 +1033,7 @@ async def act_n1_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=summary[:1024],
             parse_mode="HTML",
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Bot act_n1 command failed")
         await update.effective_message.reply_text("❌ Произошла ошибка при генерации Акта Н-1.")
 
@@ -1020,7 +1083,7 @@ async def permit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=summary[:1024],
             parse_mode="HTML",
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Bot permit command failed")
         await update.effective_message.reply_text("❌ Произошла ошибка при генерации наряда-допуска.")
 
@@ -1039,6 +1102,7 @@ def build_application() -> Application:
         MessageHandler(filters.ALL, debug_update),
         group=-100,
     )
+    application.add_handler(TypeHandler(Update, access_gate), group=-90)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("act_n1", act_n1_command))
     application.add_handler(CommandHandler("permit", permit_command))
