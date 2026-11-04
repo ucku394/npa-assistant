@@ -623,3 +623,32 @@ footer a:hover { text-decoration: underline; }
 .inspection-result{margin-top:16px;padding-top:14px;border-top:1px solid #eaecf0;line-height:1.55}.inspection-title{margin-top:14px;font-weight:700}
 .inspection-title.confirmed{color:#b42318}.inspection-title.potential{color:#b54708}.finding{margin:8px 0;padding:10px 12px;border-radius:10px;background:#f8fafc}.finding.confirmed{border-left:4px solid #d92d20}
 .inspection-note,.inspection-loading{margin-top:12px;color:#667085;font-size:13px}.inspection-error{color:#b42318;padding:10px;background:#fef3f2;border-radius:10px}.prescription-button{margin-top:14px}.prescription-button:disabled{opacity:.6;cursor:wait}
+
+
+.answer-mode-badge {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.answer-mode-ai_fallback {
+  border-color: #f5c27a;
+  color: #92400e;
+  background: #fffaeb;
+}
+.answer-mode-hybrid_ai {
+  border-color: #b2ccff;
+  color: #1849a9;
+  background: #eff8ff;
+}
+.answer-mode-verified_npa {
+  border-color: #a6f4c5;
+  color: #067647;
+  background: #ecfdf3;
+}
