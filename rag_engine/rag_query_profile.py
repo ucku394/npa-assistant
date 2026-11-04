@@ -382,7 +382,8 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
         # на отказ, а о том, что работник должен сделать при невыдаче СИЗ.
         ppe_nonprovision_action_pattern = (
             r"(?:что\s+(?:должен|следует)\s+(?:сделать|делать)|"
-            r"как\s+(?:должен|следует)\s+поступить|"
+            r"как\s+(?:(?:должен|следует)\s+)?поступить|"
+            r"куда\s+обращат\w*|к\s+кому\s+обращат\w*|"
             r"каков\w*\s+порядок\s+действий|"
             r"каков\w*\s+(?:дальнейш\w*\s+)?действ\w*|"
             r"дальнейш\w*\s+действ\w*\s+работник\w*|"
@@ -400,7 +401,18 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             r"(?:не\s+(?:выдан\w*|выда\w*|предостав\w*|обеспеч\w*))"
             r".{0,100}?"
             r"(?:что\s+(?:должен|следует)\s+(?:сделать|делать)|"
-            r"как\s+(?:должен|следует)\s+поступить|"
+            r"как\s+(?:(?:должен|следует)\s+)?поступить|"
+            r"куда\s+обращат\w*|к\s+кому\s+обращат\w*|"
+            r"порядок\s+действий)"
+        )
+        ppe_nonprovision_action_preceding_pattern = (
+            r"(?:не\s+(?:выдан\w*|выда\w*|предостав\w*|обеспеч\w*))"
+            r".{0,100}?"
+            r"(?:сиз|средств\w*\s+индивидуальн\w*\s+защит)"
+            r".{0,100}?"
+            r"(?:что\s+(?:должен|следует)\s+(?:сделать|делать)|"
+            r"как\s+(?:(?:должен|следует)\s+)?поступить|"
+            r"куда\s+обращат\w*|к\s+кому\s+обращат\w*|"
             r"порядок\s+действий)"
         )
 
@@ -408,6 +420,11 @@ def build_universal_query_profile(user_query: str) -> Dict[str, Any]:
             re.search(ppe_nonprovision_action_pattern, query, re.IGNORECASE)
             or re.search(
                 ppe_nonprovision_action_reverse_pattern,
+                query,
+                re.IGNORECASE,
+            )
+            or re.search(
+                ppe_nonprovision_action_preceding_pattern,
                 query,
                 re.IGNORECASE,
             )
