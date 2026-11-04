@@ -385,7 +385,22 @@ async def access_gate(
         return
     user_id = update.effective_user.id
 
-    if TELEGRAM_ALLOWED_USER_IDS and user_id not in TELEGRAM_ALLOWED_USER_IDS:
+    is_start = _is_start_command(update)
+    is_allowed = not TELEGRAM_ALLOWED_USER_IDS or user_id in TELEGRAM_ALLOWED_USER_IDS
+
+    # Limit rejected users as well as authorized users; otherwise an unknown
+    # account can generate an unbounded stream of access-denied replies.
+    if not is_start or not is_allowed:
+        retry_after = _user_rate_limiter.hit(str(user_id))
+        if retry_after:
+            logger.info("TELEGRAM ACCESS | rate limited | user_id=%s", user_id)
+            await _reply_gate(
+                update,
+                f"⏳ Слишком много запросов. Повторите через {math.ceil(retry_after)} с.",
+            )
+            raise ApplicationHandlerStop
+
+    if not is_allowed:
         logger.warning("TELEGRAM ACCESS | denied | user_id=%s", user_id)
         await _reply_gate(
             update,
@@ -393,17 +408,8 @@ async def access_gate(
         )
         raise ApplicationHandlerStop
 
-    if _is_start_command(update):
+    if is_start:
         return
-
-    retry_after = _user_rate_limiter.hit(str(user_id))
-    if retry_after:
-        logger.info("TELEGRAM ACCESS | rate limited | user_id=%s", user_id)
-        await _reply_gate(
-            update,
-            f"⏳ Слишком много запросов. Повторите через {math.ceil(retry_after)} с.",
-        )
-        raise ApplicationHandlerStop
 
 
 # ============================================================
