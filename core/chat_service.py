@@ -533,11 +533,27 @@ class ChatService:
         base_prompt: str,
         reason: Dict[str, Any],
     ) -> str:
+        profile = reason.get("query_profile") or {}
+        qualifiers = set(profile.get("qualifiers") or [])
+        ppe_retry = ""
+        if qualifiers.intersection({"ppe_nonprovision_action", "refusal_due_to_no_ppe"}):
+            ppe_retry = (
+                "\\n\\nСПЕЦИАЛЬНЫЙ СЦЕНАРИЙ: НЕОБЕСПЕЧЕНИЕ СИЗ\\n"
+                "Распознай вопрос как правовой сценарий о правах работника при необеспечении СИЗ. "
+                "Используй статью 11 Закона Республики Беларусь № 356-З только в пределах её "
+                "фактического текста в RAG SOURCE. Правила обеспечения СИЗ № 209 используй "
+                "только для тех отдельных требований, которые прямо содержатся в найденных пунктах. "
+                "Не приписывай статье 11 или Правилам № 209 действия, которых нет в соответствующем фрагменте. "
+                "Разбей ответ на короткие самостоятельные предложения: после КАЖДОГО юридически значимого "
+                "предложения немедленно поставь его собственный [SOURCE:...]. Не ставь одну общую ссылку "
+                "в конце абзаца вместо ссылок после отдельных утверждений. Если источник не подтверждает "
+                "следующий шаг алгоритма, прямо обозначь пробел и не додумывай его.\\n"
+            )
         return (
             base_prompt
-            + "\n\n============================================================\n"
-            + "СТРОГИЙ РЕЖИМ ДОКАЗАТЕЛЬНОСТИ\n"
-            + "============================================================\n"
+            + "\\n\\n============================================================\\n"
+            + "СТРОГИЙ РЕЖИМ ДОКАЗАТЕЛЬНОСТИ\\n"
+            + "============================================================\\n"
             + "Предыдущий вариант не прошёл Evidence Gate. Переформулируй ответ. "
             + "Каждое юридически значимое утверждение должно иметь [SOURCE:SOURCE_ID]. "
             + "Используй только SOURCE_ID из EVIDENCE MAP и фактический текст RAG. "
@@ -547,8 +563,9 @@ class ChatService:
             + "или графическую позицию отдельным пунктом Правил. "
             + "Сохрани SOURCE_ID непосредственно рядом с каждым юридически значимым утверждением, "
             + "в том числе после переформулирования. Если прямое требование и его значения не подтверждаются "
-            + "фрагментом, укажи конкретно, что именно не удалось подтвердить.\n"
-            + f"Причина проверки: {reason}"
+            + "фрагментом, укажи конкретно, что именно не удалось подтвердить."
+            + ppe_retry
+            + f"\\nПричина проверки: {reason}"
         )
 
     @staticmethod
@@ -1137,11 +1154,20 @@ class ChatService:
             claim_evidence.get("unsupported_references", []),
             claim_evidence.get("cited_evidence_count", 0),
         )
+        if not claim_evidence.get("passed"):
+            logger.warning(
+                "CHAT | request_id=%s | evidence_gate_detail | uncited_claim=%s | cited_source_ids=%s",
+                request_id,
+                claim_evidence.get("uncited_claim_line"),
+                grounding.get("cited_source_ids"),
+            )
 
         if not grounding["passed"] or not claim_evidence["passed"]:
             retry_reason = {
                 "grounding": grounding,
                 "claim_evidence": claim_evidence,
+                "query_profile": query_profile,
+                "question": question,
             }
             retry_prompt = self._build_grounding_retry_prompt(prompt, retry_reason)
             retry_prompt += (
