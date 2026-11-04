@@ -505,7 +505,7 @@ async def text_handler(
             )
 
             sources = result.get("sources") or []
-            if not sources:
+            if not sources and result.get("answer_mode", "verified_npa") == "verified_npa":
                 logger.warning(
                     "LEGAL | Evidence Gate passed but no validated sources were returned."
                 )
