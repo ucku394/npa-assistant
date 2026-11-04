@@ -481,3 +481,48 @@ def test_fall_protection_extractive_fallback_preserves_and_cites_both_limits():
     assert "6 кН" in answer
     assert "не более 2 м" in answer
     assert answer.count("[SOURCE:") >= 2
+
+
+def test_ai_fallback_rejects_legal_claims_and_accepts_non_normative_guidance():
+    assert ChatService._is_safe_ai_fallback(
+        "Для анализа ситуации полезно отдельно зафиксировать фактические обстоятельства "
+        "и проверить состояние оборудования."
+    ) is True
+    assert ChatService._is_safe_ai_fallback(
+        "Работодатель обязан провести проверку в течение 3 дней."
+    ) is False
+    assert ChatService._is_safe_ai_fallback(
+        "Согласно пункту 17 Правил это запрещается."
+    ) is False
+
+
+def test_evidence_map_keeps_full_chunk_for_validation_and_short_excerpt_for_prompt():
+    long_text = ("Описание общего контекста. " * 50) + (
+        "Согласно пункту 17 работник обязан соблюдать требования безопасности."
+    )
+    evidence = ChatService._build_evidence_map([{
+        "doc_name": "Правила по охране труда",
+        "point_num": "раздел А",
+        "content": long_text,
+    }])
+    assert len(evidence) == 1
+    assert evidence[0]["full_text"] == long_text
+    assert len(evidence[0]["excerpt"]) <= 700
+
+
+def test_claim_evidence_uses_full_chunk_beyond_prompt_excerpt():
+    long_text = ("Описание общего контекста. " * 50) + (
+        "Согласно пункту 17 работник обязан соблюдать требования безопасности."
+    )
+    result = ChatService._claim_evidence_check(
+        answer="Согласно пункту 17 работник обязан соблюдать требования безопасности. [SOURCE:NPA_RULE_A]",
+        evidence_map=[{
+            "source_id": "NPA_RULE_A",
+            "document": "Правила по охране труда",
+            "point": "раздел А",
+            "excerpt": "Описание общего контекста.",
+            "full_text": long_text,
+        }],
+        query_profile={"question_type": "general"},
+    )
+    assert result["passed"] is True
