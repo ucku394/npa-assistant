@@ -234,6 +234,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             success=False,
             error="no_relevant_context",
+            answer_mode="insufficient_evidence",
             question=question,
             answer_with_citations="",
             answer=(
@@ -248,6 +249,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             success=False,
             error="grounding_failed",
+            answer_mode="insufficient_evidence",
             question=question,
             answer=(
                 "Не удалось подтвердить ответ найденными фрагментами нормативных "
