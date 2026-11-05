@@ -530,7 +530,7 @@ def test_claim_evidence_uses_full_chunk_beyond_prompt_excerpt():
 def test_claim_evidence_accepts_legal_reference_with_labeled_adjacent_source():
     result = ChatService._claim_evidence_check(
         answer=(
-            "Согласно пункту 17 Положения работодатель проводит внеочередную аттестацию.\n"
+            "Согласно пункту 17 Положения внеочередная аттестация рабочих мест проводится в предусмотренных случаях.\n"
             "Источник: [SOURCE:NPA_ATTESTATION_P17]"
         ),
         evidence_map=[{
