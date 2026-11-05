@@ -149,6 +149,57 @@ def test_workplace_attestation_search_keeps_short_lexical_queries_in_top_eight()
     assert any("№ 253" in item for item in queries)
 
 
+@pytest.mark.parametrize(
+    "query,required_query",
+    [
+        ("Как часто проводится аттестация рабочих мест?", "пункт 19 Положения о порядке проведения аттестации рабочих мест по условиям труда"),
+        ("Когда проводится внеочередная аттестация рабочих мест?", "пункт 17 Положения о порядке проведения аттестации рабочих мест по условиям труда"),
+        ("Какие результаты аттестации рабочих мест?", "пункт 12 Положения о порядке проведения аттестации рабочих мест по условиям труда"),
+        ("Кто входит в комиссию по аттестации рабочих мест?", "состав комиссии по проведению аттестации рабочих мест"),
+    ],
+)
+def test_attestation_mode_queries_are_reserved_before_ai_expansions(query, required_query):
+    profile = build_universal_query_profile(query)
+    queries = build_search_queries(
+        query,
+        "workplace_attestation",
+        "occupational_safety",
+        [],
+        profile,
+        legal_plan={
+            "search_queries": [f"generic AI expansion {index}" for index in range(8)],
+            "legal_phrases": [],
+            "legal_concepts": [],
+        },
+    )
+
+    assert len(queries) <= 8
+    assert required_query.casefold() in [item.casefold() for item in queries]
+
+
+def test_legal_query_planner_defaults_to_deterministic_without_ai_call(monkeypatch):
+    import services.ai_router
+    from rag_engine.legal_query_planner import build_legal_query_plan
+
+    monkeypatch.delenv("RAG_ENABLE_AI_QUERY_PLANNER", raising=False)
+
+    def unexpected_ai_call(*args, **kwargs):
+        raise AssertionError("AI planner must be disabled by default")
+
+    monkeypatch.setattr(services.ai_router, "generate_answer", unexpected_ai_call)
+    query = "Основания для проведения аттестации рабочих мест"
+    profile = build_universal_query_profile(query)
+    plan = build_legal_query_plan(
+        query,
+        profile,
+        "workplace_attestation",
+        "occupational_safety",
+    )
+
+    assert plan["planner_source"] == "deterministic"
+    assert plan["jurisdiction"] == "BY"
+
+
 def test_ptm_search_keeps_abbreviation_and_expanded_lexical_queries():
     query = "ПТМ"
     queries = build_search_queries(
@@ -194,6 +245,7 @@ def test_ppe_nonprovision_llm_planner_cannot_override_deterministic_rights_inten
 
     query = "Что должен сделать работник, если ему не выдали СИЗ?"
     profile = build_universal_query_profile(query)
+    monkeypatch.setenv("RAG_ENABLE_AI_QUERY_PLANNER", "true")
 
     monkeypatch.setattr(
         services.ai_router,

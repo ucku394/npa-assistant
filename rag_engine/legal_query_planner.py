@@ -1,6 +1,6 @@
 """Universal legal query planner for the Belarusian legal RAG."""
 from __future__ import annotations
-import json, logging, re
+import json, logging, os, re
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,17 @@ def build_legal_query_plan(original: str, profile: Dict[str, Any], topic: str, l
     original = re.sub(r"\s+", " ", str(original or "").strip())
     fallback = fallback_plan(original, profile, topic, legal_domain)
     if not original: return fallback
+
+    # The deterministic profile already contains the domain/topic-specific
+    # routing needed for retrieval. Keep the extra network call opt-in: it
+    # adds latency and can fail independently of the actual answer generation.
+    ai_planner_enabled = os.getenv("RAG_ENABLE_AI_QUERY_PLANNER", "false").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    if not ai_planner_enabled:
+        logger.info("LEGAL_QUERY_PLAN | source=deterministic | ai_planner=disabled")
+        return fallback
+
     try:
         from services.ai_router import generate_answer
         raw = generate_answer(_prompt(original, profile, topic, legal_domain), enforce_source_grounding=False)

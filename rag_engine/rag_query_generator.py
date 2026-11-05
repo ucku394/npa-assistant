@@ -252,6 +252,31 @@ def build_search_queries(
             "Положение об аттестации рабочих мест № 253",
             "внеочередная аттестация рабочих мест",
         ])
+        # Reserve part of the eight-query budget for the detected attestation
+        # mode before AI-generated/general expansions are appended.
+        attestation_mode = _attestation_query_mode(original)
+        if attestation_mode == "periodicity":
+            queries.extend([
+                "периодичность аттестации рабочих мест по условиям труда",
+                "пункт 19 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+                "аттестация рабочих мест проводится один раз в пять лет",
+            ])
+        elif attestation_mode == "extraordinary":
+            queries.extend([
+                "внеочередная аттестация рабочих мест по условиям труда",
+                "пункт 17 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+                "внеочередная аттестация переаттестация в течение шести месяцев",
+            ])
+        elif attestation_mode == "results":
+            queries.extend([
+                "результаты аттестации рабочих мест по условиям труда",
+                "пункт 12 Положения о порядке проведения аттестации рабочих мест по условиям труда",
+            ])
+        elif attestation_mode == "commission":
+            queries.extend([
+                "комиссия по аттестации рабочих мест по условиям труда",
+                "состав комиссии по проведению аттестации рабочих мест",
+            ])
 
     if re.search(r"\bптм\b|пожарно[- ]техническ\w*\s+минимум", original, re.IGNORECASE):
         queries.extend([
