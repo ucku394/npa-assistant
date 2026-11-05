@@ -527,6 +527,23 @@ def test_claim_evidence_uses_full_chunk_beyond_prompt_excerpt():
     )
     assert result["passed"] is True
 
+def test_claim_evidence_accepts_legal_reference_with_labeled_adjacent_source():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Согласно пункту 17 Положения работодатель проводит внеочередную аттестацию.\n"
+            "Источник: [SOURCE:NPA_ATTESTATION_P17]"
+        ),
+        evidence_map=[{
+            "source_id": "NPA_ATTESTATION_P17",
+            "document": "Положение о порядке проведения аттестации рабочих мест по условиям труда",
+            "point": "17.",
+            "excerpt": "Внеочередная аттестация рабочих мест проводится в случаях, предусмотренных настоящим Положением.",
+        }],
+        query_profile={"question_type": "general"},
+    )
+    assert result["passed"] is True
+
+
 def test_claim_evidence_accepts_source_marker_on_labeled_adjacent_line():
     result = ChatService._claim_evidence_check(
         answer=(

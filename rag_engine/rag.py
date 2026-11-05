@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 from embedding import get_query_embeddings
@@ -3936,6 +3937,7 @@ async def retrieve_context(
     request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     request_id = str(request_id or "untracked")
+    request_started = time.perf_counter()
     logger.info("RAG | request_id=%s | query_len=%s", request_id, len(user_query or ""))
 
     legal_domain = detect_legal_domain(user_query)
@@ -4016,14 +4018,23 @@ async def retrieve_context(
             "строительные леса вышки-туры подмости настилы опоры устойчивость",
             "приемка и осмотр средств подмащивания",
         ])
-    legal_query_plan = build_legal_query_plan(
+    planner_started = time.perf_counter()
+    legal_query_plan = await asyncio.to_thread(
+        build_legal_query_plan,
         user_query,
         query_profile,
         topic,
         legal_domain,
     )
+    logger.info(
+        "RAG | request_id=%s | stage=legal_query_planner | duration_ms=%s | source=%s",
+        request_id,
+        round((time.perf_counter() - planner_started) * 1000),
+        legal_query_plan.get("planner_source"),
+    )
     query_profile["legal_query_plan"] = legal_query_plan
 
+    query_started = time.perf_counter()
     search_queries = build_search_queries(
         user_query,
         topic,
@@ -4031,6 +4042,12 @@ async def retrieve_context(
         intents,
         universal_profile=query_profile,
         legal_plan=legal_query_plan,
+    )
+    logger.info(
+        "RAG | request_id=%s | stage=query_generation | duration_ms=%s | query_count=%s",
+        request_id,
+        round((time.perf_counter() - query_started) * 1000),
+        len(search_queries),
     )
 
     logger.info(
@@ -4073,9 +4090,16 @@ async def retrieve_context(
     )
     logger.info("RAG | search_queries | count=%s", len(search_queries))
 
+    embedding_started = time.perf_counter()
     query_vectors = await asyncio.to_thread(
         get_query_embeddings,
         search_queries,
+    )
+    logger.info(
+        "RAG | request_id=%s | stage=query_embeddings | duration_ms=%s | query_count=%s",
+        request_id,
+        round((time.perf_counter() - embedding_started) * 1000),
+        len(search_queries),
     )
 
     valid_pairs = [
@@ -4130,6 +4154,7 @@ async def retrieve_context(
     search_diagnostics: List[Dict[str, Any]] = []
     search_concurrency = max(1, int(os.getenv("RAG_SEARCH_CONCURRENCY", "2")))
 
+    search_started = time.perf_counter()
     for batch_start in range(0, len(valid_queries), search_concurrency):
         batch_indices = range(
             batch_start,
@@ -4220,6 +4245,14 @@ async def retrieve_context(
                     for item in lexical_top
                 ],
             )
+
+    logger.info(
+        "RAG | request_id=%s | stage=supabase_search | duration_ms=%s | query_count=%s | concurrency=%s",
+        request_id,
+        round((time.perf_counter() - search_started) * 1000),
+        len(valid_queries),
+        search_concurrency,
+    )
 
     query_roles = [
         "main" if index == 0 else "expanded"
@@ -4455,6 +4488,11 @@ async def retrieve_context(
         }
         for index, chunk in enumerate(final_chunks, start=1)
     ]
+    logger.info(
+        "RAG | request_id=%s | stage=total | duration_ms=%s",
+        request_id,
+        round((time.perf_counter() - request_started) * 1000),
+    )
     logger.info(
         "RAG | request_id=%s | final | count=%s | accident_mode=%s | special_category=%s | special_issue=%s | sources=%s",
         request_id,
