@@ -230,7 +230,7 @@ def test_legal_assistant_prompt_includes_evidence_map():
 def test_grounding_retry_prompt_uses_real_line_breaks():
     prompt = ChatService._build_grounding_retry_prompt("BASE PROMPT", {"reason": "test"})
 
-    assert "\\n\\n===" not in prompt
+    assert "\n\n===" not in prompt
     assert "\n\n===" in prompt
 
 
@@ -560,4 +560,30 @@ def test_claim_evidence_does_not_accept_unrelated_text_as_adjacent_source_line()
     )
     assert result["passed"] is False
     assert result["reason"] == "legal_claim_missing_local_source_citation"
+
+def test_legal_reference_gate_accepts_labeled_adjacent_source_lines_for_multiple_acts():
+    result = ChatService._claim_evidence_check(
+        answer=(
+            "Согласно пункту 17 Положения, применяется установленное требование.\n"
+            "Источник: [SOURCE:NPA_253_P17]\n"
+            "Согласно статье 10 Закона, действует соответствующее правило.\n"
+            "Источник: [SOURCE:NPA_356_ART10]"
+        ),
+        evidence_map=[
+            {
+                "source_id": "NPA_253_P17",
+                "document": "Положение об аттестации рабочих мест № 253",
+                "point": "17.",
+                "excerpt": "Пункт 17 устанавливает соответствующее требование.",
+            },
+            {
+                "source_id": "NPA_356_ART10",
+                "document": "Закон об охране труда № 356-З",
+                "point": "Статья 10",
+                "excerpt": "Статья 10 устанавливает соответствующее правило.",
+            },
+        ],
+        query_profile={"question_type": "general"},
+    )
+    assert result["passed"] is True
 
