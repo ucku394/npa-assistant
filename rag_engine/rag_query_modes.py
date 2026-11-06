@@ -51,6 +51,17 @@ def _attestation_query_mode(user_query: str) -> str:
     if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in commission_patterns):
         return "commission"
 
+    # Distinguish statutory grounds/purpose from periodicity and extraordinary triggers.
+    grounds_patterns = [
+        r"\bоснован\w*\b",
+        r"\bс\s+какой\s+целью\b",
+        r"\bдля\s+чего\b",
+        r"\bцел\w*\s+проведен\w*\s+аттестаци\w*\b",
+        r"\bкакие\s+рабочие\s+места\s+подлежат\s+аттестаци\w*\b",
+    ]
+    if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in grounds_patterns):
+        return "grounds"
+
     return "general"
 
 
