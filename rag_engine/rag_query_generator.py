@@ -277,6 +277,15 @@ def build_search_queries(
                 "комиссия по аттестации рабочих мест по условиям труда",
                 "состав комиссии по проведению аттестации рабочих мест",
             ])
+        elif attestation_mode == "grounds":
+            # Separate the statutory purpose/scope of attestation from its
+            # five-year cycle and extraordinary-attestation triggers.
+            # Keep these exact formulations inside the top-eight query budget.
+            queries.extend([
+                "пункт 2 Положения о порядке проведения аттестации рабочих мест по условиям труда цели аттестации",
+                "выявление факторов производственной среды тяжести и напряженности трудового процесса полный рабочий день",
+                "пункт 4 Инструкции № 35 аттестация проводится на рабочем месте работник занят полный рабочий день вредные опасные условия труда",
+            ])
 
     if re.search(r"\bптм\b|пожарно[- ]техническ\w*\s+минимум", original, re.IGNORECASE):
         queries.extend([

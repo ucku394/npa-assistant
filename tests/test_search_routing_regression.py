@@ -133,7 +133,7 @@ def test_fall_protection_search_generates_decree_11_queries():
 
 
 def test_workplace_attestation_search_keeps_short_lexical_queries_in_top_eight():
-    query = "Основания для проведения аттестации рабочих мест"
+    query = "Основания для проведении аттестации рабочих мест"
     queries = build_search_queries(
         query,
         detect_topic(query),
@@ -147,6 +147,16 @@ def test_workplace_attestation_search_keeps_short_lexical_queries_in_top_eight()
     assert "аттестация рабочих мест" in normalized
     assert "основания проведения аттестации" in normalized
     assert any("№ 253" in item for item in queries)
+    assert any("пункт 2 положения" in item for item in normalized)
+    assert any("пункт 4 инструкции № 35" in item for item in normalized)
+
+
+def test_attestation_query_mode_recognizes_grounds_even_with_inflected_wording():
+    from rag_engine.rag_query_modes import _attestation_query_mode
+
+    assert _attestation_query_mode("Основания для проведении аттестации рабочих мест") == "grounds"
+    assert _attestation_query_mode("Для чего проводится аттестация рабочих мест?") == "grounds"
+    assert _attestation_query_mode("Когда проводится внеочередная аттестация рабочих мест?") == "extraordinary"
 
 
 @pytest.mark.parametrize(
